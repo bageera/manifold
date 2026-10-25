@@ -1,8 +1,9 @@
 [package]
 name = "manifold"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 description = "Lossless RGB8 shared-patch atlas image codec (MNF5)"
+license = "MIT"
 
 [dependencies]
 flate2 = "1.0"
