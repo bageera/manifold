@@ -1,5 +1,55 @@
 # Changelog
 
+## v0.5.1-rc1 — MNF5.1 gate: formalization & hardening (2026-10-25)
+
+Closes the v0.5.1 exit conditions (README §9): format spec, fixes, bounded
+decoding, property/fuzz tests, golden vectors, clean CI.
+
+**Normative spec:**
+- `docs/format.md`: container layout and validation ordering, record
+  grammar (literal / exact-ref / geom-ref), ring-Z/256 reference
+  semantics, D8 transform table with pull maps, encoder cost model
+  (informative), versioning policy.
+
+**Decoder fix:**
+- Explicit magic check added — the old test passed only because a
+  payload-length mismatch fired first, so any non-MNF5 magic within an
+  otherwise-consistent header would have decoded. Now rejected upfront.
+
+**Conformance:**
+- `tests/conformance/` + `tests/conformance.rs`: 2 byte-exact golden
+  vectors (exact reference; geometric rot180 with mode 2) and 14
+  rejection vectors (magic, zero/oversized dims, tile size/count,
+  dangling reference, shape mismatch, transform range, transform-4 on
+  non-square, mode 3, truncation, trailing data, short header, corrupt
+  zlib). Property-based roundtrip loop (deterministic xorshift).
+- Crate split into lib + bin (`src/lib.rs`) so integration tests drive
+  the real library.
+
+**Independent implementation (README §6):**
+- `src/refdecode.rs`: reference decoder written from the spec, no reuse
+  of codec parsing/blitting/transforms — D8 implemented as push maps
+  instead of pull maps. `tests/differential.rs` cross-checks both
+  decoders: agreement on golden vectors, rejection parity on all 14
+  rejection vectors, agreement + source equality on the full corpus
+  across all three encoding arms.
+
+**CI:**
+- `.github/workflows/ci.yml` and `.gitlab-ci.yml` (GitLab is the actual
+  remote host): fmt --check, clippy -D warnings, full test suite,
+  release build, CLI roundtrips including `--geom`, bounded fuzz via
+  `scripts/fuzz.py`.
+
+**Benchmark (README §7 metrics):**
+- `benchmark` now reports bits-per-pixel, compression ratio, and split
+  encode/decode timing next to file size.
+
+Still open on the path to v1.0: peak-RSS instrumentation, external codec
+comparison runs (WebP lossless / JPEG XL lossless), held-out evaluation
+corpus.
+
+---
+
 ## v0.6.0 — Geometric Atlas (2026-10-25)
 
 Geometric patch references behind an opt-in `--geom` flag; default `encode`
