@@ -126,8 +126,15 @@ fn benchmark(path: &Path) {
         height: src.height,
     };
     let n_tiles = tile_grid(dims).0 * tile_grid(dims).1;
+    let raw_pixels = dims.width as u64 * dims.height as u64 * 3;
 
-    let mut rows: Vec<(&str, usize, u128)> = Vec::new();
+    struct Row {
+        label: &'static str,
+        bytes: u64,
+        enc_ms: u128,
+        dec_ms: u128,
+    }
+    let mut rows: Vec<Row> = Vec::new();
 
     let arms: [(&str, bool, bool); 3] = [
         ("MNF5-atlas", true, false),     // exact references only (v0.5 ablation)
@@ -135,8 +142,8 @@ fn benchmark(path: &Path) {
         ("MNF5-no-atlas", false, false), // baseline: predictive literals
     ];
     for (label, use_atlas, use_geom) in arms {
-        let t0 = Instant::now();
         let tiles = split_tiles(&src.pixels, dims);
+        let t0 = Instant::now();
         let (raw, st) = encode_stats(&tiles, use_atlas, use_geom);
         let payload = compress_payload(&raw);
         let mut buf = build_header(dims, tiles.len() as u32, payload.len() as u32);
@@ -146,7 +153,12 @@ fn benchmark(path: &Path) {
         let res = decode(&buf).unwrap_or_else(|e| die(&format!("benchmark decode: {e}")));
         let dec_ms = t1.elapsed().as_millis();
         assert_eq!(res.pixels, src.pixels, "lossless check failed for {label}");
-        rows.push((label, buf.len(), enc_ms + dec_ms));
+        rows.push(Row {
+            label,
+            bytes: buf.len() as u64,
+            enc_ms,
+            dec_ms,
+        });
         if use_atlas {
             println!(
                 "  [{label}] tiles={}: literal={} exact-ref={} geom-ref={} (nontrivial transforms: {})",
@@ -162,12 +174,34 @@ fn benchmark(path: &Path) {
     let png_size = img::encode_png(dims, &src.pixels)
         .unwrap_or_else(|e| die(&format!("png benchmark encode: {e}")))
         .len();
-    rows.push(("PNG", png_size, 0));
+    rows.push(Row {
+        label: "PNG",
+        bytes: png_size as u64,
+        enc_ms: 0,
+        dec_ms: 0,
+    });
 
-    println!("image {}x{}, {} tiles", dims.width, dims.height, n_tiles);
-    println!("{:<14} {:>10} {:>8}", "codec", "bytes", "ms");
-    for (label, size, ms) in &rows {
-        println!("{:<14} {:>10} {:>8}", label, size, ms);
+    println!(
+        "image {}x{}, {} tiles, source RGB8 = {} bytes",
+        dims.width, dims.height, n_tiles, raw_pixels
+    );
+    println!(
+        "{:<16} {:>9} {:>8} {:>9} {:>8} {:>7} {:>8}",
+        "codec", "bytes", "bits/px", "ratio", "enc ms", "dec ms", "total ms"
+    );
+    for r in &rows {
+        let bpp = 8.0 * r.bytes as f64 / (dims.width as f64 * dims.height as f64);
+        let ratio = raw_pixels as f64 / r.bytes as f64;
+        println!(
+            "{:<16} {:>9} {:>8.3} {:>8.2}x {:>8} {:>7} {:>8}",
+            r.label,
+            r.bytes,
+            bpp,
+            ratio,
+            r.enc_ms,
+            r.dec_ms,
+            r.enc_ms + r.dec_ms
+        );
     }
 }
 
