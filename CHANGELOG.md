@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.7-research — entropy coder & channel-plan study (2026-10-25)
+
+P2 experiments (README dev priorities 3-5), measured, none shipped as
+format changes (all would require a v2 format decision):
+
+- Measured zlib-6 vs zstd-19 × interleaved vs planar RGB on the literal
+  tile streams of the dev + held-out corpora (docs/benchmarks.md).
+- zstd-19 dominates zlib-6 everywhere except noise (ties): screenshot
+  interleaved 3,884 → 1,429 (63%), poster 3,634 → 981 (73%). Entropy
+  coding is the largest untapped lever.
+- Planar layout beats interleaved on smooth content (gradient zlib:
+  5,018 vs 219,782; plaid 64,886 vs 108,184) but loses on palette/flat
+  classes (poster 6,620 vs 3,634). Best combined variant on held-out
+  blob: planar+zstd 10,692 vs shipped 24,306 (2.3×).
+- RESEARCH FINDING: reversible YCoCg-R cannot be byte-packed in this
+  format — co = r−b and cg = g−tmp each span 511 values; one byte holds
+  256, and mod-256 wrapping breaks the shift-based reconstruction terms.
+  Adoption requires a 9-bit planar layout (version bump; not adopted).
+- An optimal v2 would spend 2 header bits selecting {interl, planar} ×
+  {zlib, zstd} per image by proxy cost; deferred with the v0.8
+  rate-aware optimization milestone.
+- Transient `research.rs` experiment module and the zstd dependency were
+  removed after the study (numbers live in benchmarks.md); the shipped
+  0.6.0 codec and its dependency set are unchanged.
+
+---
+
+
 ## v0.5.1 — Validation & hardening gate CLOSED (2026-10-25)
 
 Tag promoted from v0.5.1-rc1 after closing the remaining exit items.

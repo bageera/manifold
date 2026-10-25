@@ -89,3 +89,38 @@ honest losses: tile-grid-aligned content favors deflate's own LZ77
 (blocks: 2,034 no-atlas vs 2,195 atlas) and WebP palette crushes flat-color
 art (poster: 494). JXL leads smooth photographic (blob 7,786). No codec was
 tuned on these five images; all values pixel-exact.
+
+# v0.7 research: entropy coder + channel plan (README dev priority 4)
+
+Literal tile streams (identical content), zlib-6 vs zstd-19, interleaved vs planar RGB.
+Shipped MNF5 = interleaved + zlib. Sizes in bytes; `manifold`'s own zlib pass and
+tile metadata explain small deltas vs the benchmark table.
+
+| image | interl zlib | interl zstd | planar zlib | planar zstd |
+|---|---|---|---|---|
+| gradient_320x240.png | 219782 | 230712 | 5018 | 3061 |
+| noise_256x256.png | 196935 | 196876 | 196935 | 196876 |
+| repeat_256x256.png | 3926 | 2553 | 2515 | 1101 |
+| screenshot_640x400.png | 3884 | 1429 | 7252 | 1938 |
+| solid_256x256.png | 704 | 38 | 1375 | 42 |
+| heldout blob_224x160.png | 24306 | 13986 | 15189 | 10692 |
+| heldout blocks_192x128.png | 2010 | 1633 | 3150 | 2256 |
+| heldout document_200x280.png | 1491 | 1114 | 2530 | 1691 |
+| heldout plaid_192.png | 108184 | 108338 | 64886 | 50517 |
+| heldout poster_208x144.png | 3634 | 981 | 6620 | 2265 |
+Findings (v0.7, measured in the table above):
+- zstd-19 dominates zlib-6 everywhere except noise (ties): interleaved
+  screenshot 3,884 -> 1,429 (63% smaller), poster 3,634 -> 981 (73%).
+  Plain zlib is the single largest lever left in this codec.
+- Planar beats interleaved-under-the-same-coder on smooth gradients
+  (gradient 5,018 vs 219,782 zlib!) and on plaid (64,886 vs 108,184), but
+  loses on palette/flat/classes where runs repeat 3-byte-aligned (poster,
+  blocks, document, screenshot). Interleaving preserves byte-runs; planar
+  preserves channel correlation.
+- Best combined variant on held-out blob: planar+zstd 10,692 vs shipped
+  interl+zlib 24,306 — 2.3x from layout+coder choice alone.
+- An optimal v2 format would cost 2 header bits to pick
+  {interl, planar} x {zlib, zstd} per image by proxy cost. Both options
+  change decode semantics => format version bump required (not adopted in
+  the v0.5 container). Recorded as the v0.7 research conclusion.
+- YCoCg-R is not byte-packable (co/cg span 511 values); finding above.
