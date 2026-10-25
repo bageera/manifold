@@ -2,7 +2,7 @@
 name = "manifold"
 version = "1.1.0"
 edition = "2021"
-description = "Lossless RGB8 shared-patch atlas image codecs (MNF5/MNF6)"
+description = "Lossless RGB8 shared-patch atlas image codecs (MNF5/MNF6/MNF7)"
 license = "MIT"
 
 [lib]
