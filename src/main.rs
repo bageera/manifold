@@ -3,6 +3,7 @@
 
 use manifold::codec::*;
 use manifold::img::{self, Image};
+use manifold::mnf6::{decode_mnf6, encode_mnf6};
 use manifold::vis;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -10,7 +11,7 @@ use std::time::Instant;
 const USAGE: &str = "manifold v0.5
 usage:
   manifold benchmark <image>
-  manifold encode <image> -o out.mnf5 [--no-atlas] [--geom]
+  manifold encode <image> -o out.mnf5 [--no-atlas] [--geom] [--mnf6]
   manifold decode <file.mnf5> -o out.png
   manifold verify <image> <file.mnf5>
   manifold vis <image> [prefix]     atlas mode/savings maps";
@@ -40,7 +41,7 @@ fn encode_image(src: &Image, use_atlas: bool, use_geom: bool) -> Vec<u8> {
     buf
 }
 
-fn encode_cmd(path: &Path, out: &Path, use_atlas: bool, use_geom: bool) {
+fn encode_cmd(path: &Path, out: &Path, use_atlas: bool, use_geom: bool, mnf6: bool) {
     let src = load_rgb(path);
     let dims = Dims {
         width: src.width,
@@ -48,11 +49,26 @@ fn encode_cmd(path: &Path, out: &Path, use_atlas: bool, use_geom: bool) {
     };
     let tiles = split_tiles(&src.pixels, dims);
     let t0 = Instant::now();
-    let buf = encode_image(&src, use_atlas, use_geom);
+    let buf = if mnf6 {
+        let (buf, st) = encode_mnf6(&src.pixels, dims, use_geom);
+        println!(
+            "  [mnf6] flags={:#04x} literal={} ycocg={} exact={} geom={} (nontrivial transforms: {})",
+            st.chosen_flags,
+            st.literal,
+            st.ycocg_literal,
+            st.ref_exact,
+            st.ref_geom,
+            st.refs.iter().flatten().filter(|(_, t)| *t != 0).count()
+        );
+        buf
+    } else {
+        encode_image(&src, use_atlas, use_geom)
+    };
     let enc_ms = t0.elapsed().as_millis();
     std::fs::write(out, &buf).unwrap_or_else(|e| die(&format!("write {}: {e}", out.display())));
+    let mode_label = if mnf6 { "mnf6" } else { "mnf5" };
     println!(
-        "encode {}: {} bytes, {}x{} px, {} tiles, atlas={}, geom={}, {} ms",
+        "encode [{mode_label}] {}: {} bytes, {}x{} px, {} tiles, atlas={}, geom={}, {} ms",
         out.display(),
         buf.len(),
         src.width,
@@ -66,14 +82,19 @@ fn encode_cmd(path: &Path, out: &Path, use_atlas: bool, use_geom: bool) {
 
 fn decode_cmd(file: &Path, out: &Path) {
     let buf = std::fs::read(file).unwrap_or_else(|e| die(&format!("read {}: {e}", file.display())));
-    let res = decode(&buf).unwrap_or_else(|e| die(&format!("decode: {e}")));
-    img::save_png(out, res.dims, &res.pixels)
+    let (res_dims, res_pixels) = if buf.len() >= 4 && &buf[0..4] == b"MNF6" {
+        decode_mnf6(&buf).unwrap_or_else(|e| die(&format!("decode mnf6: {e}")))
+    } else {
+        let res = decode(&buf).unwrap_or_else(|e| die(&format!("decode: {e}")));
+        (res.dims, res.pixels)
+    };
+    img::save_png(out, res_dims, &res_pixels)
         .unwrap_or_else(|e| die(&format!("save {}: {e}", out.display())));
     println!(
         "decode {}: {}x{} → {}",
         file.display(),
-        res.dims.width,
-        res.dims.height,
+        res_dims.width,
+        res_dims.height,
         out.display()
     );
 }
@@ -81,9 +102,14 @@ fn decode_cmd(file: &Path, out: &Path) {
 fn verify_cmd(image: &Path, file: &Path) {
     let src = load_rgb(image);
     let buf = std::fs::read(file).unwrap_or_else(|e| die(&format!("read {}: {e}", file.display())));
-    let res = decode(&buf).unwrap_or_else(|e| die(&format!("decode: {e}")));
-    let dims_ok = res.dims.width == src.width && res.dims.height == src.height;
-    if dims_ok && res.pixels == src.pixels {
+    let (rdims, rpx) = if buf.len() >= 4 && &buf[0..4] == b"MNF6" {
+        decode_mnf6(&buf).unwrap_or_else(|e| die(&format!("decode mnf6: {e}")))
+    } else {
+        let res = decode(&buf).unwrap_or_else(|e| die(&format!("decode: {e}")));
+        (res.dims, res.pixels)
+    };
+    let dims_ok = rdims.width == src.width && rdims.height == src.height;
+    if dims_ok && rpx == src.pixels {
         println!(
             "PASS: exact RGB8 reconstruction ({}x{})",
             src.width, src.height
@@ -220,8 +246,8 @@ pub fn main() {
             }
         }
         "encode" => {
-            let (path, out, use_atlas, use_geom) = parse_encode(&args[1..]);
-            encode_cmd(&path, &out, use_atlas, use_geom);
+            let (path, out, use_atlas, use_geom, mnf6) = parse_encode(&args[1..]);
+            encode_cmd(&path, &out, use_atlas, use_geom, mnf6);
         }
         "decode" => {
             let (file, out) = parse_flag(&args[1..], "decode <file.mnf5>");
@@ -250,10 +276,11 @@ pub fn main() {
     }
 }
 
-fn parse_encode(a: &[String]) -> (PathBuf, PathBuf, bool, bool) {
+fn parse_encode(a: &[String]) -> (PathBuf, PathBuf, bool, bool, bool) {
     let mut path: Option<PathBuf> = None;
     let mut out: Option<PathBuf> = None;
     let mut atlas = true;
+    let mut mnf6 = false;
     // v0.6 geometric mode is OPT-IN: default output stays v0.5-format
     // (modes 0/1 only) for compatibility with the packaged v0.5 decoder.
     let mut geom = false;
@@ -268,6 +295,7 @@ fn parse_encode(a: &[String]) -> (PathBuf, PathBuf, bool, bool) {
             }
             "--no-atlas" => atlas = false,
             "--geom" => geom = true,
+            "--mnf6" => mnf6 = true,
             _ => {
                 if path.is_none() {
                     path = Some(PathBuf::from(&a[i]));
@@ -281,6 +309,7 @@ fn parse_encode(a: &[String]) -> (PathBuf, PathBuf, bool, bool) {
         out.unwrap_or_else(|| die("encode: missing -o out.mnf5")),
         atlas,
         geom,
+        mnf6,
     )
 }
 

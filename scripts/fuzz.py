@@ -33,13 +33,13 @@ def main() -> int:
     panics = accepted = rejected = 0
     total = 0
     for img in images:
-        for extra in ([], ["--geom"]):
+        for extra in ([], ["--geom"], ["--mnf6"]):
             subprocess.run(
                 [BIN, "encode", str(img), "-o", "/tmp/fz_base.mnf5", *extra],
                 check=True, capture_output=True,
             )
             base = Path("/tmp/fz_base.mnf5").read_bytes()
-            for trial in range(args.trials // (len(images) * 2) + 1):
+            for trial in range(args.trials // (len(images) * 3) + 1):
                 b = bytearray(base)
                 kind = trial % 3
                 if kind == 0:
@@ -59,7 +59,7 @@ def main() -> int:
                     accepted += 1
                 elif r.returncode == 101:
                     panics += 1
-                    print(f"PANIC {img.name} {'geom' if extra else ''} trial {trial}: {r.stderr[-200:]}", file=sys.stderr)
+                    print(f"PANIC {img.name} {'geom' if '--geom' in extra else 'mnf6' if '--mnf6' in extra else ''} trial {trial}: {r.stderr[-200:]}", file=sys.stderr)
                 else:
                     rejected += 1
 

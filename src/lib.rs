@@ -2,5 +2,6 @@
 // integration tests (tests/conformance.rs).
 pub mod codec;
 pub mod img;
+pub mod mnf6;
 pub mod refdecode;
 pub mod vis;
