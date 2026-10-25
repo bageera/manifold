@@ -49,9 +49,12 @@ impl Tile {
     }
 }
 
+// MSRV (review fix 5): integer `is_multiple_of` is 1.87+, this crate
+// pins 1.73+ (README's div_ceil requirement) — modulo form is deliberate.
 #[inline]
+#[allow(clippy::manual_is_multiple_of)]
 pub fn div_ceil(a: u32, b: u32) -> u32 {
-    a / b + u32::from(!a.is_multiple_of(b))
+    a / b + u32::from(a % b != 0)
 }
 
 pub fn tile_grid(dims: Dims) -> (u32, u32) {
@@ -86,8 +89,14 @@ impl Atlas {
     }
 
     pub fn insert(&mut self, tile: &Tile) {
-        self.sigs
-            .push(tile_sig(tile.width, tile.height, &tile.data));
+        let sig = tile_sig(tile.width, tile.height, &tile.data);
+        self.insert_with_sig(tile, sig);
+    }
+
+    /// Insert with a precomputed signature (review fix 5: callers that
+    /// already computed sig for ranking should not pay for it twice).
+    pub fn insert_with_sig(&mut self, tile: &Tile, sig: Sig) {
+        self.sigs.push(sig);
         self.patches
             .push((tile.width, tile.height, tile.data.clone()));
     }
@@ -344,7 +353,7 @@ pub fn encode_stats(tiles: &[Tile], use_atlas: bool, use_geom: bool) -> (Vec<u8>
             Mode::Literal => {}
         }
         out.extend_from_slice(&best_bytes);
-        atlas.insert(tile);
+        atlas.insert_with_sig(tile, sig);
     }
     (out, stats)
 }
@@ -385,8 +394,34 @@ pub struct DecodeResult {
     pub pixels: Vec<u8>,
 }
 
+/// Configurable decoder resource ceilings (review fix 3). Defaults are the
+/// format-derived maxima; callers decoding untrusted input can tighten any
+/// of them independently.
+#[derive(Debug, Clone, Copy)]
+pub struct DecodeLimits {
+    pub max_pixels: u64,
+    pub max_tiles: u32,
+    pub max_decompressed: u64,
+    pub max_total_memory: u64, // pixels buffer + atlas patches, bytes
+}
+
+impl Default for DecodeLimits {
+    fn default() -> Self {
+        DecodeLimits {
+            max_pixels: 1 << 26,
+            max_tiles: u32::MAX,
+            max_decompressed: u64::MAX, // replaced by checked per-file bound
+            max_total_memory: u64::MAX,
+        }
+    }
+}
+
 /// Decode an MNF5 file (header + zlib payload) back to RGB8 pixels.
 pub fn decode(buf: &[u8]) -> Result<DecodeResult, String> {
+    decode_with_limits(buf, &DecodeLimits::default())
+}
+
+pub fn decode_with_limits(buf: &[u8], lim: &DecodeLimits) -> Result<DecodeResult, String> {
     if buf.len() < HEADER_SIZE {
         return Err(format!(
             "truncated header: {} < {HEADER_SIZE} bytes",
@@ -397,10 +432,16 @@ pub fn decode(buf: &[u8]) -> Result<DecodeResult, String> {
         return Err("bad magic (want MNF5)".into());
     }
     let (w, h) = read_dims(&buf[4..12])?;
+    if w as u64 * h as u64 > lim.max_pixels {
+        return Err("image exceeds max_pixels limit".into());
+    }
     let ts = u32::from_le_bytes(buf[12..16].try_into().unwrap());
     let tile_count = u32::from_le_bytes(buf[16..20].try_into().unwrap());
     if ts != TILE_SIZE {
         return Err(format!("unsupported tile size {ts}"));
+    }
+    if tile_count > lim.max_tiles {
+        return Err("tile count exceeds max_tiles limit".into());
     }
     let payload_len = u32::from_le_bytes(buf[20..24].try_into().unwrap()) as usize;
     let (cols, rows) = tile_grid(Dims {
@@ -431,9 +472,14 @@ pub fn decode(buf: &[u8]) -> Result<DecodeResult, String> {
     }
     let payload = &buf[HEADER_SIZE..HEADER_SIZE + payload_len];
 
-    // Zip-bomb cap: worst case per tile is 1 mode + 4 idx + 1 transform + 768
-    // data bytes; take(limit+1) lets us distinguish exactly-at-limit from over.
-    let decomp_limit = tile_count as u64 * (1 + 5 + (TILE_SIZE * TILE_SIZE * 3) as u64);
+    // Compression bound (checked math, review fix 1): raw stream <=
+    // 3WH pixel bytes total + per-tile metadata worst case
+    // (1 mode + 4 idx + 1 transform = 6). Reject during decompression
+    // via take(limit+1), not after read_to_end.
+    let px_bytes_total = (w as u64) * (h as u64) * 3;
+    let decomp_limit = px_bytes_total
+        .checked_add(6 * tile_count as u64)
+        .ok_or("decompressed size overflow")?;
     let mut dz = ZlibDecoder::new(payload).take(decomp_limit + 1);
     let mut raw = Vec::new();
     dz.read_to_end(&mut raw).map_err(|e| format!("zlib: {e}"))?;
@@ -441,9 +487,25 @@ pub fn decode(buf: &[u8]) -> Result<DecodeResult, String> {
         return Err("decompressed payload exceeds size limit".into());
     }
 
+    // Premature-allocation gate (review fix 2): the stream must hold at
+    // least 4 bytes per tile (mode byte + minimum ref metadata) before
+    // any image-sized allocation happens.
+    if raw.len() < 4 * tile_count as usize {
+        return Err("decompressed stream shorter than per-tile minimum".into());
+    }
+
     let total_px = w as usize * h as usize * 3;
+    // decoder memory = pixels buffer + atlas patches (a second full copy
+    // once all tiles are decoded). Enforce the ceiling before allocating.
+    let mem_needed = (total_px as u64) * 2;
+    if mem_needed > lim.max_total_memory {
+        return Err(format!(
+            "decoder memory {mem_needed} exceeds max_total_memory limit"
+        ));
+    }
     let mut out = vec![0u8; total_px];
-    let mut patches: Vec<(u32, u32, Vec<u8>)> = Vec::with_capacity(tile_count as usize);
+    // no capacity reservation: patches grows as actually decoded
+    let mut patches: Vec<(u32, u32, Vec<u8>)> = Vec::new();
     let mut cursor = 0usize;
 
     for t in 0..tile_count {
