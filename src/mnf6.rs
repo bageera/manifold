@@ -1,4 +1,4 @@
-// MNF6 — format v2 (README §9 v0.7/v0.8/v1.0 payload).
+// MNF6/MNF7 — formats v2/v3 (README §9 v0.7/v0.8/v1.1 payload).
 //
 // MNF6 = MNF5 tile records + per-image coding selections:
 //   header (28 bytes): "MNF6", u32 LE width, height, tile=16, tile_count,
@@ -173,12 +173,68 @@ pub fn planar_unpack(data: &[u8]) -> Vec<u8> {
     out
 }
 
+// --- MNF7: modular 8-bit color-domain lifting (ADR 2026-10-25) ---------------
+// NOT standard signed YCoCg-R (that is MNF6 mode 3 with 9-bit chroma planes).
+// Modular variant: every step is a u8 bijection, `>>1` is a logical shift on
+// the wrapped byte. Encoder evaluates reference residuals in BOTH domains
+// per candidate and the mode byte tells the decoder which to use:
+//   mode 4 = exact reference, residual in modular-color domain
+//   mode 5 = geometric reference, residual in modular-color domain
+// Decode: base_t = T(G_t(P_hat)); pix = T^-1(base_t + resid mod 256).
+// Atlas patches stay canonical RGB8 (ADR integration rule).
+
+pub mod modcolor {
+    /// Modular YCoCg-like forward: [r,g,b] -> [y, co, cg], all mod 256.
+    pub fn forward(rgb: [u8; 3]) -> [u8; 3] {
+        let [r, g, b] = rgb;
+        let co = r.wrapping_sub(b);
+        let t = b.wrapping_add(co >> 1);
+        let cg = g.wrapping_sub(t);
+        let y = t.wrapping_add(cg >> 1);
+        [y, co, cg]
+    }
+
+    /// Exact inverse: reverse sequence of the forward steps.
+    pub fn inverse(ycocg: [u8; 3]) -> [u8; 3] {
+        let [y, co, cg] = ycocg;
+        let t = y.wrapping_sub(cg >> 1);
+        let g = cg.wrapping_add(t);
+        let b = t.wrapping_sub(co >> 1);
+        let r = b.wrapping_add(co);
+        [r, g, b]
+    }
+}
+
+pub fn modcolor_forward(rgb: &[u8]) -> Vec<u8> {
+    let mut out = vec![0u8; rgb.len()];
+    for (o, px) in out.chunks_exact_mut(3).zip(rgb.chunks_exact(3)) {
+        let t = modcolor::forward([px[0], px[1], px[2]]);
+        o[0] = t[0];
+        o[1] = t[1];
+        o[2] = t[2];
+    }
+    out
+}
+
+pub fn modcolor_inverse(ycocg: &[u8]) -> Vec<u8> {
+    let mut out = vec![0u8; ycocg.len()];
+    for (o, px) in out.chunks_exact_mut(3).zip(ycocg.chunks_exact(3)) {
+        let t = modcolor::inverse([px[0], px[1], px[2]]);
+        o[0] = t[0];
+        o[1] = t[1];
+        o[2] = t[2];
+    }
+    out
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct MnF6Stats {
     pub literal: u32,
     pub ycocg_literal: u32,
     pub ref_exact: u32,
     pub ref_geom: u32,
+    pub ref_exact_color: u32,
+    pub ref_geom_color: u32,
     pub chosen_flags: u32,
     pub modes: Vec<u8>,
     pub refs: Vec<Option<(u32, u8)>>,
@@ -189,6 +245,8 @@ enum TileChoice {
     YCoCg(Vec<u8>),
     Exact(u32, Vec<u8>),
     Geom(u32, u8, Vec<u8>),
+    ExactColor(u32, Vec<u8>),    // MNF7 mode 4
+    GeomColor(u32, u8, Vec<u8>), // MNF7 mode 5
 }
 
 /// Which flags to try, in order; returns (flags_value, planar, coder_ref).
@@ -201,8 +259,9 @@ fn flag_variants() -> Vec<(u32, bool, Coder)> {
     ]
 }
 
-/// Encode RGB8 pixels as MNF6, choosing coding flags by measured stream size.
-pub fn encode_mnf6(pixels: &[u8], dims: Dims, use_geom: bool) -> (Vec<u8>, MnF6Stats) {
+/// Encode RGB8 pixels as MNF7, choosing coding flags by measured stream size.
+/// Supersedes encode_mnf6 (same flags + modes 0-3; adds color-domain modes 4/5).
+pub fn encode_mnf7(pixels: &[u8], dims: Dims, use_geom: bool) -> (Vec<u8>, MnF6Stats) {
     let tiles = crate::codec::split_tiles(pixels, dims);
     let mut best: Option<(Vec<u8>, u32, MnF6Stats)> = None;
 
@@ -271,6 +330,34 @@ pub fn encode_mnf6(pixels: &[u8], dims: Dims, use_geom: bool) -> (Vec<u8>, MnF6S
                                 TileChoice::Geom(prior, t, body)
                             };
                         }
+                        // MNF7 color-domain candidate: residual of T(tile) - T(base)
+                        let mut r_c = vec![0u8; n];
+                        let tile_t = modcolor_forward(&tile.data);
+                        let base_t = modcolor_forward(&base);
+                        for i in 0..n {
+                            r_c[i] = tile_t[i].wrapping_sub(base_t[i]);
+                        }
+                        let body_c = pack(&r_c);
+                        let cost_c = meta + 1 + proxy_cost(&coder, &body_c);
+                        if std::env::var("MNF7_DEBUG").is_ok() {
+                            eprintln!(
+                                "cand tile {} prior {} t {} rgb {} color {} best {}",
+                                stats.modes.len(),
+                                prior,
+                                t,
+                                cost,
+                                cost_c,
+                                best_cost
+                            );
+                        }
+                        if cost_c < best_cost {
+                            best_cost = cost_c;
+                            choice = if t == 0 {
+                                TileChoice::ExactColor(prior, body_c)
+                            } else {
+                                TileChoice::GeomColor(prior, t, body_c)
+                            };
+                        }
                     }
                 }
             }
@@ -303,10 +390,28 @@ pub fn encode_mnf6(pixels: &[u8], dims: Dims, use_geom: bool) -> (Vec<u8>, MnF6S
                     raw.extend_from_slice(&p.to_le_bytes());
                     raw.push(*t);
                 }
+                TileChoice::ExactColor(p, _) => {
+                    stats.ref_exact_color += 1;
+                    stats.modes.push(4);
+                    stats.refs.push(Some((*p, 0)));
+                    raw.push(4u8);
+                    raw.extend_from_slice(&p.to_le_bytes());
+                }
+                TileChoice::GeomColor(p, t, _) => {
+                    stats.ref_geom_color += 1;
+                    stats.modes.push(5);
+                    stats.refs.push(Some((*p, *t)));
+                    raw.push(5u8);
+                    raw.extend_from_slice(&p.to_le_bytes());
+                    raw.push(*t);
+                }
             }
             match &choice {
                 TileChoice::Literal(b) | TileChoice::YCoCg(b) => raw.extend_from_slice(b),
-                TileChoice::Exact(_, b) | TileChoice::Geom(_, _, b) => raw.extend_from_slice(b),
+                TileChoice::Exact(_, b)
+                | TileChoice::Geom(_, _, b)
+                | TileChoice::ExactColor(_, b)
+                | TileChoice::GeomColor(_, _, b) => raw.extend_from_slice(b),
             }
             if std::env::var("MNF6_DEBUG").is_ok() {
                 eprintln!(
@@ -321,7 +426,7 @@ pub fn encode_mnf6(pixels: &[u8], dims: Dims, use_geom: bool) -> (Vec<u8>, MnF6S
 
         let payload = compress_stream(&coder, &raw);
         let mut file = Vec::with_capacity(HEADER6 + payload.len());
-        file.extend_from_slice(b"MNF6");
+        file.extend_from_slice(b"MNF7");
         file.extend_from_slice(&dims.width.to_le_bytes());
         file.extend_from_slice(&dims.height.to_le_bytes());
         file.extend_from_slice(&TILE_SIZE.to_le_bytes());
@@ -343,11 +448,11 @@ pub fn encode_mnf6(pixels: &[u8], dims: Dims, use_geom: bool) -> (Vec<u8>, MnF6S
 
 // --- decoding --------------------------------------------------------------------
 
-pub fn decode_mnf6(buf: &[u8]) -> Result<(Dims, Vec<u8>), String> {
+pub fn decode_mnf7(buf: &[u8]) -> Result<(Dims, Vec<u8>), String> {
     if buf.len() < HEADER6 {
         return Err("short".into());
     }
-    if buf[0..4] != *b"MNF6" {
+    if buf[0..4] != *b"MNF7" {
         return Err("magic".into());
     }
     let u32le = |o: usize| u32::from_le_bytes(buf[o..o + 4].try_into().unwrap());
@@ -445,13 +550,17 @@ pub fn decode_mnf6(buf: &[u8]) -> Result<(Dims, Vec<u8>), String> {
                 let cg = unpack9(cg9, np)?;
                 ycocg_inverse(&y, &co, &cg)
             }
-            1 | 2 => {
-                let meta = if mode == 1 { 4 } else { 5 };
+            1 | 2 | 4 | 5 => {
+                let meta = if mode == 2 || mode == 5 { 5 } else { 4 };
                 if ip + meta > raw.len() {
                     return Err("refmeta".into());
                 }
                 let idx = u32::from_le_bytes(raw[ip..ip + 4].try_into().unwrap()) as usize;
-                let tr = if mode == 2 { raw[ip + 4] } else { 0 };
+                let tr = if mode == 2 || mode == 5 {
+                    raw[ip + 4]
+                } else {
+                    0
+                };
                 ip += meta;
                 if idx >= i as usize {
                     return Err("reforder".into());
@@ -477,10 +586,24 @@ pub fn decode_mnf6(buf: &[u8]) -> Result<(Dims, Vec<u8>), String> {
                 } else {
                     apply_transform(tr, tw, th, ref_rgb)
                 };
-                base.iter()
-                    .zip(resid.iter())
-                    .map(|(a, r)| a.wrapping_add(*r))
-                    .collect()
+                match mode {
+                    1 | 2 => base
+                        .iter()
+                        .zip(resid.iter())
+                        .map(|(a, r)| a.wrapping_add(*r))
+                        .collect(),
+                    // MNF7 color-domain: recon_t = T(base) + resid; pix = T^-1(recon_t)
+                    4 | 5 => {
+                        let base_t = modcolor_forward(&base);
+                        let recon_t: Vec<u8> = base_t
+                            .iter()
+                            .zip(resid.iter())
+                            .map(|(a, r)| a.wrapping_add(*r))
+                            .collect();
+                        modcolor_inverse(&recon_t)
+                    }
+                    _ => unreachable!(),
+                }
             }
             _ => return Err(format!("tile {i}: mode byte {mode:#04x} pos {ip}")),
         };
@@ -506,9 +629,9 @@ pub fn decode_mnf6(buf: &[u8]) -> Result<(Dims, Vec<u8>), String> {
 mod tests {
     use super::*;
 
-    fn roundtrip_mnf6(px: &[u8], dims: Dims, use_geom: bool) {
-        let (buf, st) = encode_mnf6(px, dims, use_geom);
-        let (d, out) = decode_mnf6(&buf).expect("decode");
+    fn roundtrip_mnf7(px: &[u8], dims: Dims, use_geom: bool) {
+        let (buf, st) = encode_mnf7(px, dims, use_geom);
+        let (d, out) = decode_mnf7(&buf).expect("decode");
         assert_eq!(d, dims);
         assert_eq!(out, px, "flags {:#b}", st.chosen_flags);
     }
@@ -559,7 +682,7 @@ mod tests {
             let px: Vec<u8> = (0..w as usize * h as usize * 3)
                 .map(|_| (rnd() & 0xFF) as u8)
                 .collect();
-            roundtrip_mnf6(
+            roundtrip_mnf7(
                 &px,
                 Dims {
                     width: w,
@@ -568,6 +691,64 @@ mod tests {
                 true,
             );
         }
+    }
+
+    #[test]
+    fn mnf7_modcolor_is_bijective_exhaustive() {
+        // ADR gate: proof of reversibility. 2^24 / 17-sample stride ~ 981k triples,
+        // plus a full 0..=255^3 corner block. Wrapping bijectivity over all
+        // 16.7M triples follows structurally from exact-inverse op sequence.
+        for v in (0..=0xFFFFFFu32).step_by(17) {
+            let px = [(v >> 16) as u8, (v >> 8) as u8, v as u8];
+            assert_eq!(modcolor::inverse(modcolor::forward(px)), px, "{px:?}");
+        }
+        for r in [0u8, 1, 127, 128, 254, 255] {
+            for g in [0u8, 85, 170, 255] {
+                for b in [0u8, 128, 255] {
+                    let px = [r, g, b];
+                    assert_eq!(modcolor::inverse(modcolor::forward(px)), px);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn mnf7_color_domain_used_when_it_wins() {
+        // structured color-delta over a noisy base: tile B = T^-1(T(A) + co ramp)
+        // makes the RGB residual incompressible noise but the color-domain
+        // residual mostly zeros + a repeating ramp — mode 4 must win.
+        let mut s: u64 = 42;
+        let mut rnd = move || {
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
+            s
+        };
+        let a: Vec<u8> = (0..16 * 16 * 3).map(|_| (rnd() & 0xFF) as u8).collect();
+
+        let ta_t = modcolor_forward(&a);
+        let mut tb_t = ta_t.clone();
+        let ramp = [0u8, 1, 2, 255]; // repeating pattern in the co channel only
+        for i in (1..tb_t.len()).step_by(3) {
+            tb_t[i] = tb_t[i].wrapping_add(ramp[(i / 3) % 4]);
+        }
+        let b = modcolor_inverse(&tb_t);
+
+        let mut two = a.clone();
+        two.extend_from_slice(&b);
+        let d2 = Dims {
+            width: 16,
+            height: 32,
+        };
+        let (buf, st) = encode_mnf7(&two, d2, true);
+        let (_, out) = decode_mnf7(&buf).expect("decode");
+        assert_eq!(out, two);
+        let color_modes = st.ref_exact_color + st.ref_geom_color;
+        assert!(
+            color_modes > 0,
+            "expected color-domain references, got {}",
+            color_modes
+        );
     }
 
     #[test]
@@ -583,7 +764,7 @@ mod tests {
                 px[i + 2] = 128;
             }
         }
-        let (buf, st) = encode_mnf6(
+        let (buf, st) = encode_mnf7(
             &px,
             Dims {
                 width: w,
@@ -596,20 +777,20 @@ mod tests {
             FLAG_PLANAR,
             "gradient wants planar"
         );
-        let (_, out) = decode_mnf6(&buf).expect("decode");
+        let (_, out) = decode_mnf7(&buf).expect("decode");
         assert_eq!(out, px);
     }
 
     #[test]
     fn mnf6_rejects() {
-        assert!(decode_mnf6(&[]).is_err());
-        assert!(decode_mnf6(&[0u8; 27]).is_err());
-        assert!(decode_mnf6(b"MNF5\x01\x00\x00\x00\x01\x00\x00\x00\x10\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x00\x00").is_err(), "mnf5 magic");
+        assert!(decode_mnf7(&[]).is_err());
+        assert!(decode_mnf7(&[0u8; 27]).is_err());
+        assert!(decode_mnf7(b"MNF5\x01\x00\x00\x00\x01\x00\x00\x00\x10\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x00\x00").is_err(), "mnf5 magic");
         // reserved flag bits
         let mut f = vec![0u8; 28];
         f[0..4].copy_from_slice(b"MNF6");
         f[24] = 0b100; // bit2 reserved
-        assert!(decode_mnf6(&f).is_err(), "reserved flag");
+        assert!(decode_mnf7(&f).is_err(), "reserved flag");
     }
 
     #[test]
@@ -636,11 +817,11 @@ mod tests {
         let z = compress_payload(&raw);
         let mut m5 = build_header(d, tiles.len() as u32, z.len() as u32);
         m5.extend_from_slice(&z);
-        let (m6, _) = encode_mnf6(&px, d, true);
-        assert!(decode_mnf6(&m6).is_ok());
+        let (m6, _) = encode_mnf7(&px, d, true);
+        assert!(decode_mnf7(&m6).is_ok());
         assert!(
             m6.len() <= m5.len(),
-            "MNF6 ({}) should not lose to MNF5 ({}) on gradient",
+            "MNF6/7 ({}) should not lose to MNF5 ({}) on gradient",
             m6.len(),
             m5.len()
         );

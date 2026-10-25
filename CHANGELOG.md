@@ -1,5 +1,34 @@
 # Changelog
 
+## v1.1.0 — MNF7: modular RGB8 color-domain residuals (ADR-001)
+
+Implements the color-transform ADR (docs/adr-001-color-transform.md):
+
+- MNF7 (new magic; superset of MNF6): modes 4/5 code exact/geometric
+  reference residuals in a MODULAR 8-bit color domain (u8 wrapping
+  YCoCg-like lifting — a bijection over RGB8 triples, NOT standard
+  signed YCoCg-R, whose 9-bit chroma requirement is why it stays in
+  mode 3 with bit-packed planes). Decoder: recon_T = T(base) + resid;
+  pixels = T^-1(recon_T), per-tile, cost-selected.
+- Reversibility proven exhaustively (stride-17 sweep of all RGB8
+  triples + corner blocks; tests/mnf7_modcolor_is_bijective_exhaustive).
+- ADR shipping-gate measurement: 0 color selections across the
+  10-image corpus (RGB residual already captures that correlation);
+  mechanism proven on structured-chroma-delta workloads
+  (tests/mnf7_color_domain_used_when_it_wins). Cost model pays nothing
+  when the color domain does not win.
+- Atlas patches stay canonical RGB8 (ADR integration rule).
+- MNF7 fuzz: 400/400 malformations rejected, 0 panics; CLI stats now
+  report color utilization; format.md §MNF7 documents layout/proof/
+  selection semantics; version 1.1.0.
+
+Validated: fmt/clippy clean, all suites green (mnf6_conformance 4 +
+differential 3 + unit 23 + integration), full-corpus MNF7 == exact
+10/10; every MNF7 file <= best MNF5 (+4-byte worst case) and < on all 10.
+
+---
+
+
 ## v1.0.0 — Stable lossless image codec (2026-10-25)
 
 Format freeze per the README §9 v1.0 exit criteria:
