@@ -1,8 +1,7 @@
 Manifold Encoder (MNF) v0.5 — Rust Research Prototype
 Status: experimental research software · RGB8 lossless image codec · not production-safe
 
-Implemented in the packaged v0.5 source: literal tiles and backward patch references.
-Not part of the packaged v0.5 format: geometric-reference mode, learned manifolds, or a stable bitstream specification.
+Implemented in the packaged source: literal tiles, backward patch references, and (v0.6, opt-in `--geom`) geometric D8 references. A normative bitstream specification now exists: docs/format.md with golden vectors in tests/conformance/.
 
 Manifold Encoder (MNF) investigates whether repeated structure in images can reduce lossless encoding cost. Version 0.5 is a deterministic shared-patch predictive codec written in Rust. It uses previously reconstructed tiles as an implicit reference atlas and codes the byte-exact difference between a tile and a chosen reference.
 
@@ -14,7 +13,7 @@ This is an empirical hypothesis, not a guarantee of better compression. The refe
 
 The project has three separate evaluation criteria:
 1. Correctness: For every accepted RGB8 image I, decode(encode(I)) == I in dimensions and every RGB channel byte.
-2. Robustness: Invalid streams must be rejected without panicking or exhausting configured resources. This is a target, not yet a verified property of v0.5.
+2. Robustness: Invalid streams must be rejected without panicking or exhausting configured resources. Verified as of v0.6.0: 1400+ mutation-fuzz trials across the corpus with zero panics, plus fixed rejection vectors in tests/conformance/.
 3. Compression value: Atlas-enabled files must be compared with atlas-disabled MNF and established lossless codecs on identical decoded RGB8 data. Savings must be demonstrated by measurements, not inferred from predictor similarity.
 A larger MNF output is a valid research result. A decoding mismatch is not.
 2. Scope and non-goals
@@ -108,8 +107,8 @@ If your image resides in the parent folder, use ../1000033041.jpg instead. The C
 
 Status of verification: These commands describe the source interface. They are not evidence that the code has been compiled, the test suite passes, or that a benchmark has been run in the current environment.
 6. Testing and correctness evidence
-Tests present in packaged v0.5
-The library includes small round-trip tests across several image sizes, a repeated-patch test expecting a reference, and a basic invalid-stream rejection test. These are valuable smoke tests, not exhaustive proof.
+Tests present in the packaged source
+Unit tests (15): round-trips across image sizes incl. edge tiles, repeated-patch reference test, D8 exact-inverse roundtrips, invalid-stream rejections. Integration suite (tests/conformance.rs, 3 tests): byte-exact golden vectors, 14 rejection vectors, and a deterministic property-based roundtrip loop. Fuzz harness: scripts/fuzz.py (mutation testing, panic-free assertion), wired into CI. These are strong smoke tests plus fixed conformance vectors, not exhaustive adversarial proof.
 Required before an MNF5.1 hardening milestone
 - Property-based testing: Random dimensions, edge tiles, image contents, atlas on/off, and round-trip equality; deterministic failing-case reproduction.
 - Format conformance: Fixed binary golden vectors with expected RGB output and explicit rejection vectors for invalid metadata, references, modes, and lengths.

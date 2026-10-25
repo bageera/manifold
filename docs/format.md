@@ -1,0 +1,118 @@
+# MNF5 Bitstream Format — Normative Specification
+
+Version: 1 (v0.5-layout + opt-in mode 2, as shipped in v0.6.0)
+Status: normative for the `manifold` crate. Golden vectors live in
+`tests/conformance/` and are enforced by `tests/conformance.rs`.
+
+## 1. Container
+
+A well-formed MNF5 file is:
+
+    file := header(24) payload(payload_len)
+
+All integers are **little-endian**. No padding, no alignment, no extension
+fields. Files with fewer than 24 bytes are invalid. Files whose total length
+differs from `24 + payload_len` are invalid — trailing bytes are rejected,
+not ignored.
+
+### Header (offset, width, field)
+
+    0   4   magic            ASCII "MNF5" exactly
+    4   4   width            u32, image width in pixels, > 0
+    8   4   height           u32, image height in pixels, > 0
+    12  4   tile_size        u32, MUST be 16 in this version
+    16  4   tile_count       u32, MUST equal ceil(width/16) * ceil(height/16)
+    20  4   payload_len      u32, zlib byte length, MUST be <= 2^31 - 1
+
+Decoder MUST validate magic, dimensions, tile_size, tile_count, and
+payload_len **before** decompressing. Additionally:
+
+- `width * height` MUST NOT exceed 2^26 pixels (allocation bound).
+- Decompressed payload MUST NOT exceed
+  `tile_count * (1 + 5 + 16*16*3)` = `tile_count * 774` bytes
+  (zip-bomb bound; worst-case record = mode + idx + transform + full data).
+
+## 2. Payload
+
+payload_len bytes of zlib stream (RFC 1950). Decompressed content is
+exactly `tile_count` consecutive tile records, concatenated with no framing:
+
+    record := literal | exact_ref | geom_ref
+    literal    := u8 mode=0                       tile_bytes(n)
+    exact_ref  := u8 mode=1 u32_le prior_index    tile_bytes(n)
+    geom_ref   := u8 mode=2 u32_le prior_index u8 transform    tile_bytes(n)
+
+    n := 3 * tw * th   (tw, th = tile dimensions at this grid position,
+                        each <= 16, smaller at right/bottom edges)
+
+`tile_bytes` is row-major RGB8, row-major within the tile.
+
+Tile positions: tile `i` sits at grid row `floor(i / cols)`, column
+`i mod cols`, where `cols = ceil(width / 16)`.
+
+## 3. Reference semantics
+
+- `prior_index` MUST be `< i` (the index of the record being decoded) and
+  MUST point at an already-decoded tile. Self- and forward references are
+  invalid.
+- The referenced tile MUST have shape exactly `(tw, th)` — equal shape, not
+  merely equal byte length.
+- For `geom_ref`, `transform` is a D8 identifier (Section 4) and MUST be
+  member of the shape-keeping subgroup for this tile:
+  all 8 transforms are valid iff `tw == th`; otherwise only 0..=3.
+- Decoding:
+      base = transform == 0 ? ref_pixels : apply_transform(transform, ref_pixels)
+      pixels = (base + residual) mod 256        (bytewise)
+  Literal decoding is the identity: `pixels = tile_bytes`.
+- All additions/subtractions on samples are in the ring Z/256 — this is
+  what makes the residual lossless regardless of prediction quality.
+
+## 4. Transform identifiers (D8, opt-in as of v0.6.0)
+
+Pull maps — output pixel `(x, y)` samples source `(sx, sy)`:
+
+    0  identity        sx=x                  sy=y
+    1  flip horizontal sx = w-1-x            sy=y
+    2  flip vertical   sx=x                  sy=h-1-y
+    3  rotate 180      sx=w-1-x              sy=h-1-y
+    4  transpose+      sx=y                  sy=h-1-x     (rot90 ccw family)
+    5  T1 after T4     composite
+    6  T3 after T4     composite (= inverse of 4 in this labeling)
+    7  T1 after T3 after T4   composite
+
+For 4..=7 the intermediate shape is `(h, w)`. `apply_transform` is used on
+both encode and decode sides — maps are exact permutations, no
+interpolation, so any consistent map is lossless by construction. Golden
+vectors pin the exact composition semantics (Section 7); do not relabel
+transform ids without bumping the format version.
+
+## 5. Cost model (encoder-side only; informative)
+
+Not normative for decoding, but the reference encoder decides literal vs
+reference by a per-tile local zlib proxy: literal pays `1 + zlib(data)`;
+a reference pays `(5, or 6 if transform != 0) + zlib(residual)`. The proxy
+is not the true marginal cost in the final combined zlib stream, and the
+atlas can legitimately lose to deflate's own LZ77 matching (e.g. constant
+tiles). No global optimality is claimed.
+
+## 6. Conformance vectors
+
+`tests/conformance/` contains byte-exact vectors with expected pixels;
+`tests/conformance.rs` asserts decode-exactness and rejection lists:
+
+- `solid_32x16.mnf5` — two solid tiles, second is an exact reference.
+- `rej_*.mnf5` — rejection vectors (bad magic, dangling reference, shape
+  mismatch, invalid transform on non-square tile, truncated stream,
+  trailing garbage, oversized dimensions, zero dimensions).
+
+Deterministic rejection: each vector must be rejected, and must not panic,
+regardless of its zlib payload.
+
+## 7. Versioning
+
+Any semantic change — new mode, new transform labeling, new header field,
+relaxed/tightened validation — requires a format-version decision and a
+fresh set of golden vectors. MNF5 is currently a research format; v0.5-
+layout files and v0.6 `--geom` files share this document with mode 2
+gated behind encoder options. The packaged v0.5 decoder subset accepts
+modes 0/1 only.

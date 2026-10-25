@@ -1,11 +1,9 @@
 // Manifold Encoder v0.5 CLI.
 // Subcommands: benchmark, encode, decode, verify. Atlas on by default; --no-atlas.
 
-mod codec;
-mod img;
-mod vis;
-
-use codec::*;
+use manifold::codec::*;
+use manifold::img::{self, Image};
+use manifold::vis;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -16,8 +14,6 @@ usage:
   manifold decode <file.mnf5> -o out.png
   manifold verify <image> <file.mnf5>
   manifold vis <image> [prefix]     atlas mode/savings maps";
-
-use img::Image;
 
 fn die(m: &str) -> ! {
     eprintln!("{m}");
@@ -32,7 +28,10 @@ fn load_rgb(path: &Path) -> Image {
 }
 
 fn encode_image(src: &Image, use_atlas: bool, use_geom: bool) -> Vec<u8> {
-    let dims = Dims { width: src.width, height: src.height };
+    let dims = Dims {
+        width: src.width,
+        height: src.height,
+    };
     let tiles = split_tiles(&src.pixels, dims);
     let raw = encode_tiles(&tiles, use_atlas, use_geom);
     let payload = compress_payload(&raw);
@@ -43,7 +42,10 @@ fn encode_image(src: &Image, use_atlas: bool, use_geom: bool) -> Vec<u8> {
 
 fn encode_cmd(path: &Path, out: &Path, use_atlas: bool, use_geom: bool) {
     let src = load_rgb(path);
-    let dims = Dims { width: src.width, height: src.height };
+    let dims = Dims {
+        width: src.width,
+        height: src.height,
+    };
     let tiles = split_tiles(&src.pixels, dims);
     let t0 = Instant::now();
     let buf = encode_image(&src, use_atlas, use_geom);
@@ -65,7 +67,8 @@ fn encode_cmd(path: &Path, out: &Path, use_atlas: bool, use_geom: bool) {
 fn decode_cmd(file: &Path, out: &Path) {
     let buf = std::fs::read(file).unwrap_or_else(|e| die(&format!("read {}: {e}", file.display())));
     let res = decode(&buf).unwrap_or_else(|e| die(&format!("decode: {e}")));
-    img::save_png(&out, res.dims, &res.pixels).unwrap_or_else(|e| die(&format!("save {}: {e}", out.display())));
+    img::save_png(out, res.dims, &res.pixels)
+        .unwrap_or_else(|e| die(&format!("save {}: {e}", out.display())));
     println!(
         "decode {}: {}x{} → {}",
         file.display(),
@@ -81,7 +84,10 @@ fn verify_cmd(image: &Path, file: &Path) {
     let res = decode(&buf).unwrap_or_else(|e| die(&format!("decode: {e}")));
     let dims_ok = res.dims.width == src.width && res.dims.height == src.height;
     if dims_ok && res.pixels == src.pixels {
-        println!("PASS: exact RGB8 reconstruction ({}x{})", src.width, src.height);
+        println!(
+            "PASS: exact RGB8 reconstruction ({}x{})",
+            src.width, src.height
+        );
     } else {
         eprintln!("FAIL: reconstruction differs");
         std::process::exit(1);
@@ -90,7 +96,10 @@ fn verify_cmd(image: &Path, file: &Path) {
 
 fn vis_cmd(image: &Path, prefix: &Path) {
     let src = load_rgb(image);
-    let dims = Dims { width: src.width, height: src.height };
+    let dims = Dims {
+        width: src.width,
+        height: src.height,
+    };
     let tiles = split_tiles(&src.pixels, dims);
     let (raw, st) = encode_stats(&tiles, true, true);
     let payload = compress_payload(&raw);
@@ -112,15 +121,18 @@ fn vis_cmd(image: &Path, prefix: &Path) {
 
 fn benchmark(path: &Path) {
     let src = load_rgb(path);
-    let dims = Dims { width: src.width, height: src.height };
+    let dims = Dims {
+        width: src.width,
+        height: src.height,
+    };
     let n_tiles = tile_grid(dims).0 * tile_grid(dims).1;
 
     let mut rows: Vec<(&str, usize, u128)> = Vec::new();
 
     let arms: [(&str, bool, bool); 3] = [
-        ("MNF5-atlas", true, false),      // exact references only (v0.5 ablation)
-        ("MNF5-geom-atlas", true, true),  // D8 geometric atlas (v0.6)
-        ("MNF5-no-atlas", false, false),  // baseline: predictive literals
+        ("MNF5-atlas", true, false),     // exact references only (v0.5 ablation)
+        ("MNF5-geom-atlas", true, true), // D8 geometric atlas (v0.6)
+        ("MNF5-no-atlas", false, false), // baseline: predictive literals
     ];
     for (label, use_atlas, use_geom) in arms {
         let t0 = Instant::now();
@@ -185,7 +197,10 @@ pub fn main() {
             if args.len() < 2 {
                 die("vis <image> [prefix]");
             }
-            let prefix = args.get(2).map(PathBuf::from).unwrap_or_else(|| PathBuf::from("atlas"));
+            let prefix = args
+                .get(2)
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("atlas"));
             vis_cmd(Path::new(&args[1]), &prefix);
         }
         "verify" => {
@@ -213,7 +228,9 @@ fn parse_encode(a: &[String]) -> (PathBuf, PathBuf, bool, bool) {
         match a[i].as_str() {
             "-o" => {
                 i += 1;
-                out = Some(PathBuf::from(a.get(i).unwrap_or_else(|| die("-o requires a path"))));
+                out = Some(PathBuf::from(
+                    a.get(i).unwrap_or_else(|| die("-o requires a path")),
+                ));
             }
             "--no-atlas" => atlas = false,
             "--geom" => geom = true,
@@ -240,7 +257,9 @@ fn parse_flag(a: &[String], usage: &str) -> (PathBuf, PathBuf) {
     while i < a.len() {
         if a[i] == "-o" {
             i += 1;
-            out = Some(PathBuf::from(a.get(i).unwrap_or_else(|| die("-o requires a path"))));
+            out = Some(PathBuf::from(
+                a.get(i).unwrap_or_else(|| die("-o requires a path")),
+            ));
         } else if file.is_none() {
             file = Some(PathBuf::from(&a[i]));
         }

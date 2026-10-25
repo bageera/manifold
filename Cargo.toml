@@ -5,6 +5,10 @@ edition = "2021"
 description = "Lossless RGB8 shared-patch atlas image codec (MNF5)"
 license = "MIT"
 
+[lib]
+name = "manifold"
+path = "src/lib.rs"
+
 [dependencies]
 flate2 = "1.0"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }

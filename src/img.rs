@@ -27,7 +27,9 @@ pub fn save_png(path: &Path, dims: Dims, pixels: &[u8]) -> Result<(), String> {
     enc.set_color(png::ColorType::Rgb);
     enc.set_depth(png::BitDepth::Eight);
     let mut writer = enc.write_header().map_err(|e| format!("png header: {e}"))?;
-    writer.write_image_data(pixels).map_err(|e| format!("png data: {e}"))?;
+    writer
+        .write_image_data(pixels)
+        .map_err(|e| format!("png data: {e}"))?;
     Ok(())
 }
 
@@ -39,7 +41,9 @@ pub fn encode_png(dims: Dims, pixels: &[u8]) -> Result<Vec<u8>, String> {
         enc.set_color(png::ColorType::Rgb);
         enc.set_depth(png::BitDepth::Eight);
         let mut writer = enc.write_header().map_err(|e| format!("png header: {e}"))?;
-        writer.write_image_data(pixels).map_err(|e| format!("png data: {e}"))?;
+        writer
+            .write_image_data(pixels)
+            .map_err(|e| format!("png data: {e}"))?;
     }
     Ok(buf)
 }
