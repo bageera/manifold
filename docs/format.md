@@ -116,3 +116,69 @@ fresh set of golden vectors. MNF5 is currently a research format; v0.5-
 layout files and v0.6 `--geom` files share this document with mode 2
 gated behind encoder options. The packaged v0.5 decoder subset accepts
 modes 0/1 only.
+
+---
+
+# MNF6 Bitstream Format — Normative Specification (format v2)
+
+Status: implemented in v0.7+ of the `manifold` crate (`src/mnf6.rs`),
+rate-aware encoder, magic-routed decoder. MNF5 remains current; MNF6 files
+are produced only via `encode --mnf6`.
+
+## 1. Container
+
+    file := header(28) payload(payload_len)
+
+    0   4   magic            ASCII "MNF6" exactly
+    4   4   width            u32 LE, > 0
+    8   4   height           u32 LE, > 0
+    12  4   tile_size        u32 LE, MUST be 16
+    16  4   tile_count       u32 LE, MUST equal ceil(width/16)*ceil(height/16)
+    20  4   payload_len      u32 LE, MUST be <= 2^31 - 1
+    24  4   flags            u32 LE bitmask (Section 2)
+
+Validation order and bounds are those of MNF5 (docs/format.md §1) plus:
+total file length MUST be exactly `28 + payload_len`. Decompressed payload
+MUST NOT exceed `tile_count * (1 + 5 + 768 + 2)` bytes.
+
+## 2. Flags
+
+    bit 0 = PLANAR   mode 0 literal bodies and mode 1/2 residual payloads
+                     carry planar [R][G][B] planes (n bytes each) instead
+                     of interleaved RGB
+    bit 1 = ZSTD     payload is a zstd frame (with xxh64 checksum) instead
+                     of a zlib stream
+    bits 2..31       reserved; MUST be 0 on write, rejected on read
+
+The encoder MEASURES all four flag variants (v0.8 rate-aware selection)
+and emits the smallest final stream; the decoder dispatches on bits only.
+
+## 3. Records
+
+    record := literal | exact_ref | geom_ref | ycocg_ref
+    literal    := u8 mode=0  body(n, layout)
+    exact_ref  := u8 mode=1  u32_le prior  body(n, layout)
+    geom_ref   := u8 mode=2  u32_le prior  u8 transform  body(n, layout)
+    ycocg_ref  := u8 mode=3  Y plane (n/3 bytes) | co9 plane | cg9 plane
+                 (co9/cg9 are ceil(9*(n/3)/8) bytes, LSB-first packed,
+                  9 bits per biased sample, co/cg stored +256)
+
+    body(n, layout) := interleaved RGB or planar per flags.bit0
+
+Reference semantics (order, shape, D8 transforms) are exactly MNF5 §3.
+Mode 3 decodes via YCoCg-R:
+    tmp = y - (cg >> 1); g = tmp + cg; b = tmp - (co >> 1);
+    r = tmp + co - (co >> 1)         (co, cg in biased signed form)
+Y plane carries 1 byte per pixel — MNF5's spec draft wrongly said n bytes;
+n counts RGB bytes throughout both specs (MNF6 decoder bug found and fixed
+by differential fuzzing: a 2497-byte mode-3 record was being read as
+2*n + 2*n9).
+
+Mode 3 is layout-independent (always bit-packed, whatever flags say).
+
+## 4. Versioning
+
+MNF6 = MNF5 semantics + flags word + mode 3. Any further semantic change
+requires a new magic. The zstd requirement includes framed checksums:
+checksum-less zstd accepted bit-flip corruptions in fuzzing (3 found,
+all now reject on checksum).

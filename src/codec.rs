@@ -76,8 +76,8 @@ pub fn tile_dims(dims: Dims, t: u32) -> (u32, u32) {
 // makes ranking hot, add per-shape buckets + edge signatures (v0.6 backlog).
 #[derive(Default)]
 pub struct Atlas {
-    patches: Vec<(u32, u32, Vec<u8>)>, // (w, h, rgb) of encoded-so-far tiles, in scan order
-    sigs: Vec<Sig>,                    // parallel: structural signature per patch
+    pub(crate) patches: Vec<(u32, u32, Vec<u8>)>, // (w, h, rgb) of encoded-so-far tiles, in scan order
+    sigs: Vec<Sig>,                               // parallel: structural signature per patch
 }
 
 impl Atlas {

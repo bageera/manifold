@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.9.0 — MNF6 format v2: rate-aware selection + YCoCg-R (v0.7/v0.8 gates)
+
+Implements the v0.7/v0.8 research conclusions as MNF6 (magic `MNF6`,
+28-byte header + `flags` word): MNF5 tile semantics untouched, plus
+
+- **flags bit0 PLANAR**: literal bodies + reference residual payloads in
+  planar RGB (per-channel planes).
+- **flags bit1 ZSTD**: payload compressed with zstd-19 (xxh64 frame
+  checksum mandatory — see hardening below) instead of zlib.
+- **mode 3 YCoCg-R**: bit-packed literal, 1-byte Y plane + two 9-bit
+  biased planes (LSB-first). Reversibility verified by exhaustive sweep
+  (2^24 / 41-sample stride ≈ 411k colors) plus bit-pack roundtrip.
+- **Rate-aware encoder (v0.8)**: builds the full tile stream under each
+  of the 4 flag variants with per-variant proxy costs and emits the
+  smallest; decode dispatches on magic + flags bits.
+
+**Measured (dev + held-out corpora, all pixel-exact via `verify`):**
+MNF6 wins 10/10 vs the best MNF5 arm — gradient 3,887→1,882,
+repeat 1,760→753, screenshot 3,897→1,819, solid 875→66, held-out blob
+16,490→10,816, plaid 100,402→58,794.
+
+**Hardening found by MNF6 fuzzing:**
+- Checksumless zstd silently ACCEPTED interior corruption (3 confirmed
+  bit-flip acceptances) — fixed by enabling the xxh64 frame checksum;
+  with it, 400/400 mutations reject, 0 panics.
+- Spec-vs-implementation divergence on mode 3: the Y plane is n/3 bytes
+  (1/pixel), not n; an exact-size accounting fuzz walk found the
+  decoder reading 2n+2n9 and desyncing at the first YCoCg tile.
+  Fixed; format.md corrected with the same finding.
+
+**New tests** (tests/mnf6_conformance.rs): golden vector (flags
+planar+zstd), reserved-flag rejection, exhaustive-arms corpus roundtrip,
+`MNF6 ≤ MNF5` rate-aware guarantee. fuzz.py gains a --mnf6 arm.
+CLI: `encode --mnf6`; decode/verify route MNF6 by magic.
+
+Dependencies unchanged for MNF5; zstd returns as an MNF6-only dep.
+
+---
+
+
 ## v0.7-research — entropy coder & channel-plan study (2026-10-25)
 
 P2 experiments (README dev priorities 3-5), measured, none shipped as
