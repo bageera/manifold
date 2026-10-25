@@ -50,8 +50,8 @@ images with zero panics, lossless roundtrips verified in the CLI.
 **Measured (synthetic corpus, benchmark subcommand):** geometric matching
 finds real wins the exact-atlas misses (screenshot: 27 transformed
 references out of 1000 tiles, 3,947→3,897 bytes) and never regresses vs the
-exact-atlas superset; repeat-pattern stays at 1,760 bytes (14,0074→
-94% under PNG); noise correctly stays literal. Geometric search costs
+exact-atlas superset; repeat-pattern stays at 1,760 bytes (94% under PNG's
+140,074); noise correctly stays literal. Geometric search costs
 ~3–7× atlas encode time (657 ms vs 74 ms on 300 tiles) — noted as the next
 optimization target, not yet optimized.
 
