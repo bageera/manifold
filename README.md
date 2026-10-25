@@ -1,5 +1,5 @@
-Manifold Encoder (MNF) v0.5 — Rust Research Prototype
-Status: experimental research software · RGB8 lossless image codec · not production-safe
+Manifold Encoder (MNF) v1.0 — Stable Lossless Image Codec
+Status: v1.0 frozen formats (MNF5 + MNF6) · RGB8 lossless · hardened decoder, fuzzed, independently validated
 
 Implemented in the packaged source: literal tiles, backward patch references, and (v0.6, opt-in `--geom`) geometric D8 references. A normative bitstream specification now exists: docs/format.md with golden vectors in tests/conformance/.
 

@@ -182,3 +182,21 @@ MNF6 = MNF5 semantics + flags word + mode 3. Any further semantic change
 requires a new magic. The zstd requirement includes framed checksums:
 checksum-less zstd accepted bit-flip corruptions in fuzzing (3 found,
 all now reject on checksum).
+
+
+---
+
+# Format freeze (v1.0, 2026-10-25)
+
+MNF5 (24-byte header, modes 0-2 with mode 2 opt-in) and MNF6 (28-byte
+header, modes 0-3, flags PLANAR|ZSTD) are frozen as of tag v1.0.0:
+- No semantic change without a new magic ("MNF7").
+- Golden + rejection vectors under tests/conformance/ are the
+  conformance set; every future decoder must reproduce them exactly.
+- Independent decoder: src/refdecode.rs (MNF5, push-map D8, spec-order
+  validation) validated against the primary decoder by
+  tests/differential.rs (verdict + pixel agreement on goldens, 14
+  rejection vectors, and the full corpus across encoding arms).
+- Both decoders bounded (zip-bomb take(limit+1)), checksummed
+  (zlib Adler32 inherent; MNF6 zstd xxh64 mandatory), panic-free under
+  scripts/fuzz.py.
