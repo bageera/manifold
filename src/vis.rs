@@ -3,7 +3,7 @@
 // Savings heat: black (no gain) -> white (max gain). Reads straight from
 // encode_stats output; no bitstream parsing.
 
-use crate::codec::{Dims, GeomStats, tile_grid};
+use crate::codec::{tile_grid, Dims, GeomStats};
 use std::io::BufWriter;
 use std::path::Path;
 
@@ -11,21 +11,29 @@ pub fn write_maps(out_prefix: &Path, dims: Dims, st: &GeomStats) -> Result<(), S
     let (cols, rows) = tile_grid(dims);
     let n = (cols * rows) as usize;
     if st.modes.len() < n || st.savings.len() < n {
-        return Err(format!("stats cover {} tiles, image needs {n}", st.modes.len()));
+        return Err(format!(
+            "stats cover {} tiles, image needs {n}",
+            st.modes.len()
+        ));
     }
 
     // mode map
     let mut mode_px = vec![0u8; n * 3];
     for i in 0..n {
         let (r, g, b) = match st.modes[i] {
-            0 => (220u8, 60u8, 50u8),   // literal: red
-            1 => (60u8, 180u8, 75u8),   // exact ref: green
-            2 => (55u8, 90u8, 220u8),   // geom ref: blue
+            0 => (220u8, 60u8, 50u8), // literal: red
+            1 => (60u8, 180u8, 75u8), // exact ref: green
+            2 => (55u8, 90u8, 220u8), // geom ref: blue
             m => return Err(format!("invalid mode {m} in stats")),
         };
         mode_px[i * 3..i * 3 + 3].copy_from_slice(&[r, g, b]);
     }
-    save(&out_prefix.with_extension("modes.png"), cols, rows, &mode_px)?;
+    save(
+        &out_prefix.with_extension("modes.png"),
+        cols,
+        rows,
+        &mode_px,
+    )?;
 
     // savings heat map (normalize by max positive saving)
     let max_save = st.savings.iter().copied().max().unwrap_or(0).max(1);
@@ -42,9 +50,9 @@ pub fn write_maps(out_prefix: &Path, dims: Dims, st: &GeomStats) -> Result<(), S
     for i in 0..n {
         let px: [u8; 3] = match st.refs[i] {
             Some((idx, _)) => [
-                ((idx as u32 * 67) % 200 + 40) as u8,
-                ((idx as u32 * 131) % 200 + 40) as u8,
-                ((idx as u32 * 199) % 200 + 40) as u8,
+                ((idx * 67) % 200 + 40) as u8,
+                ((idx * 131) % 200 + 40) as u8,
+                ((idx * 199) % 200 + 40) as u8,
             ],
             None => [30, 30, 34],
         };

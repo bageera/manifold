@@ -51,11 +51,14 @@ impl Tile {
 
 #[inline]
 pub fn div_ceil(a: u32, b: u32) -> u32 {
-    a / b + u32::from(a % b != 0)
+    a / b + u32::from(!a.is_multiple_of(b))
 }
 
 pub fn tile_grid(dims: Dims) -> (u32, u32) {
-    (div_ceil(dims.width, TILE_SIZE), div_ceil(dims.height, TILE_SIZE))
+    (
+        div_ceil(dims.width, TILE_SIZE),
+        div_ceil(dims.height, TILE_SIZE),
+    )
 }
 
 pub fn tile_dims(dims: Dims, t: u32) -> (u32, u32) {
@@ -110,7 +113,7 @@ impl Atlas {
             .collect();
         cands.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
         cands.truncate(top);
-        cands.into_iter().map(|(_, i)| i as u32).collect()
+        cands.into_iter().map(|(_, i)| i).collect()
     }
 }
 
@@ -170,7 +173,8 @@ pub fn tile_sig(w: u32, h: u32, data: &[u8]) -> Sig {
 }
 
 fn sig_dist(a: &Sig, b: &Sig) -> u64 {
-    let rgb = (a.mean.0 - b.mean.0).pow(2) + (a.mean.1 - b.mean.1).pow(2) + (a.mean.2 - b.mean.2).pow(2);
+    let rgb =
+        (a.mean.0 - b.mean.0).pow(2) + (a.mean.1 - b.mean.1).pow(2) + (a.mean.2 - b.mean.2).pow(2);
     let grad = (((a.gdx - b.gdx).abs() + (a.gdy - b.gdy).abs()) as u64)
         .min(((a.gdy - b.gdx).abs() + (a.gdx - b.gdy).abs()) as u64);
     let lum = (a.luma - b.luma).pow(2) as u64 + (a.var - b.var).pow(2) as u64;
@@ -254,7 +258,8 @@ pub fn encode_tiles(tiles: &[Tile], use_atlas: bool, use_geom: bool) -> Vec<u8> 
 
 /// Encode + utilization counters (v0.6 exit metric: reference utilization).
 pub fn encode_stats(tiles: &[Tile], use_atlas: bool, use_geom: bool) -> (Vec<u8>, GeomStats) {
-    let mut out: Vec<u8> = Vec::with_capacity(tiles.len() * (TILE_SIZE as usize * TILE_SIZE as usize * 3 + 6));
+    let mut out: Vec<u8> =
+        Vec::with_capacity(tiles.len() * (TILE_SIZE as usize * TILE_SIZE as usize * 3 + 6));
     let mut atlas = Atlas::new();
     let mut stats = GeomStats::default();
 
@@ -295,7 +300,7 @@ pub fn encode_stats(tiles: &[Tile], use_atlas: bool, use_geom: bool) -> (Vec<u8>
                     }
                     // metadata: mode byte + u32 index + (u8 transform when t != 0)
                     let meta_cost = 5 + u64::from(t != 0);
-                    let cost = meta_cost as u64 + tile_proxy_cost(&residual);
+                    let cost = meta_cost + tile_proxy_cost(&residual);
                     if cost < best_cost {
                         best_cost = cost;
                         best_mode = Mode::GeomReference(prior, t);
@@ -356,9 +361,9 @@ pub struct GeomStats {
     pub literal: u32,
     pub ref_exact: u32,
     pub ref_geom: u32,
-    pub geom_nontrivial: u32, // mode 2 with transform != 0
-    pub modes: Vec<u8>,       // per-tile emit mode (0/1/2), scan order
-    pub savings: Vec<i64>,    // per-tile literal-proxy-cost minus chosen-cost
+    pub geom_nontrivial: u32,         // mode 2 with transform != 0
+    pub modes: Vec<u8>,               // per-tile emit mode (0/1/2), scan order
+    pub savings: Vec<i64>,            // per-tile literal-proxy-cost minus chosen-cost
     pub refs: Vec<Option<(u32, u8)>>, // per-tile (source index, transform) for references
 }
 
@@ -383,7 +388,13 @@ pub struct DecodeResult {
 /// Decode an MNF5 file (header + zlib payload) back to RGB8 pixels.
 pub fn decode(buf: &[u8]) -> Result<DecodeResult, String> {
     if buf.len() < HEADER_SIZE {
-        return Err(format!("truncated header: {} < {HEADER_SIZE} bytes", buf.len()));
+        return Err(format!(
+            "truncated header: {} < {HEADER_SIZE} bytes",
+            buf.len()
+        ));
+    }
+    if &buf[0..4] != b"MNF5" {
+        return Err("bad magic (want MNF5)".into());
     }
     let (w, h) = read_dims(&buf[4..12])?;
     let ts = u32::from_le_bytes(buf[12..16].try_into().unwrap());
@@ -392,10 +403,15 @@ pub fn decode(buf: &[u8]) -> Result<DecodeResult, String> {
         return Err(format!("unsupported tile size {ts}"));
     }
     let payload_len = u32::from_le_bytes(buf[20..24].try_into().unwrap()) as usize;
-    let (cols, rows) = tile_grid(Dims { width: w, height: h });
+    let (cols, rows) = tile_grid(Dims {
+        width: w,
+        height: h,
+    });
     let expected = cols * rows;
     if tile_count != expected {
-        return Err(format!("tile_count {tile_count} != expected {expected} for {w}x{h}"));
+        return Err(format!(
+            "tile_count {tile_count} != expected {expected} for {w}x{h}"
+        ));
     }
     let _rows = rows;
     if payload_len > MAX_PAYLOAD {
@@ -409,7 +425,8 @@ pub fn decode(buf: &[u8]) -> Result<DecodeResult, String> {
     if buf.len() != HEADER_SIZE + payload_len {
         return Err(format!(
             "file is {} bytes but header declares {} + {payload_len} payload",
-            buf.len(), HEADER_SIZE
+            buf.len(),
+            HEADER_SIZE
         ));
     }
     let payload = &buf[HEADER_SIZE..HEADER_SIZE + payload_len];
@@ -419,8 +436,7 @@ pub fn decode(buf: &[u8]) -> Result<DecodeResult, String> {
     let decomp_limit = tile_count as u64 * (1 + 5 + (TILE_SIZE * TILE_SIZE * 3) as u64);
     let mut dz = ZlibDecoder::new(payload).take(decomp_limit + 1);
     let mut raw = Vec::new();
-    dz.read_to_end(&mut raw)
-        .map_err(|e| format!("zlib: {e}"))?;
+    dz.read_to_end(&mut raw).map_err(|e| format!("zlib: {e}"))?;
     if raw.len() as u64 > decomp_limit {
         return Err("decompressed payload exceeds size limit".into());
     }
@@ -431,7 +447,13 @@ pub fn decode(buf: &[u8]) -> Result<DecodeResult, String> {
     let mut cursor = 0usize;
 
     for t in 0..tile_count {
-        let (tw, th) = tile_dims(Dims { width: w, height: h }, t);
+        let (tw, th) = tile_dims(
+            Dims {
+                width: w,
+                height: h,
+            },
+            t,
+        );
         let n = (tw * th * 3) as usize;
         if cursor + 1 > raw.len() {
             return Err(format!("tile {t}: truncated mode byte"));
@@ -453,12 +475,16 @@ pub fn decode(buf: &[u8]) -> Result<DecodeResult, String> {
                 }
                 let idx = u32::from_le_bytes(raw[cursor..cursor + 4].try_into().unwrap());
                 cursor += 4;
-                let (rw, rh, ref_rgb) = patches
-                    .get(idx as usize)
-                    .ok_or_else(|| format!("tile {t}: reference to tile {idx} >= {len} decoded",
-                        len = patches.len()))?;
+                let (rw, rh, ref_rgb) = patches.get(idx as usize).ok_or_else(|| {
+                    format!(
+                        "tile {t}: reference to tile {idx} >= {len} decoded",
+                        len = patches.len()
+                    )
+                })?;
                 if *rw != tw || *rh != th {
-                    return Err(format!("tile {t}: patch {idx} shaped {rw}x{rh}, need {tw}x{th}"));
+                    return Err(format!(
+                        "tile {t}: patch {idx} shaped {rw}x{rh}, need {tw}x{th}"
+                    ));
                 }
                 if cursor + n > raw.len() {
                     return Err(format!("tile {t}: truncated residual"));
@@ -479,14 +505,20 @@ pub fn decode(buf: &[u8]) -> Result<DecodeResult, String> {
                 let tr = raw[cursor + 4];
                 cursor += 5;
                 if !transform_is_valid_for(tr, tw, th) {
-                    return Err(format!("tile {t}: invalid transform {tr} for {tw}x{th} tile"));
+                    return Err(format!(
+                        "tile {t}: invalid transform {tr} for {tw}x{th} tile"
+                    ));
                 }
-                let (rw, rh, ref_rgb) = patches
-                    .get(idx as usize)
-                    .ok_or_else(|| format!("tile {t}: reference to tile {idx} >= {len} decoded",
-                        len = patches.len()))?;
+                let (rw, rh, ref_rgb) = patches.get(idx as usize).ok_or_else(|| {
+                    format!(
+                        "tile {t}: reference to tile {idx} >= {len} decoded",
+                        len = patches.len()
+                    )
+                })?;
                 if *rw != tw || *rh != th {
-                    return Err(format!("tile {t}: patch {idx} shaped {rw}x{rh}, need {tw}x{th}"));
+                    return Err(format!(
+                        "tile {t}: patch {idx} shaped {rw}x{rh}, need {tw}x{th}"
+                    ));
                 }
                 if cursor + n > raw.len() {
                     return Err(format!("tile {t}: truncated residual"));
@@ -506,14 +538,30 @@ pub fn decode(buf: &[u8]) -> Result<DecodeResult, String> {
             }
             m => return Err(format!("tile {t}: invalid mode byte {m}")),
         };
-        blit_tile(&mut out, Dims { width: w, height: h }, t, &data, tw, th);
+        blit_tile(
+            &mut out,
+            Dims {
+                width: w,
+                height: h,
+            },
+            t,
+            &data,
+            tw,
+            th,
+        );
         patches.push((tw, th, data));
     }
     if cursor != raw.len() {
-        return Err(format!("trailing bytes after last tile: {cursor} != {}", raw.len()));
+        return Err(format!(
+            "trailing bytes after last tile: {cursor} != {}",
+            raw.len()
+        ));
     }
     Ok(DecodeResult {
-        dims: Dims { width: w, height: h },
+        dims: Dims {
+            width: w,
+            height: h,
+        },
         pixels: out,
     })
 }
@@ -553,7 +601,11 @@ pub fn split_tiles(pixels: &[u8], d: Dims) -> Vec<Tile> {
                     data[dst..dst + 3].copy_from_slice(&pixels[src..src + 3]);
                 }
             }
-            Tile { data, width: tw, height: th }
+            Tile {
+                data,
+                width: tw,
+                height: th,
+            }
         })
         .collect()
 }
@@ -578,7 +630,10 @@ mod tests {
     use super::*;
 
     fn dims(w: u32, h: u32) -> Dims {
-        Dims { width: w, height: h }
+        Dims {
+            width: w,
+            height: h,
+        }
     }
 
     fn roundtrip(d: Dims, pixels: &[u8], use_atlas: bool) -> Vec<u8> {
@@ -600,8 +655,11 @@ mod tests {
     fn gradient(w: u32, h: u32) -> Vec<u8> {
         (0..w * h)
             .flat_map(|i| {
-                let i = i as u32;
-                [(i % 256) as u8, ((i / w) % 256) as u8, ((i / 7) % 256) as u8]
+                [
+                    (i % 256) as u8,
+                    ((i / w) % 256) as u8,
+                    ((i / 7) % 256) as u8,
+                ]
             })
             .collect()
     }
@@ -631,7 +689,13 @@ mod tests {
 
     #[test]
     fn roundtrip_odd_dims() {
-        for (w, h) in [(31u32, 33u32), (17u32, 1u32), (1u32, 17u32), (1u32, 1u32), (48u32, 47u32)] {
+        for (w, h) in [
+            (31u32, 33u32),
+            (17u32, 1u32),
+            (1u32, 17u32),
+            (1u32, 1u32),
+            (48u32, 47u32),
+        ] {
             let px = gradient(w, h);
             let dec = roundtrip(dims(w, h), &px, true);
             assert_eq!(dec.len(), (w * h * 3) as usize, "len {w}x{h}");
@@ -675,8 +739,14 @@ mod tests {
         assert!(decode(&bad_tile_size).is_err(), "tile size");
         let bad_count = build_header(dims(16, 16), 5, 0);
         assert!(decode(&bad_count).is_err(), "tile count");
-        assert!(decode(&build_header(dims(0, 16), 1, 0)).is_err(), "zero dim");
-        assert!(read_dims(&build_header(dims(0, 16), 1, 0)[4..12]).is_err(), "read_dims rejects zero width");
+        assert!(
+            decode(&build_header(dims(0, 16), 1, 0)).is_err(),
+            "zero dim"
+        );
+        assert!(
+            read_dims(&build_header(dims(0, 16), 1, 0)[4..12]).is_err(),
+            "read_dims rejects zero width"
+        );
         // truncated payload: valid header, valid zlib, missing trailing tile data
         let d = dims(32, 16);
         let tiles = split_tiles(&solid(32, 16, [1, 2, 3]), d);
@@ -704,14 +774,24 @@ mod tests {
 
     #[test]
     fn decoder_rejects_oversized_dims() {
-        let h = build_header(Dims { width: 1 << 24, height: 1 << 24 }, 0, 0);
+        let h = build_header(
+            Dims {
+                width: 1 << 24,
+                height: 1 << 24,
+            },
+            0,
+            0,
+        );
         assert!(decode(&h).is_err(), "oversized dims");
     }
 
     #[test]
     fn atlas_reference_shape_mismatch_rejected() {
         // tile 0 is 16x16, tile 1 is 16x8; mode 1 reference from tile 1 to tile 0
-        let d = Dims { width: 16, height: 24 };
+        let d = Dims {
+            width: 16,
+            height: 24,
+        };
         let mut raw = Vec::new();
         raw.push(0u8); // tile 0 literal
         raw.extend_from_slice(&[0u8; 16 * 16 * 3]);
@@ -738,13 +818,24 @@ mod tests {
         };
         let noisy: Vec<u8> = (0..32 * 16 * 3).map(|_| rnd()).collect();
         let tiles = vec![
-            Tile { data: noisy.clone(), width: 32, height: 16 },
-            Tile { data: noisy.clone(), width: 32, height: 16 },
+            Tile {
+                data: noisy.clone(),
+                width: 32,
+                height: 16,
+            },
+            Tile {
+                data: noisy.clone(),
+                width: 32,
+                height: 16,
+            },
         ];
         let raw_tiles = encode_tiles(&tiles, true, false);
         let t1 = 1 + 32 * 16 * 3; // second tile's metadata starts after tile 0's data
         assert_eq!(raw_tiles[0], 0, "tile 0 literal");
-        assert_eq!(raw_tiles[t1], 1, "tile 1 should be an exact reference (mode 1)");
+        assert_eq!(
+            raw_tiles[t1], 1,
+            "tile 1 should be an exact reference (mode 1)"
+        );
         let idx = u32::from_le_bytes(raw_tiles[t1 + 1..t1 + 5].try_into().unwrap());
         assert_eq!(idx, 0, "reference points at tile 0");
         // then 768 bytes of all-zero residual
@@ -757,7 +848,12 @@ mod tests {
         // The encoder must find some exact inverse t with T_t(base) == original
         // (t labels depend on composition order; only exactness matters), emit
         // mode 2 with a zero residual, and metadata must roundtrip.
-        for (w, h) in [(16u32, 16u32), (30u32, 30u32), (16u32, 24u32), (31u32, 33u32)] {
+        for (w, h) in [
+            (16u32, 16u32),
+            (30u32, 30u32),
+            (16u32, 24u32),
+            (31u32, 33u32),
+        ] {
             let mut s: u32 = 777;
             let mut rnd = || {
                 s = s.wrapping_mul(1103515245).wrapping_add(12345);
@@ -769,8 +865,16 @@ mod tests {
                     continue;
                 }
                 let base = apply_transform(t0, w, h, &px);
-                let base_tile = Tile { data: base.clone(), width: w, height: h };
-                let target_tile = Tile { data: px.clone(), width: w, height: h };
+                let base_tile = Tile {
+                    data: base.clone(),
+                    width: w,
+                    height: h,
+                };
+                let target_tile = Tile {
+                    data: px.clone(),
+                    width: w,
+                    height: h,
+                };
                 let raw = encode_tiles(&[base_tile, target_tile], true, true);
                 let t1 = 1 + (w * h * 3) as usize;
                 let mode = raw[t1];
@@ -797,7 +901,10 @@ mod tests {
     #[test]
     fn geom_reference_transform4_nonsquare_rejected() {
         // mode 2 with transform 4 on a 16x8 partial tile changes shape -> must error
-        let d = Dims { width: 16, height: 24 };
+        let d = Dims {
+            width: 16,
+            height: 24,
+        };
         let mut raw = Vec::new();
         raw.push(0u8); // tile 0 literal 16x16
         raw.extend_from_slice(&[0u8; 16 * 16 * 3]);
@@ -809,29 +916,44 @@ mod tests {
         let mut b = build_header(d, 2, payload.len() as u32);
         b.extend_from_slice(&payload);
         let err = decode(&b).unwrap_err();
-        assert!(err.contains("invalid transform"), "want transform rejection, got: {err}");
+        assert!(
+            err.contains("invalid transform"),
+            "want transform rejection, got: {err}"
+        );
     }
 
     #[test]
     fn nonsquare_partial_tiles_use_shape_keeping_subset() {
         // every valid partial-tile transform must roundtrip through the codec
-        let d = Dims { width: 31, height: 33 }; // has 15x1 and 15x16 partial tiles
+        let d = Dims {
+            width: 31,
+            height: 33,
+        }; // has 15x1 and 15x16 partial tiles
         let mut s: u32 = 4242;
         let mut rnd = || {
             s = s.wrapping_mul(1103515245).wrapping_add(12345);
             (s >> 16) as u8
         };
-        let px: Vec<u8> = (0..d.width as usize * d.height as usize * 3).map(|_| rnd()).collect();
+        let px: Vec<u8> = (0..d.width as usize * d.height as usize * 3)
+            .map(|_| rnd())
+            .collect();
         assert_eq!(roundtrip(d, &px, true), px);
     }
 
     #[test]
     fn no_atlas_uses_literals() {
-        let d = Dims { width: 32, height: 16 };
+        let d = Dims {
+            width: 32,
+            height: 16,
+        };
         let tiles = split_tiles(&solid(32, 16, [9, 9, 9]), d);
         let raw = encode_tiles(&tiles, false, false);
         assert_eq!(raw[0], 0);
-        assert_eq!(raw[1 + 16 * 16 * 3], 0, "tile 1 literal when atlas disabled");
+        assert_eq!(
+            raw[1 + 16 * 16 * 3],
+            0,
+            "tile 1 literal when atlas disabled"
+        );
     }
 
     #[test]

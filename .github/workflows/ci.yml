@@ -1,0 +1,29 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Unit + conformance tests
+        run: cargo test
+      - name: Release build
+        run: cargo build --release
+      - name: CLI roundtrip + fuzz (bounded)
+        run: |
+          cargo run --release -- encode testdata/screenshot_640x400.png -o /tmp/s.mnf5
+          cargo run --release -- verify testdata/screenshot_640x400.png /tmp/s.mnf5
+          cargo run --release -- encode testdata/screenshot_640x400.png -o /tmp/g.mnf5 --geom
+          cargo run --release -- verify testdata/screenshot_640x400.png /tmp/g.mnf5
+          python3 scripts/fuzz.py --trials 300
