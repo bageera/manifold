@@ -1,3 +1,6 @@
+[workspace]
+members = [".", "crates/mnf-subspace"]
+
 [package]
 name = "manifold"
 version = "1.1.0"
