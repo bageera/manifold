@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.0.0 — Stable lossless image codec (2026-10-25)
+
+Format freeze per the README §9 v1.0 exit criteria:
+
+- MNF5 and MNF6 frozen: no semantic change without a new magic (MNF7).
+  docs/format.md gains the freeze stamp, naming tests/conformance/ as
+  the conformance set and src/refdecode.rs + tests/differential.rs as
+  the independent-validation pair.
+- README status lines updated to the frozen/stable profile.
+- Both decoders: bounded (take(limit+1)), checksummed (zlib Adler32
+  inherent; MNF6 zstd xxh64 mandatory), panic-free across 1,300+fuzz
+  trials on the full corpus in three encoding arms each.
+- Known limits carried into stability honestly: encoder proxy cost is
+  local (not globally optimal); atlas remains backward-only and
+  shape-identical; MNF6 encoder runs 4 flag variants (slow but
+  rate-optimal); no WebP/AVIF container integration.
+
+v1.0 = same code quality gate: fmt/clippy clean, 31 test suites green.
+
+---
+
+
 ## v0.9.0 — MNF6 format v2: rate-aware selection + YCoCg-R (v0.7/v0.8 gates)
 
 Implements the v0.7/v0.8 research conclusions as MNF6 (magic `MNF6`,
