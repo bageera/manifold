@@ -1,7 +1,11 @@
-Manifold Encoder (MNF) v1.0 — Stable Lossless Image Codec
-Status: v1.0 frozen formats (MNF5 + MNF6) · RGB8 lossless · hardened decoder, fuzzed, independently validated
+Manifold Encoder (MNF) v1.1 — Lossless Image Codec Suite
+Status: MNF5/MNF6/MNF7 frozen formats · RGB8 lossless · hardened (fuzzed, bounded), independently validated
 
-Implemented in the packaged source: literal tiles, backward patch references, and (v0.6, opt-in `--geom`) geometric D8 references. A normative bitstream specification now exists: docs/format.md with golden vectors in tests/conformance/.
+Current architecture (v1.1):
+- MNF5 — 24-byte header, zlib tile stream, literal/reference modes, geometric D8 references (mode 2, opt-in `--geom`).
+- MNF6 — 28-byte header + flags: planar RGB bodies (bit 0), zstd-19 payload (bit 1), YCoCg-R literal mode 3 with 9-bit packed chroma. Rate-aware encoder measures all four flag variants and emits the smallest.
+- MNF7 — adds modular 8-bit color-domain residual coding (modes 4/5) per docs/adr-001-color-transform.md; atlas references stay canonical RGB8.
+- Decoders: primary + independent reference decoder (src/refdecode.rs, push-map D8) cross-validated by tests/differential.rs; conformance vectors in tests/conformance/; normative spec at docs/format.md.
 
 Manifold Encoder (MNF) investigates whether repeated structure in images can reduce lossless encoding cost. Version 0.5 is a deterministic shared-patch predictive codec written in Rust. It uses previously reconstructed tiles as an implicit reference atlas and codes the byte-exact difference between a tile and a chosen reference.
 
