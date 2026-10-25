@@ -1,0 +1,11 @@
+[package]
+name = "mnf-subspace"
+version = "0.1.0"
+edition = "2021"
+description = "MNF Subspace v0.1: exact low-rank predictive atlas research"
+license = "MIT"
+
+[dependencies]
+flate2 = "1.0"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+png = "0.17"
