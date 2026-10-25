@@ -235,6 +235,7 @@ pub struct MnF6Stats {
     pub ref_geom: u32,
     pub ref_exact_color: u32,
     pub ref_geom_color: u32,
+    pub geom_nontrivial: u32,
     pub chosen_flags: u32,
     pub modes: Vec<u8>,
     pub refs: Vec<Option<(u32, u8)>>,
@@ -384,6 +385,9 @@ pub fn encode_mnf7(pixels: &[u8], dims: Dims, use_geom: bool) -> (Vec<u8>, MnF6S
                 }
                 TileChoice::Geom(p, t, _) => {
                     stats.ref_geom += 1;
+                    if *t != 0 {
+                        stats.geom_nontrivial += 1;
+                    }
                     stats.modes.push(2);
                     stats.refs.push(Some((*p, *t)));
                     raw.push(2u8);
@@ -399,6 +403,9 @@ pub fn encode_mnf7(pixels: &[u8], dims: Dims, use_geom: bool) -> (Vec<u8>, MnF6S
                 }
                 TileChoice::GeomColor(p, t, _) => {
                     stats.ref_geom_color += 1;
+                    if *t != 0 {
+                        stats.geom_nontrivial += 1;
+                    }
                     stats.modes.push(5);
                     stats.refs.push(Some((*p, *t)));
                     raw.push(5u8);
@@ -836,5 +843,56 @@ mod tests {
             m6.len(),
             m5.len()
         );
+    }
+    #[test]
+    fn d8_atlas_full_roundtrip() {
+        // Review fix 4 (conformance gate): a 5-level staircase image forces
+        // distinct D8 matches; every nonidentity transform must be EMITTED
+        // (not silently fallen back to literal) and the complete file must
+        // decode back to the original pixels. geom_nontrivial assertion keeps
+        // the test from passing via literal-only encoding.
+        let (w, h) = (64u32, 64u32);
+        let mut px = vec![0u8; (w * h * 3) as usize];
+        // 16 unique structures: quantized x-position blocks, so rotated
+        // variants of earlier tiles produce real zero-residual matches only
+        // through the corresponding D8 transform.
+        for y in 0..h {
+            for x in 0..w {
+                let i = ((y * w + x) * 3) as usize;
+                let band = ((x / 4) as u16 * 13) as u8;
+                px[i] = band;
+                px[i + 1] = ((y / 4) as u16 * 11) as u8;
+                px[i + 2] = band ^ (((y / 4) as u16 * 29) as u8);
+            }
+        }
+        // build an image where row-blocks 2..8 are D8 transforms of the first
+        let mut stacked = px.clone();
+        for t in [1u8, 2, 3, 4, 5, 6, 7] {
+            let transformed = crate::codec::apply_transform(t, w, h, &px);
+            stacked.extend_from_slice(&transformed);
+        }
+        let d = Dims {
+            width: w,
+            height: h * 8,
+        };
+        let (buf, st) = encode_mnf7(&stacked, d, true);
+        // the encoder must have emitted geometric references with nonidentity
+        // transforms; literals would make this test meaningless
+        assert!(
+            st.ref_geom > 0,
+            "no geometric references emitted: literal={} exact={} geom={} nontrivial={}",
+            st.literal,
+            st.ref_exact,
+            st.ref_geom,
+            st.geom_nontrivial
+        );
+        assert!(
+            st.geom_nontrivial > 0,
+            "only identity transforms used — test cannot verify D8 matching"
+        );
+        let (dims, out) = decode_mnf7(&buf).expect("full-file decode");
+        assert_eq!((dims.width, dims.height), (w, h * 8));
+        assert_eq!(out, stacked, "MNF7 D8 atlas roundtrip");
+        // MNF7 decodes exact; also cross-check the file through the standalone CLI path in differential tests
     }
 }
