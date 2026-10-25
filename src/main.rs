@@ -3,7 +3,7 @@
 
 use manifold::codec::*;
 use manifold::img::{self, Image};
-use manifold::mnf6::{decode_mnf6, encode_mnf6};
+use manifold::mnf6::{decode_mnf7, encode_mnf7};
 use manifold::vis;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -50,14 +50,15 @@ fn encode_cmd(path: &Path, out: &Path, use_atlas: bool, use_geom: bool, mnf6: bo
     let tiles = split_tiles(&src.pixels, dims);
     let t0 = Instant::now();
     let buf = if mnf6 {
-        let (buf, st) = encode_mnf6(&src.pixels, dims, use_geom);
+        let (buf, st) = encode_mnf7(&src.pixels, dims, use_geom);
         println!(
-            "  [mnf6] flags={:#04x} literal={} ycocg={} exact={} geom={} (nontrivial transforms: {})",
+            "  [mnf6] flags={:#04x} literal={} ycocg={} exact={} geom={} color={} (nontrivial transforms: {})",
             st.chosen_flags,
             st.literal,
             st.ycocg_literal,
             st.ref_exact,
             st.ref_geom,
+            st.ref_exact_color + st.ref_geom_color,
             st.refs.iter().flatten().filter(|(_, t)| *t != 0).count()
         );
         buf
@@ -82,12 +83,13 @@ fn encode_cmd(path: &Path, out: &Path, use_atlas: bool, use_geom: bool, mnf6: bo
 
 fn decode_cmd(file: &Path, out: &Path) {
     let buf = std::fs::read(file).unwrap_or_else(|e| die(&format!("read {}: {e}", file.display())));
-    let (res_dims, res_pixels) = if buf.len() >= 4 && &buf[0..4] == b"MNF6" {
-        decode_mnf6(&buf).unwrap_or_else(|e| die(&format!("decode mnf6: {e}")))
-    } else {
-        let res = decode(&buf).unwrap_or_else(|e| die(&format!("decode: {e}")));
-        (res.dims, res.pixels)
-    };
+    let (res_dims, res_pixels) =
+        if buf.len() >= 4 && (&buf[0..4] == b"MNF6" || &buf[0..4] == b"MNF7") {
+            decode_mnf7(&buf).unwrap_or_else(|e| die(&format!("decode mnf6/7: {e}")))
+        } else {
+            let res = decode(&buf).unwrap_or_else(|e| die(&format!("decode: {e}")));
+            (res.dims, res.pixels)
+        };
     img::save_png(out, res_dims, &res_pixels)
         .unwrap_or_else(|e| die(&format!("save {}: {e}", out.display())));
     println!(
@@ -102,8 +104,8 @@ fn decode_cmd(file: &Path, out: &Path) {
 fn verify_cmd(image: &Path, file: &Path) {
     let src = load_rgb(image);
     let buf = std::fs::read(file).unwrap_or_else(|e| die(&format!("read {}: {e}", file.display())));
-    let (rdims, rpx) = if buf.len() >= 4 && &buf[0..4] == b"MNF6" {
-        decode_mnf6(&buf).unwrap_or_else(|e| die(&format!("decode mnf6: {e}")))
+    let (rdims, rpx) = if buf.len() >= 4 && (&buf[0..4] == b"MNF6" || &buf[0..4] == b"MNF7") {
+        decode_mnf7(&buf).unwrap_or_else(|e| die(&format!("decode mnf6/7: {e}")))
     } else {
         let res = decode(&buf).unwrap_or_else(|e| die(&format!("decode: {e}")));
         (res.dims, res.pixels)

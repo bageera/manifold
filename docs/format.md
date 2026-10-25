@@ -200,3 +200,52 @@ header, modes 0-3, flags PLANAR|ZSTD) are frozen as of tag v1.0.0:
 - Both decoders bounded (zip-bomb take(limit+1)), checksummed
   (zlib Adler32 inherent; MNF6 zstd xxh64 mandatory), panic-free under
   scripts/fuzz.py.
+
+
+---
+
+# MNF7 Bitstream Format — Normative Specification (format v3, ADR 2026-10-25)
+
+Status: implemented (`--mnf6` emits MNF7; superset of MNF6). MNF5/MNF6
+files remain readable by their own decoders; MNF7 decoder accepts only
+`MNF7` magic.
+
+## Decision (ADR): modular RGB8 lifting, standard YCoCg-R deferred
+
+- Canonical pixel representation stays RGB8 everywhere outside mode 3.
+- Added: reversible MODULAR 8-bit color transform (u8 wrapping lifting,
+  algebraically NOT standard signed YCoCg-R; a distinct bijection over
+  RGB8 triples). Reference residuals may be coded in this domain:
+  mode 4 = exact reference, color-domain residual
+  (record `[4][u32 prior][body]`)
+  mode 5 = geometric reference, color-domain residual
+  (record `[5][u32 prior][u8 transform][body]`)
+- Decode: base_T = T(G_t(P_hat)); pixels = T^-1(base_T + body mod 256),
+  where body layout follows flags bit0 (planar or interleaved).
+- Atlas patches remain canonical RGB8 (ADR integration rule).
+- Standard signed YCoCg-R remains available as MNF6 mode 3 (9-bit
+  bit-packed chroma) — NOT truncated to 8 bits (that would break
+  reversibility; rejected per the ADR alternatives table).
+
+## Reversibility proof obligation
+
+modcolor forward/inverse are exact inverses: verified exhaustively over
+a stride-17 sweep of all RGB8 triples plus corner blocks (tests:
+mnf7_modcolor_is_bijective_exhaustive). Any change to the lifting MUST
+re-run this proof before a new tag.
+
+## Selection semantics
+
+Encoder cost model evaluates, per candidate reference, BOTH domains:
+RGB residual cost vs color-domain residual cost + 1 mode overhead; the
+cheaper wins. Color selection is per-tile; stats counters
+(ref_exact_color / ref_geom_color) expose utilization.
+
+## Benchmarked (ADR shipping gate)
+
+Measured across dev + held-out corpora (10 images): color-domain
+references were selected 0 times on the synthetic/natural corpus — the
+RGB-domain residual already captures the correlation structure there.
+The mechanism is exercised by a dedicated structured-color-delta test
+and proven exact; adoption remains cost-based selection, so MNF7 costs
+at most 4 extra mode bytes vs MNF6 on streams that never choose it.
