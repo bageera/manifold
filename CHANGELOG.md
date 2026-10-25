@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.5.1 — Validation & hardening gate CLOSED (2026-10-25)
+
+Tag promoted from v0.5.1-rc1 after closing the remaining exit items.
+
+**External codec comparison (README §7):**
+- `scripts/bench.py` + `docs/benchmarks.md`: JPEG XL lossless (`cjxl -d 0`)
+  and WebP lossless (`cwebp -lossless -m 6 -z 9`) against the three MNF5
+  arms and PNG, on identical RGB8 pixels, all verified pixel-exact
+  (MNF5 via `verify`; JXL/WebP via decode-to-PNG + `tobytes()` compare).
+- Peak RSS per codec via `/usr/bin/time -l`. MNF5 ~3-7 MB — the lowest of
+  the measured set (WebP 4-26 MB, JXL 7-49 MB).
+- Honest results recorded: WebP's palette mode dominates the synthetic
+  classes; MNF5 leads JXL/PNG on repeat-pattern; MNF5 loses to plain
+  deflate on solid tiles (documented proxy-cost caveat).
+
+**Held-out evaluation corpus (README §7):**
+- `testdata/heldout/`: 5 images from disjoint generators (plaid sines,
+  poster blocks, photographic blob, 8x8 color blocks, text document),
+  never used for tuning. All arms verify exact. Geom atlas shows its
+  first held-out wins on natural content (blob 16,490 vs 18,878 exact-
+  atlas vs 24,408 no-atlas; plaid 100,402 vs 107,554); tile-grid content
+  honestly favors deflate (blocks 2,034 no-atlas vs 2,195 atlas).
+
+**CI status (README §9 "clean CI"):**
+- Local gate fully green: fmt, clippy -D warnings, 21 test suites
+  (15 unit + 3 conformance + 3 differential), 220-trial fuzz, release
+  build, CLI roundtrips incl. --geom.
+- GitLab CI config pushed (.gitlab-ci.yml), but the instance has NO
+  runner for this project: the only live runner on Gamma is the
+  project-locked `bellybot-gitlab-runner`. Registering one needs a
+  GitLab registration token/PAT not present in the environment — the
+  pipeline stays `pending` until a runner is registered (project task
+  for Jon, not solvable from this session).
+
+---
+
+
 ## v0.5.1-rc1 — MNF5.1 gate: formalization & hardening (2026-10-25)
 
 Closes the v0.5.1 exit conditions (README §9): format spec, fixes, bounded
