@@ -104,3 +104,69 @@ canonical report; ~25 s).
   contextual rANS via constriction) benchmarked against the same frozen
   streams. Any format change (new magic, backend field) only after the
   retention gate passes on the held-out corpus.
+
+---
+
+# Stage 2 — Integrated selection + custom residual coder arms (2026-10-25)
+
+Status: research only; frozen formats untouched. Stage-2 script:
+`crates/mnf-subspace/scripts/entropy_backends_stage2.py`.
+
+Protocol: per tile, candidates (literal / exact ref / D8 geom) are costed
+through the backend being measured (the `maximum`-profile simulation) with a
+cheap MAD shortlist (8 of ≤128x8) paying the real backend calls; the stream
+then codes with that same backend; selector metadata included. Custom arms:
+zero-run + adaptive Rice (mag+sign), and planar R/G/B split coded as three
+separate streams under zstd-19.
+
+## Results (bytes; 10-image corpus)
+
+| image | zlib-9 | zstd-19 | brotli-9 | brotli-11 | xz-6 | rice | planar(zstd) |
+|---|---|---|---|---|---|---|---|
+| gradient | 6,243 | 3,909 | 4,022 | **3,432** | 3,536 | 239,065 | 2,823 |
+| noise | 196,935 | 196,879 | 196,869 | = | 196,936 | 442,976 | 196,686 |
+| repeat | 1,865 | 990 | 976 | **913** | 1,048 | 103,334 | 1,192 |
+| screenshot | 3,038 | 1,498 | **1,334** | 1,529 | 1,648 | 15,633 | 3,139 |
+| solid | 511 | 47 | **29** | 33 | 176 | 133 | 258 |
+| blob | 10,886 | **8,801** | 10,598 | 9,086 | 8,812 | 22,632 | 9,357 |
+| blocks | 3,344 | **2,992** | 3,057 | 3,085 | 3,292 | 13,065 | 4,432 |
+| document | 2,134 | **1,829** | 1,990 | 1,853 | 1,860 | 14,957 | 3,279 |
+| plaid | 61,975 | 58,698 | 60,058 | 50,453 | **45,944** | 132,319 | 38,424 |
+| poster | 3,569 | 2,747 | 3,061 | **2,721** | 2,892 | 74,129 | 6,897 |
+
+Mode-utilization shifts with the backend: e.g. gradient picks 286 exact
+references under zlib-9 but mostly literals under zstd/brotli; poster flips
+from 27 literals to 90 exact references under brotli. The review's premise is
+confirmed: the cheapest predictor/mode is BACKEND-DEPENDENT (selection must
+run inside the encoder per backend, never via a fixed proxy).
+
+Interleaved vs planar matters per backend: planar + zstd-19 cuts the
+gradient's integrated stream 3,909 → 2,823 B (−28%) but COSTS blob +
+5% and screenshot + 107%. Another measured, content-dependent flag for a
+`maximum` profile.
+
+## Custom residual coder (first arms — honest losses)
+
+- Zero-run + adaptive Rice (mag+sign per tile): loses on every image with
+  tile repetition (repeat: 103 kB vs 0.9-1.9 kB for LZ-family) — a pure
+  per-symbol model cannot express "copy the previous tile body". Wins only
+  solid (133 B — it is a run coder's home turf).
+- Order-0/order-1 empirical entropy check (vectorized, framed streams
+  including mode bytes): order-0 LOSES to zlib-9 broadly (screenshot 23.9 kB
+  vs 3.0 kB); order-1 (prev-magnitude bucket x slot-kind, 8 contexts, table
+  cost included) closes a lot (7.8 kB) but still loses. Conclusion: LZ's
+  string-matching layer is doing real work on tile-structured residuals; a
+  competitive custom coder must be MIXED — run-length/LZ layer for repeated
+  tile bodies + rANS with contextual magnitude model for the rest
+  (the JPEG-LS architecture shape: runs + Golomb for the non-run symbols).
+  The constriction-based interleaved-rANS track inherits this requirement.
+
+## Stage-2 decisions for MNF8 (pending formats)
+
+- `balanced`: zstd-19, interleaved, no predictor-selection change (safe,
+  never loses to zlib-9 in the matrix).
+- `maximum` simulation results: backend-dependence of mode selection is real
+  (utilization tables above); xz stays archival (wins plaid only).
+- Rice/rANS arms need the mixed design; stage 1's byte-delta hack (998 B on
+  gradient) also beats every integrated arm — spatial modeling in front of
+  ANY coder remains the dominant lever.
