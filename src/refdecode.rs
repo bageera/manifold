@@ -24,8 +24,8 @@ pub struct RefDecodeResult {
     pub pixels: Vec<u8>,
 }
 
+// Spec-quote helper (docs/format.md uses `ceil`); std div_ceil is the same math.
 fn div_ceil(a: u32, b: u32) -> u32 {
-    // spec-quote helper; std div_ceil is equivalent (clippy-checked)
     a.div_ceil(b)
 }
 

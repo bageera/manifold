@@ -98,9 +98,7 @@ pub fn pca(x: &[Vec<f64>], k: usize) -> (Vec<Vec<f64>>, Vec<f64>, Vec<f64>) {
             }
             dot.sqrt()
         };
-        if comp >= k {
-            break;
-        }
+        // (no `comp >= k` guard here — comp is < k by the loop range; dead check removed in audit)
         for (cc, vv) in c[comp].iter_mut().zip(&v) {
             *cc = *vv;
         }
