@@ -8,6 +8,26 @@ Status: MNF5/MNF6/MNF7 frozen formats + MNF8 backend-field format
 fuzzed) · independently validated · normative format spec at
 [docs/format.md](docs/format.md)
 
+## Library surface (v1.2+)
+
+Manifold builds as a Rust library (`manifold` crate) plus a CLI binary, and as
+a C-ABI crate for non-Rust callers.
+
+| API | Status | Since |
+| --- | ------ | ----- |
+| `codec::*` (MNF5 encode/decode, `DecodeLimits`) | stable (v1.x semver) | v1.0 |
+| `mnf6::*` MNF6/7 encode/decode + `decode_mnf7_with_limits` | stable | v1.2.1 |
+| `mnf8::*` MNF8 encode/decode, profiles, `FLAG_PRED_MED` | stable | v1.2.0 |
+| `error::Error` / `error::Result` (matchable categories) | stable | v1.2.1 |
+| `refdecode::ref_decode` (independent MNF5 decoder) | stable | v1.2.1 |
+| `img` I/O shims (JPEG/PNG) | stable under the default `image-io` feature | v1.0 |
+| `crates/manifold-capi` (`manifold_decode`, `manifold_encode`, `manifold_encode_mnf8`) | stable status codes | v1.2.1 |
+| `crates/mnf-subspace`, `crates/mnf-mans` | research, workspace-only (`publish = false`), no semver | — |
+
+Formats are frozen (MNF6/7 flag masks frozen; MNF8 owns flag bit2 only). All
+fallible library operations return `error::Result<T>`; malformed input is
+`Error::Format`, never a panic. MSRV: current stable Rust (`rust-version = 1.91`).
+
 ## Formats
 
 | Format | Magic | Header | Coder | Modes | Introduced |

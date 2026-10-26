@@ -1,0 +1,18 @@
+[package]
+name = "manifold-capi"
+version = "1.2.1"
+edition = "2021"
+rust-version = "1.91"
+description = "C FFI for the Manifold lossless RGB8 codecs"
+license = "MIT"
+publish = false
+
+[lib]
+name = "manifold_capi"
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+manifold = { path = "../.." }
+
+[package.metadata.notes]
+stability = "C ABI v1: never panics on caller data; all fallibility through status codes"

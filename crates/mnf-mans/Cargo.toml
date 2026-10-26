@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "MNF8 research: mixed run/LZ + contextual-rANS residual coder (prototype)"
 license = "MIT"
+publish = false
 
 [dependencies]
 constriction = "0.5"
