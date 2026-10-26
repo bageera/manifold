@@ -20,20 +20,29 @@
 use std::io::Read;
 
 use crate::codec::{apply_transform, div_ceil, tile_sig, Atlas, Dims, RANK_CANDIDATES, TILE_SIZE};
+use crate::error::{Error, Result};
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use std::io::Write;
 
+/// Header size: `MNF6`/`MNF7` magic + 6×`u32` LE.
 pub const HEADER6: usize = 28;
+/// Record bodies packed channel-planar.
 pub const FLAG_PLANAR: u32 = 1;
+/// zstd container (MNF7); MNF6 = zlib.
 pub const FLAG_ZSTD: u32 = 2;
+/// Bits above bit1 reserved (MNF6/7 masks frozen).
 pub const FLAGS_RESERVED: u32 = !0b11;
 
+/// Entropy coder choice for the record stream.
 pub enum Coder {
+    /// zlib level 9 container (MNF6 header magic).
     Zlib,
+    /// zstd at the given level (MNF7 header magic).
     Zstd(i32),
 }
 
+/// Compress the full record stream with the chosen coder.
 pub fn compress_stream(coder: &Coder, buf: &[u8]) -> Vec<u8> {
     match coder {
         Coder::Zlib => {
@@ -51,6 +60,7 @@ pub fn compress_stream(coder: &Coder, buf: &[u8]) -> Vec<u8> {
     }
 }
 
+/// Local cost proxy used to rank candidates (not a global optimum).
 pub fn proxy_cost(coder: &Coder, buf: &[u8]) -> u64 {
     match coder {
         Coder::Zlib => compress_stream(coder, buf).len() as u64,
@@ -61,6 +71,7 @@ pub fn proxy_cost(coder: &Coder, buf: &[u8]) -> u64 {
 
 // --- 9-bit plane packing (LSB-first) -----------------------------------------
 
+/// Pack 9-bit values LSB-first (YCoCg chroma).
 pub fn pack9(values: &[u16]) -> Vec<u8> {
     let mut out = Vec::with_capacity((values.len() * 9).div_ceil(8) + 1);
     let mut acc: u32 = 0;
@@ -81,10 +92,11 @@ pub fn pack9(values: &[u16]) -> Vec<u8> {
     out
 }
 
-pub fn unpack9(bytes: &[u8], n: usize) -> Result<Vec<u16>, String> {
+/// Inverse of `pack9` for `n` values.
+pub fn unpack9(bytes: &[u8], n: usize) -> Result<Vec<u16>> {
     let need = (n * 9).div_ceil(8);
     if bytes.len() < need {
-        return Err("9-bit plane truncated".into());
+        return Err(Error::fmt_msg("9-bit plane truncated"));
     }
     let mut out = Vec::with_capacity(n);
     let mut acc: u32 = 0;
@@ -93,7 +105,7 @@ pub fn unpack9(bytes: &[u8], n: usize) -> Result<Vec<u16>, String> {
     for _ in 0..n {
         while bits < 9 {
             if bi >= bytes.len() {
-                return Err("9-bit plane truncated".into());
+                return Err(Error::fmt_msg("9-bit plane truncated"));
             }
             acc |= (bytes[bi] as u32) << bits;
             bi += 1;
@@ -108,6 +120,7 @@ pub fn unpack9(bytes: &[u8], n: usize) -> Result<Vec<u16>, String> {
 
 // --- YCoCg-R -------------------------------------------------------------------
 
+/// Integer YCoCg forward (deterministic; `y` + 9-bit chroma).
 pub fn ycocg_forward(rgb: &[u8]) -> (Vec<u8>, Vec<u16>, Vec<u16>) {
     let n = rgb.len() / 3;
     let (mut y, mut co, mut cg) = (
@@ -131,6 +144,7 @@ pub fn ycocg_forward(rgb: &[u8]) -> (Vec<u8>, Vec<u16>, Vec<u16>) {
     (y, co, cg)
 }
 
+/// Integer YCoCg inverse (exact counterpart of `ycocg_forward`).
 pub fn ycocg_inverse(y: &[u8], co: &[u16], cg: &[u16]) -> Vec<u8> {
     let n = y.len();
     let mut out = vec![0u8; n * 3];
@@ -151,6 +165,7 @@ pub fn ycocg_inverse(y: &[u8], co: &[u16], cg: &[u16]) -> Vec<u8> {
 
 // --- layouts ----------------------------------------------------------------------
 
+/// Split interleaved RGB into three planes (planar packing).
 pub fn planar_pack(data: &[u8]) -> Vec<u8> {
     let n = data.len() / 3;
     let mut out = Vec::with_capacity(data.len());
@@ -162,6 +177,7 @@ pub fn planar_pack(data: &[u8]) -> Vec<u8> {
     out
 }
 
+/// Reassemble three planes into interleaved RGB.
 pub fn planar_unpack(data: &[u8]) -> Vec<u8> {
     let n = data.len() / 3;
     let mut out = vec![0u8; data.len()];
@@ -183,8 +199,9 @@ pub fn planar_unpack(data: &[u8]) -> Vec<u8> {
 // Decode: base_t = T(G_t(P_hat)); pix = T^-1(base_t + resid mod 256).
 // Atlas patches stay canonical RGB8 (ADR integration rule).
 
+/// Modular YCoCg color transform (MNF7 color modes 4/5).
 pub mod modcolor {
-    /// Modular YCoCg-like forward: [r,g,b] -> [y, co, cg], all mod 256.
+    /// Modular YCoCg-like forward: (r,g,b) -> (y, co, cg), all mod 256.
     pub fn forward(rgb: [u8; 3]) -> [u8; 3] {
         let [r, g, b] = rgb;
         let co = r.wrapping_sub(b);
@@ -205,6 +222,7 @@ pub mod modcolor {
     }
 }
 
+/// Forward transform, one tile (bytes).
 pub fn modcolor_forward(rgb: &[u8]) -> Vec<u8> {
     let mut out = vec![0u8; rgb.len()];
     for (o, px) in out.chunks_exact_mut(3).zip(rgb.chunks_exact(3)) {
@@ -216,6 +234,7 @@ pub fn modcolor_forward(rgb: &[u8]) -> Vec<u8> {
     out
 }
 
+/// Forward transform, iterator-friendly (avoids re-collect).
 pub fn modcolor_forward_iter(rgb: &[u8]) -> Vec<u8> {
     let mut out = vec![0u8; rgb.len()];
     for (o, px) in out.chunks_exact_mut(3).zip(rgb.chunks_exact(3)) {
@@ -227,6 +246,7 @@ pub fn modcolor_forward_iter(rgb: &[u8]) -> Vec<u8> {
     out
 }
 
+/// Inverse transform (exact).
 pub fn modcolor_inverse(ycocg: &[u8]) -> Vec<u8> {
     let mut out = vec![0u8; ycocg.len()];
     for (o, px) in out.chunks_exact_mut(3).zip(ycocg.chunks_exact(3)) {
@@ -238,17 +258,28 @@ pub fn modcolor_inverse(ycocg: &[u8]) -> Vec<u8> {
     out
 }
 
+/// MNF6/7 encode statistics.
 #[derive(Debug, Clone, Default)]
 pub struct MnF6Stats {
+    /// Mode-0 literals.
     pub literal: u32,
+    /// Mode-3 YCoCg literals.
     pub ycocg_literal: u32,
+    /// Exact references (t=0).
     pub ref_exact: u32,
+    /// Geometric references (t≠0).
     pub ref_geom: u32,
+    /// Color-domain exact references.
     pub ref_exact_color: u32,
+    /// Color-domain geometric references.
     pub ref_geom_color: u32,
+    /// Geometric refs with nontrivial transform.
     pub geom_nontrivial: u32,
+    /// Flags id measured best for this stream.
     pub chosen_flags: u32,
+    /// Per-tile chosen mode, scan order.
     pub modes: Vec<u8>,
+    /// Per-tile (source index, transform) when referenced.
     pub refs: Vec<Option<(u32, u8)>>,
 }
 
@@ -353,17 +384,6 @@ pub fn encode_mnf7(pixels: &[u8], dims: Dims, use_geom: bool) -> (Vec<u8>, MnF6S
                         }
                         let body_c = pack(&r_c);
                         let cost_c = meta + 1 + proxy_cost(&coder, &body_c);
-                        if std::env::var("MNF7_DEBUG").is_ok() {
-                            eprintln!(
-                                "cand tile {} prior {} t {} rgb {} color {} best {}",
-                                stats.modes.len(),
-                                prior,
-                                t,
-                                cost,
-                                cost_c,
-                                best_cost
-                            );
-                        }
                         if cost_c < best_cost {
                             best_cost = cost_c;
                             choice = if t == 0 {
@@ -433,14 +453,6 @@ pub fn encode_mnf7(pixels: &[u8], dims: Dims, use_geom: bool) -> (Vec<u8>, MnF6S
                 | TileChoice::ExactColor(_, b)
                 | TileChoice::GeomColor(_, _, b) => raw.extend_from_slice(b),
             }
-            if std::env::var("MNF6_DEBUG").is_ok() {
-                eprintln!(
-                    "tile {} mode={} rawlen={}",
-                    stats.modes.len(),
-                    stats.modes.last().unwrap_or(&0),
-                    raw.len()
-                );
-            }
             atlas.insert(tile);
         }
 
@@ -468,41 +480,86 @@ pub fn encode_mnf7(pixels: &[u8], dims: Dims, use_geom: bool) -> (Vec<u8>, MnF6S
 
 // --- decoding --------------------------------------------------------------------
 
-pub fn decode_mnf7(buf: &[u8]) -> Result<(Dims, Vec<u8>), String> {
+/// Configurable ceilings for MNF6/MNF7/MNF8 decoding (mirror of
+/// codec::DecodeLimits; the same limit semantics at the header-validation
+/// points). Defaults = the format-derived maxima (identical to codec's).
+#[derive(Debug, Clone, Copy)]
+pub struct DecodeLimits {
+    /// Max total pixels (w*h).
+    pub max_pixels: u64,
+    /// Max tiles.
+    pub max_tiles: u32,
+    /// Max decompressed payload bytes.
+    pub max_decompressed: u64,
+}
+
+impl Default for DecodeLimits {
+    fn default() -> Self {
+        DecodeLimits {
+            max_pixels: 1 << 26,
+            max_tiles: u32::MAX,
+            max_decompressed: u64::MAX, // replaced by the checked per-file bound
+        }
+    }
+}
+
+/// Decode MNF6/7 with configurable ceilings (library API; decode_mnf7 is the
+/// defaults wrapper).
+pub fn decode_mnf7_with_limits(buf: &[u8], lim: &DecodeLimits) -> Result<(Dims, Vec<u8>)> {
+    decode_mnf7_inner(buf, lim)
+}
+
+/// Decode MNF6/7 (magic auto) with default ceilings.
+pub fn decode_mnf7(buf: &[u8]) -> Result<(Dims, Vec<u8>)> {
+    decode_mnf7_inner(buf, &DecodeLimits::default())
+}
+
+fn decode_mnf7_inner(buf: &[u8], lim: &DecodeLimits) -> Result<(Dims, Vec<u8>)> {
     if buf.len() < HEADER6 {
-        return Err("short".into());
+        return Err(Error::fmt_msg("short"));
     }
     if buf[0..4] != *b"MNF7" {
-        return Err("magic".into());
+        return Err(Error::fmt_msg("magic"));
     }
     let u32le = |o: usize| u32::from_le_bytes(buf[o..o + 4].try_into().unwrap());
     let width = u32le(4);
     let height = u32le(8);
     if width == 0 || height == 0 {
-        return Err("dims".into());
+        return Err(Error::fmt_msg("dims"));
     }
-    if width as u64 * height as u64 > (1 << 26) {
-        return Err("pixels".into());
+    if width as u64 * height as u64 > lim.max_pixels {
+        return Err(Error::Limits {
+            which: "max_pixels",
+            limit: lim.max_pixels,
+            actual: width as u64 * height as u64,
+        });
     }
     if u32le(12) != TILE_SIZE {
-        return Err("tilesize".into());
+        return Err(Error::fmt_msg("tilesize"));
     }
     let cols = div_ceil(width, TILE_SIZE);
     let rows = div_ceil(height, TILE_SIZE);
     let tile_count = u32le(16);
     if tile_count != cols * rows {
-        return Err("tilecount".into());
+        return Err(Error::fmt_msg("tilecount"));
+    }
+    if tile_count > lim.max_tiles {
+        return Err(Error::Limits {
+            which: "max_tiles",
+            limit: u64::from(lim.max_tiles),
+            actual: u64::from(tile_count),
+        });
     }
     let payload_len = u32le(20);
     if payload_len > (1 << 31) - 1 {
-        return Err("payloadlen".into());
+        return Err(Error::fmt_msg("payloadlen"));
     }
     if buf.len() != HEADER6 + payload_len as usize {
-        return Err("filelen".into());
+        return Err(Error::fmt_msg("filelen"));
     }
     let flags = u32le(24);
     if flags & FLAGS_RESERVED != 0 {
-        return Err("reserved-flags".into());
+        return Err(Error::fmt_msg("reserved-flags"));
     }
     let planar = flags & FLAG_PLANAR != 0;
     let zlib_in = flags & FLAG_ZSTD == 0;
@@ -520,22 +577,25 @@ pub fn decode_mnf7(buf: &[u8]) -> Result<(Dims, Vec<u8>), String> {
     let raw: Vec<u8> = if zlib_in {
         let mut d = flate2::read::ZlibDecoder::new(zlib_data).take(limit + 1);
         let mut v = Vec::new();
-        d.read_to_end(&mut v).map_err(|_| "zlib".to_string())?;
+        d.read_to_end(&mut v)
+            .map_err(|_| Error::Decompress("corrupt zlib stream"))?;
         v
     } else {
-        let d = zstd::stream::read::Decoder::new(zlib_data).map_err(|_| "zstd-init".to_string())?;
+        let d = zstd::stream::read::Decoder::new(zlib_data)
+            .map_err(|_| Error::Decompress("zstd init"))?;
         // same window cap as MNF8: level 19 uses <= 8 MiB; a hostile frame
         // must not claim the 128 MiB library default (review fix 4)
         let mut d = d;
         d.window_log_max(23)
-            .map_err(|_| "zstd-window".to_string())?;
+            .map_err(|_| Error::Decompress("zstd window param"))?;
         let mut d = d.take(limit + 1);
         let mut v = Vec::new();
-        d.read_to_end(&mut v).map_err(|_| "zstd".to_string())?;
+        d.read_to_end(&mut v)
+            .map_err(|_| Error::Decompress("corrupt zstd stream"))?;
         v
     };
     if raw.len() as u64 > limit {
-        return Err("bomb".into());
+        return Err(Error::fmt_msg("bomb"));
     }
 
     let pixels = decode_record_walk(&raw, width, height, tile_count, planar, false)?;
@@ -553,7 +613,7 @@ pub fn decode_record_walk(
     tile_count: u32,
     planar: bool,
     med: bool,
-) -> Result<Vec<u8>, String> {
+) -> Result<Vec<u8>> {
     let cols = div_ceil(width, TILE_SIZE);
     let mut pixels = vec![0u8; width as usize * height as usize * 3];
     let mut decoded: Vec<(u32, u32, Vec<u8>)> = Vec::with_capacity(tile_count as usize);
@@ -566,7 +626,7 @@ pub fn decode_record_walk(
         let n = (tw * th * 3) as usize;
 
         if ip >= raw.len() {
-            return Err(format!("eof at tile {i}"));
+            return Err(Error::fmt_msg(format!("eof at tile {i}")));
         }
         let mode = raw[ip];
         ip += 1;
@@ -574,7 +634,7 @@ pub fn decode_record_walk(
         let tile = match mode {
             0 => {
                 if ip + n > raw.len() {
-                    return Err("body".into());
+                    return Err(Error::fmt_msg("body"));
                 }
                 let body = raw[ip..ip + n].to_vec();
                 ip += n;
@@ -635,13 +695,6 @@ pub fn decode_record_walk(
                             }
                         }
                     }
-                    if std::env::var("MNF8_DEBUG").is_ok() && i < 3 {
-                        eprintln!(
-                            "[dbg-w] tile {i} recon[:9]={:?} body[:9]={:?}",
-                            &recon[..9],
-                            &body[..9]
-                        );
-                    }
                     recon
                 } else {
                     body
@@ -652,7 +705,7 @@ pub fn decode_record_walk(
                 let np = n / 3;
                 let n9 = (np * 9).div_ceil(8);
                 if ip + np + 2 * n9 > raw.len() {
-                    return Err(format!("tile {i}: body"));
+                    return Err(Error::fmt_msg(format!("tile {i}: body")));
                 }
                 let y = raw[ip..ip + np].to_vec();
                 let co9 = &raw[ip + np..ip + np + n9];
@@ -665,7 +718,7 @@ pub fn decode_record_walk(
             1 | 2 | 4 | 5 => {
                 let meta = if mode == 2 || mode == 5 { 5 } else { 4 };
                 if ip + meta > raw.len() {
-                    return Err("refmeta".into());
+                    return Err(Error::fmt_msg("refmeta"));
                 }
                 let idx = u32::from_le_bytes(raw[ip..ip + 4].try_into().unwrap()) as usize;
                 let tr = if mode == 2 || mode == 5 {
@@ -675,20 +728,20 @@ pub fn decode_record_walk(
                 };
                 ip += meta;
                 if idx >= i as usize {
-                    return Err("reforder".into());
+                    return Err(Error::fmt_msg("reforder"));
                 }
                 if tr >= 8 {
-                    return Err("tranform-range".into());
+                    return Err(Error::fmt_msg("tranform-range"));
                 }
                 let (rw, rh, ref_rgb) = &decoded[idx];
                 if *rw != tw || *rh != th {
-                    return Err("refshape".into());
+                    return Err(Error::fmt_msg("refshape"));
                 }
                 if tw != th && tr >= 4 {
-                    return Err("xform-shape".into());
+                    return Err(Error::fmt_msg("xform-shape"));
                 }
                 if ip + n > raw.len() {
-                    return Err("body".into());
+                    return Err(Error::fmt_msg("body"));
                 }
                 let body = raw[ip..ip + n].to_vec();
                 ip += n;
@@ -717,7 +770,11 @@ pub fn decode_record_walk(
                     _ => unreachable!(),
                 }
             }
-            _ => return Err(format!("tile {i}: mode byte {mode:#04x} pos {ip}")),
+            _ => {
+                return Err(Error::fmt_msg(format!(
+                    "tile {i}: mode byte {mode:#04x} pos {ip}"
+                )))
+            }
         };
         decoded.push((tw, th, tile.clone()));
 
@@ -732,7 +789,7 @@ pub fn decode_record_walk(
         }
     }
     if ip != raw.len() {
-        return Err("extra".into());
+        return Err(Error::fmt_msg("extra"));
     }
     // note: Ok(Dims..) tuple-return belonged to decode_mnf7; this walker returns pixels
     Ok(pixels)
@@ -792,7 +849,7 @@ fn med_predict_pixel(a: u32, b: u32, cc: u32) -> u32 {
         // plane branch; clamp into byte range — NOTE the encoder's predictor
         // values live in 0..=255 after its own clamp; identical formula both
         // sides (med_predict clamps identically)
-        plane.max(0).min(255) as u32
+        plane.clamp(0, 255) as u32
     } else {
         let pa = (plane - a as i64).abs();
         let pb = (plane - b as i64).abs();

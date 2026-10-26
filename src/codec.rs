@@ -2,31 +2,46 @@
 // Format: 24-byte header ("MNF5", u32 LE width, height, tile=16, tile_count, zlib_len),
 // zlib payload of per-tile [u8 mode][mode 1: u32 idx | mode 2: u32 idx + u8 transform][tw*th*3 bytes].
 
+use crate::error::{Error, Result};
+
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use std::io::{Read, Write};
 
+/// Magic + header size (bytes): `MNF5` + 5×`u32` LE.
 pub const HEADER_SIZE: usize = 24;
+/// Tile edge in pixels (both axes).
 pub const TILE_SIZE: u32 = 16;
+/// Atlas cap: max distinct previously-decoded patches tracked.
 pub const ATLAS_CAPACITY: usize = 128;
+/// Best-N references evaluated per tile after signature ranking.
 pub const RANK_CANDIDATES: usize = 8;
+/// D8 geometric transforms considered (identity + rotation/reflection).
 pub const NUM_TRANSFORMS: u8 = 8;
 
+/// Image dimensions in pixels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Dims {
+    /// Width in pixels.
     pub width: u32,
+    /// Height in pixels.
     pub height: u32,
 }
 
+/// Per-tile record kinds: literal or reference (v0.5 mode grammar).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
+    /// Raw RGB bytes follow.
     Literal,
+    /// Prior tile index; optional transform id follows.
     Reference(u32),
+    /// Exact reference with a D8 transform applied (index, transform id).
     GeomReference(u32, u8), // prior tile index, D8 transform id 0..8
 }
 
 impl Mode {
+    /// Encode as the record mode byte.
     pub fn to_byte(self) -> u8 {
         match self {
             Mode::Literal => 0,
@@ -36,14 +51,19 @@ impl Mode {
     }
 }
 
+/// A tile: raw RGB data plus its (possibly partial) edge dims.
 #[derive(Debug, Clone)]
 pub struct Tile {
+    /// Row-major RGB8 tile bytes (tw*th*3).
     pub data: Vec<u8>, // tw*th*3, row-major RGB
+    /// Tile width (partial tiles < 16).
     pub width: u32,
+    /// Tile height.
     pub height: u32,
 }
 
 impl Tile {
+    /// Byte length of the tile's raw RGB payload.
     pub fn nbytes(&self) -> usize {
         self.width as usize * self.height as usize * 3
     }
@@ -51,12 +71,14 @@ impl Tile {
 
 // MSRV (review fix 5): integer `is_multiple_of` is 1.87+, this crate
 // pins 1.73+ (README's div_ceil requirement) — modulo form is deliberate.
+/// Ceiling division.
 #[inline]
 #[allow(clippy::manual_is_multiple_of)]
 pub fn div_ceil(a: u32, b: u32) -> u32 {
     a / b + u32::from(a % b != 0)
 }
 
+/// (tiles_per_row, tile_rows) for the row-major tile scan.
 pub fn tile_grid(dims: Dims) -> (u32, u32) {
     (
         div_ceil(dims.width, TILE_SIZE),
@@ -64,6 +86,7 @@ pub fn tile_grid(dims: Dims) -> (u32, u32) {
     )
 }
 
+/// (w,h) of tile `t`, respecting partial edge tiles.
 pub fn tile_dims(dims: Dims, t: u32) -> (u32, u32) {
     let (cols, rows) = tile_grid(dims);
     let tx = t % cols;
@@ -77,6 +100,7 @@ pub fn tile_dims(dims: Dims, t: u32) -> (u32, u32) {
 // ponytail: all patches retained (index space must match decoder); README's
 // "last 128" applies to the ranking window, not storage. If a 20k+-tile photo
 // makes ranking hot, add per-shape buckets + edge signatures (v0.6 backlog).
+/// Atlas: previously decoded patches, ranked lookup by signature.
 #[derive(Default)]
 pub struct Atlas {
     pub(crate) patches: Vec<(u32, u32, Vec<u8>)>, // (w, h, rgb) of encoded-so-far tiles, in scan order
@@ -84,10 +108,12 @@ pub struct Atlas {
 }
 
 impl Atlas {
+    /// Empty atlas at the header capacity.
     pub fn new() -> Self {
         Atlas::default()
     }
 
+    /// Insert a decoded tile (encoder-side bookkeeping).
     pub fn insert(&mut self, tile: &Tile) {
         let sig = tile_sig(tile.width, tile.height, &tile.data);
         self.insert_with_sig(tile, sig);
@@ -141,6 +167,7 @@ fn rgb_mean(rgb: &[u8]) -> (i64, i64, i64) {
 // ponytail: mean+gradient+variance signature, D8-permutation-aware via the
 // min(dx/dy swap) term. Full edge histograms would rank better if recall
 // ever becomes the bottleneck (v0.7 backlog).
+/// Tile signature: RGB means used for nearest-neighbor ranking.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Sig {
     mean: (i64, i64, i64),
@@ -154,6 +181,7 @@ fn luma(px: &[u8]) -> i64 {
     (299 * px[0] as i64 + 587 * px[1] as i64 + 114 * px[2] as i64) / 1000
 }
 
+/// Compute a tile's signature for atlas ranking.
 pub fn tile_sig(w: u32, h: u32, data: &[u8]) -> Sig {
     let n = (w * h) as i64;
     let l = data.chunks_exact(3).map(luma).collect::<Vec<i64>>();
@@ -194,6 +222,7 @@ fn sig_dist(a: &Sig, b: &Sig) -> u64 {
 // Pull maps: output pixel (x, y) samples src(sx, sy). Encode and decode both
 // call apply_transform, so any consistent map roundtrips losslessly.
 
+/// Dims of a tile after D8 transform `t` (swapped for rotations).
 pub fn transform_dims(t: u8, w: u32, h: u32) -> (u32, u32) {
     match t {
         4..=7 => (h, w),
@@ -223,6 +252,7 @@ fn transform_source(t: u8, w: u32, h: u32, x: u32, y: u32) -> (u32, u32) {
     }
 }
 
+/// Pixel bytes after D8 transform `t` (deterministic integer perm).
 pub fn apply_transform(t: u8, w: u32, h: u32, data: &[u8]) -> Vec<u8> {
     assert!(t < NUM_TRANSFORMS, "invalid transform {t}");
     if t >= 5 {
@@ -257,7 +287,7 @@ pub fn tile_proxy_cost(bytes: &[u8]) -> u64 {
 }
 
 /// Encode a tile stream (row-major, tile_dims shapes) with optional atlas matching.
-/// Raw bytes per tile: [mode][idx?][transform?][data]; mode 2 (geometric atlas,
+/// Raw bytes per tile: mode, optional idx, optional transform, body; mode 2 (geometric atlas,
 /// v0.6) writes both index (u32 LE) and transform id (u8) after the mode byte.
 /// `use_geom` extends matching to the D8 group; with `use_atlas` only, exact
 /// prior-patch references (v0.5 behavior) are used.
@@ -358,6 +388,7 @@ pub fn encode_stats(tiles: &[Tile], use_atlas: bool, use_geom: bool) -> (Vec<u8>
     (out, stats)
 }
 
+/// zlib-compress the assembled record stream (level 9).
 pub fn compress_payload(raw: &[u8]) -> Vec<u8> {
     let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
     e.write_all(raw).expect("zlib encode");
@@ -365,17 +396,26 @@ pub fn compress_payload(raw: &[u8]) -> Vec<u8> {
 }
 
 // v0.6 exit criterion: how much the atlas is actually used.
+/// Encode statistics (per-tile choices/savings; feeds vis maps).
 #[derive(Debug, Clone, Default)]
 pub struct GeomStats {
+    /// Count of mode-0 literals.
     pub literal: u32,
+    /// Count of mode-1 exact references.
     pub ref_exact: u32,
+    /// Count of mode-2 geometric references.
     pub ref_geom: u32,
-    pub geom_nontrivial: u32,         // mode 2 with transform != 0
-    pub modes: Vec<u8>,               // per-tile emit mode (0/1/2), scan order
-    pub savings: Vec<i64>,            // per-tile literal-proxy-cost minus chosen-cost
+    /// Mode-2 with a nontrivial transform (t≠0).
+    pub geom_nontrivial: u32, // mode 2 with transform != 0
+    /// Per-tile chosen mode, scan order.
+    pub modes: Vec<u8>, // per-tile emit mode (0/1/2), scan order
+    /// Per-tile proxy-cost saving vs literal.
+    pub savings: Vec<i64>, // per-tile literal-proxy-cost minus chosen-cost
+    /// Per-tile (source index, transform).
     pub refs: Vec<Option<(u32, u8)>>, // per-tile (source index, transform) for references
 }
 
+/// Build the 24-byte `MNF5` header.
 pub fn build_header(dims: Dims, tile_count: u32, payload_len: u32) -> Vec<u8> {
     let mut h = Vec::with_capacity(HEADER_SIZE);
     h.extend_from_slice(b"MNF5");
@@ -388,9 +428,12 @@ pub fn build_header(dims: Dims, tile_count: u32, payload_len: u32) -> Vec<u8> {
     h
 }
 
+/// Decoded image: dims + RGB8 pixels.
 #[derive(Debug)]
 pub struct DecodeResult {
+    /// Decoded dimensions.
     pub dims: Dims,
+    /// RGB8 pixels, row-major.
     pub pixels: Vec<u8>,
 }
 
@@ -399,9 +442,13 @@ pub struct DecodeResult {
 /// of them independently.
 #[derive(Debug, Clone, Copy)]
 pub struct DecodeLimits {
+    /// Max total pixels (w*h).
     pub max_pixels: u64,
+    /// Max tiles.
     pub max_tiles: u32,
+    /// Max decompressed payload bytes.
     pub max_decompressed: u64,
+    /// Max decoder memory (pixels + atlas), bytes.
     pub max_total_memory: u64, // pixels buffer + atlas patches, bytes
 }
 
@@ -417,31 +464,37 @@ impl Default for DecodeLimits {
 }
 
 /// Decode an MNF5 file (header + zlib payload) back to RGB8 pixels.
-pub fn decode(buf: &[u8]) -> Result<DecodeResult, String> {
+pub fn decode(buf: &[u8]) -> Result<DecodeResult> {
     decode_with_limits(buf, &DecodeLimits::default())
 }
 
-pub fn decode_with_limits(buf: &[u8], lim: &DecodeLimits) -> Result<DecodeResult, String> {
+/// Decode MNF5 with configurable ceilings.
+pub fn decode_with_limits(buf: &[u8], lim: &DecodeLimits) -> Result<DecodeResult> {
     if buf.len() < HEADER_SIZE {
-        return Err(format!(
-            "truncated header: {} < {HEADER_SIZE} bytes",
-            buf.len()
-        ));
+        return Err(Error::fmt_at("truncated header", buf.len() as u64));
     }
     if &buf[0..4] != b"MNF5" {
-        return Err("bad magic (want MNF5)".into());
+        return Err(Error::fmt_at("bad magic (want MNF5)", 0));
     }
     let (w, h) = read_dims(&buf[4..12])?;
     if w as u64 * h as u64 > lim.max_pixels {
-        return Err("image exceeds max_pixels limit".into());
+        return Err(Error::Limits {
+            which: "max_pixels",
+            limit: lim.max_pixels,
+            actual: w as u64 * h as u64,
+        });
     }
     let ts = u32::from_le_bytes(buf[12..16].try_into().unwrap());
     let tile_count = u32::from_le_bytes(buf[16..20].try_into().unwrap());
     if ts != TILE_SIZE {
-        return Err(format!("unsupported tile size {ts}"));
+        return Err(Error::fmt_msg(format!("unsupported tile size {ts}")));
     }
-    if tile_count > lim.max_tiles {
-        return Err("tile count exceeds max_tiles limit".into());
+    if tile_count as u64 > lim.max_tiles as u64 {
+        return Err(Error::Limits {
+            which: "max_tiles",
+            limit: u64::from(lim.max_tiles),
+            actual: tile_count as u64,
+        });
     }
     let payload_len = u32::from_le_bytes(buf[20..24].try_into().unwrap()) as usize;
     let (cols, rows) = tile_grid(Dims {
@@ -450,25 +503,25 @@ pub fn decode_with_limits(buf: &[u8], lim: &DecodeLimits) -> Result<DecodeResult
     });
     let expected = cols * rows;
     if tile_count != expected {
-        return Err(format!(
+        return Err(Error::fmt_msg(format!(
             "tile_count {tile_count} != expected {expected} for {w}x{h}"
-        ));
+        )));
     }
     let _rows = rows;
     if payload_len > MAX_PAYLOAD {
-        return Err("payload too large".into());
+        return Err(Error::fmt_msg("payload too large"));
     }
     if (buf.len() - HEADER_SIZE) < payload_len {
-        return Err("payload shorter than header-declared len".into());
+        return Err(Error::fmt_msg("payload shorter than header-declared len"));
     }
     // Reject bytes beyond the declared payload before decompressing: a
     // well-formed file is header + exactly payload_len bytes.
     if buf.len() != HEADER_SIZE + payload_len {
-        return Err(format!(
+        return Err(Error::fmt_msg(format!(
             "file is {} bytes but header declares {} + {payload_len} payload",
             buf.len(),
             HEADER_SIZE
-        ));
+        )));
     }
     let payload = &buf[HEADER_SIZE..HEADER_SIZE + payload_len];
 
@@ -479,19 +532,26 @@ pub fn decode_with_limits(buf: &[u8], lim: &DecodeLimits) -> Result<DecodeResult
     let px_bytes_total = (w as u64) * (h as u64) * 3;
     let decomp_limit = px_bytes_total
         .checked_add(6 * tile_count as u64)
-        .ok_or("decompressed size overflow")?;
+        .ok_or_else(|| Error::fmt_msg("decompressed size overflow"))?;
     let mut dz = ZlibDecoder::new(payload).take(decomp_limit + 1);
     let mut raw = Vec::new();
-    dz.read_to_end(&mut raw).map_err(|e| format!("zlib: {e}"))?;
+    dz.read_to_end(&mut raw)
+        .map_err(|_| Error::Decompress("corrupt zlib stream"))?;
     if raw.len() as u64 > decomp_limit {
-        return Err("decompressed payload exceeds size limit".into());
+        return Err(Error::Limits {
+            which: "max_decompressed",
+            limit: decomp_limit,
+            actual: raw.len() as u64,
+        });
     }
 
     // Premature-allocation gate (review fix 2): the stream must hold at
     // least 4 bytes per tile (mode byte + minimum ref metadata) before
     // any image-sized allocation happens.
     if raw.len() < 4 * tile_count as usize {
-        return Err("decompressed stream shorter than per-tile minimum".into());
+        return Err(Error::fmt_msg(
+            "decompressed stream shorter than per-tile minimum",
+        ));
     }
 
     let total_px = w as usize * h as usize * 3;
@@ -499,9 +559,11 @@ pub fn decode_with_limits(buf: &[u8], lim: &DecodeLimits) -> Result<DecodeResult
     // once all tiles are decoded). Enforce the ceiling before allocating.
     let mem_needed = (total_px as u64) * 2;
     if mem_needed > lim.max_total_memory {
-        return Err(format!(
-            "decoder memory {mem_needed} exceeds max_total_memory limit"
-        ));
+        return Err(Error::Limits {
+            which: "max_total_memory",
+            limit: lim.max_total_memory,
+            actual: mem_needed,
+        });
     }
     let mut out = vec![0u8; total_px];
     // no capacity reservation: patches grows as actually decoded
@@ -518,14 +580,20 @@ pub fn decode_with_limits(buf: &[u8], lim: &DecodeLimits) -> Result<DecodeResult
         );
         let n = (tw * th * 3) as usize;
         if cursor + 1 > raw.len() {
-            return Err(format!("tile {t}: truncated mode byte"));
+            return Err(Error::fmt_at(
+                format!("tile {t}: truncated mode byte"),
+                u64::from(t),
+            ));
         }
         let mode = raw[cursor];
         cursor += 1;
         let data: Vec<u8> = match mode {
             0 => {
                 if cursor + n > raw.len() {
-                    return Err(format!("tile {t}: truncated literal payload"));
+                    return Err(Error::fmt_at(
+                        format!("tile {t}: truncated literal payload"),
+                        u64::from(t),
+                    ));
                 }
                 let d = raw[cursor..cursor + n].to_vec();
                 cursor += n;
@@ -533,23 +601,40 @@ pub fn decode_with_limits(buf: &[u8], lim: &DecodeLimits) -> Result<DecodeResult
             }
             1 => {
                 if cursor + 4 > raw.len() {
-                    return Err(format!("tile {t}: truncated reference index"));
+                    return Err(Error::fmt_at(
+                        format!("tile {t}: truncated reference index"),
+                        u64::from(t),
+                    ));
                 }
                 let idx = u32::from_le_bytes(raw[cursor..cursor + 4].try_into().unwrap());
                 cursor += 4;
                 let (rw, rh, ref_rgb) = patches.get(idx as usize).ok_or_else(|| {
-                    format!(
+                    Error::fmt_msg(format!(
                         "tile {t}: reference to tile {idx} >= {len} decoded",
-                        len = patches.len()
-                    )
+                        len = patches.len(),
+                        t = t,
+                        idx = idx
+                    ))
                 })?;
                 if *rw != tw || *rh != th {
-                    return Err(format!(
-                        "tile {t}: patch {idx} shaped {rw}x{rh}, need {tw}x{th}"
+                    return Err(Error::fmt_at(
+                        format!(
+                            "tile {t}: patch {idx} shaped {rw}x{rh}, need {tw}x{th}",
+                            t = t,
+                            idx = idx,
+                            rw = rw,
+                            rh = rh,
+                            tw = tw,
+                            th = th
+                        ),
+                        u64::from(t),
                     ));
                 }
                 if cursor + n > raw.len() {
-                    return Err(format!("tile {t}: truncated residual"));
+                    return Err(Error::fmt_at(
+                        format!("tile {t}: truncated residual"),
+                        u64::from(t),
+                    ));
                 }
                 let residual = &raw[cursor..cursor + n];
                 let mut d = vec![0u8; n];
@@ -561,29 +646,53 @@ pub fn decode_with_limits(buf: &[u8], lim: &DecodeLimits) -> Result<DecodeResult
             }
             2 => {
                 if cursor + 5 > raw.len() {
-                    return Err(format!("tile {t}: truncated geometric reference"));
+                    return Err(Error::fmt_at(
+                        format!("tile {t}: truncated geometric reference"),
+                        u64::from(t),
+                    ));
                 }
                 let idx = u32::from_le_bytes(raw[cursor..cursor + 4].try_into().unwrap());
                 let tr = raw[cursor + 4];
                 cursor += 5;
                 if !transform_is_valid_for(tr, tw, th) {
-                    return Err(format!(
-                        "tile {t}: invalid transform {tr} for {tw}x{th} tile"
+                    return Err(Error::fmt_at(
+                        format!(
+                            "tile {t}: invalid transform {tr} for {tw}x{th} tile",
+                            t = t,
+                            tr = tr,
+                            tw = tw,
+                            th = th
+                        ),
+                        u64::from(t),
                     ));
                 }
                 let (rw, rh, ref_rgb) = patches.get(idx as usize).ok_or_else(|| {
-                    format!(
+                    Error::fmt_msg(format!(
                         "tile {t}: reference to tile {idx} >= {len} decoded",
-                        len = patches.len()
-                    )
+                        len = patches.len(),
+                        t = t,
+                        idx = idx
+                    ))
                 })?;
                 if *rw != tw || *rh != th {
-                    return Err(format!(
-                        "tile {t}: patch {idx} shaped {rw}x{rh}, need {tw}x{th}"
+                    return Err(Error::fmt_at(
+                        format!(
+                            "tile {t}: patch {idx} shaped {rw}x{rh}, need {tw}x{th}",
+                            t = t,
+                            idx = idx,
+                            rw = rw,
+                            rh = rh,
+                            tw = tw,
+                            th = th
+                        ),
+                        u64::from(t),
                     ));
                 }
                 if cursor + n > raw.len() {
-                    return Err(format!("tile {t}: truncated residual"));
+                    return Err(Error::fmt_at(
+                        format!("tile {t}: truncated residual"),
+                        u64::from(t),
+                    ));
                 }
                 let residual = &raw[cursor..cursor + n];
                 let transformed = if tr == 0 {
@@ -598,7 +707,12 @@ pub fn decode_with_limits(buf: &[u8], lim: &DecodeLimits) -> Result<DecodeResult
                 cursor += n;
                 d
             }
-            m => return Err(format!("tile {t}: invalid mode byte {m}")),
+            m => {
+                return Err(Error::fmt_at(
+                    format!("tile {t}: invalid mode byte {m}"),
+                    u64::from(t),
+                ))
+            }
         };
         blit_tile(
             &mut out,
@@ -614,10 +728,10 @@ pub fn decode_with_limits(buf: &[u8], lim: &DecodeLimits) -> Result<DecodeResult
         patches.push((tw, th, data));
     }
     if cursor != raw.len() {
-        return Err(format!(
+        return Err(Error::fmt_msg(format!(
             "trailing bytes after last tile: {cursor} != {}",
             raw.len()
-        ));
+        )));
     }
     Ok(DecodeResult {
         dims: Dims {
@@ -630,16 +744,16 @@ pub fn decode_with_limits(buf: &[u8], lim: &DecodeLimits) -> Result<DecodeResult
 
 const MAX_PAYLOAD: usize = 1 << 31; // 2 GiB hard stop for untrusted input
 
-fn read_dims(b: &[u8]) -> Result<(u32, u32), String> {
+fn read_dims(b: &[u8]) -> Result<(u32, u32)> {
     let w = u32::from_le_bytes(b[0..4].try_into().unwrap());
     let h = u32::from_le_bytes(b[4..8].try_into().unwrap());
     if w == 0 || h == 0 {
-        return Err("zero dimensions".into());
+        return Err(Error::fmt_msg("zero dimensions"));
     }
     // guard oversized allocations: total pixels capped at 2^26 (~192 MiB RGB;
     // the atlas keeps a second copy of every patch, so budget ~2x while decoding)
     if (w as u64) * (h as u64) > (1 << 26) {
-        return Err("image too large".into());
+        return Err(Error::fmt_msg("image too large"));
     }
     Ok((w, h))
 }
@@ -864,7 +978,10 @@ mod tests {
         let mut b = build_header(d, 2, payload.len() as u32);
         b.extend_from_slice(&payload);
         let err = decode(&b).unwrap_err();
-        assert!(err.contains("shaped"), "want shape mismatch, got: {err}");
+        assert!(
+            err.to_string().contains("shaped"),
+            "want shape mismatch, got: {err}"
+        );
     }
 
     #[test]
@@ -979,7 +1096,7 @@ mod tests {
         b.extend_from_slice(&payload);
         let err = decode(&b).unwrap_err();
         assert!(
-            err.contains("invalid transform"),
+            err.to_string().contains("invalid transform"),
             "want transform rejection, got: {err}"
         );
     }
