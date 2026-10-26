@@ -31,11 +31,15 @@ use std::io::Read;
 
 use crate::codec::{apply_transform, div_ceil, split_tiles, tile_sig, Atlas, Dims, TILE_SIZE};
 use crate::mnf6::{
-    compress_stream, decode_record_walk, modcolor_forward_iter, pack9, planar_pack, proxy_cost,
-    ycocg_forward, Coder, MnF6Stats, FLAGS_RESERVED, FLAG_PLANAR,
+    compress_stream, decode_record_walk, med_predict, modcolor_forward_iter, pack9, planar_pack,
+    proxy_cost, ycocg_forward, Coder, MnF6Stats, FLAG_PLANAR,
 };
 
 pub const HEADER8: usize = 32;
+
+// MNF8-only flags (MNF6/7 keep !0b11 frozen; MNF8 owns bit2):
+pub const FLAG_PRED_MED: u32 = 4; // mode-0 literal bodies carry image-wide MED residuals
+pub const FLAGS_RESERVED8: u32 = !0b111;
 
 pub const BACKEND_ZLIB: u32 = 0;
 pub const BACKEND_ZSTD19: u32 = 1;
@@ -143,11 +147,16 @@ pub fn encode_mnf8(
     };
     let mut best: Option<(Vec<u8>, u32, MnF6Stats, u32)> = None;
     for (backend, coder) in candidates {
-        for flags in [0u32, FLAG_PLANAR] {
+        for flags in [
+            0u32,
+            FLAG_PLANAR,
+            FLAG_PRED_MED,
+            FLAG_PLANAR | FLAG_PRED_MED,
+        ] {
             let planar = flags & FLAG_PLANAR != 0;
+            let med = flags & FLAG_PRED_MED != 0;
             let (file, st) = encode_stream_coder(
-                pixels, dims, true, // use_atlas: the public encoder always has the atlas on
-                use_geom, flags, planar, &coder, backend,
+                pixels, dims, true, use_geom, flags, planar, med, &coder, backend,
             )
             .expect("encoding an in-memory image cannot fail");
             let size = file.len();
@@ -179,15 +188,21 @@ fn encode_stream_coder(
     use_geom: bool,
     flags: u32,
     planar: bool,
+    med: bool,
     coder: &Coder,
     backend: u32,
 ) -> Result<(Vec<u8>, MnF6Stats), String> {
+    let med_pred = if med {
+        med_predict(pixels, dims.width as usize, dims.height as usize)
+    } else {
+        Vec::new()
+    };
     let tiles = split_tiles(pixels, dims);
     let mut raw: Vec<u8> = Vec::with_capacity(tiles.len() * 774);
     let mut stats = MnF6Stats::default();
     let mut atlas = Atlas::new();
 
-    for tile in &tiles {
+    for (idx, tile) in tiles.iter().enumerate() {
         let n = tile.nbytes();
         let pack = |rgb: &[u8]| -> Vec<u8> {
             if planar {
@@ -197,7 +212,36 @@ fn encode_stream_coder(
             }
         };
 
-        let lit_body = pack(&tile.data);
+        // mode-0 literal candidate; with FLAG_PRED_MED the body carries the
+        // image-wide MED residual (decoder reconstructs causally)
+        let lit_src: Vec<u8> = if med {
+            let (tw, th) = (tile.width as usize, tile.height as usize);
+            let cols = dims.width as usize;
+            let tx = (idx % ((dims.width as usize + 15) / 16)) * 16;
+            let ty = (idx / ((dims.width as usize + 15) / 16)) * 16;
+            let mut src = Vec::with_capacity(n);
+            for y in 0..th {
+                let row_off = ((ty + y) * cols + tx) * 3;
+                src.extend_from_slice(&med_pred[row_off..row_off + tw * 3]);
+            }
+            tile.data
+                .iter()
+                .zip(&src)
+                .map(|(x, m)| x.wrapping_sub(*m))
+                .collect()
+        } else {
+            tile.data.clone()
+        };
+        if std::env::var("MNF8_DEBUG").is_ok() && idx < 3 {
+            eprintln!(
+                "[dbg] tile {idx} w={} h={} lit_src[:9]={:?} tile[:9]={:?}",
+                tile.width,
+                tile.height,
+                &lit_src[..9.min(lit_src.len())],
+                &tile.data[..9]
+            );
+        }
+        let lit_body = pack(&lit_src);
         let mut choice_body = lit_body.clone();
         let mut choice_mode = 0u8;
         let mut choice_ref: Option<(u32, u8)> = None;
@@ -370,7 +414,8 @@ pub fn decode_mnf8(buf: &[u8]) -> Result<(Dims, Vec<u8>, u32), String> {
         return Err("filelen".into());
     }
     let flags = u32le(24);
-    if flags & FLAGS_RESERVED != 0 {
+    // MNF8 owns bit2 (FLAG_PRED_MED); MNF6/7 do not — wider mask here
+    if flags & FLAGS_RESERVED8 != 0 {
         return Err("reserved-flags".into());
     }
     let backend = u32le(28);
@@ -407,7 +452,14 @@ pub fn decode_mnf8(buf: &[u8]) -> Result<(Dims, Vec<u8>, u32), String> {
         other => return Err(format!("unsupported backend {other}")),
     };
 
-    let pixels = decode_record_walk(&raw, width, height, tile_count, planar)?;
+    let pixels = decode_record_walk(
+        &raw,
+        width,
+        height,
+        tile_count,
+        planar,
+        flags & FLAG_PRED_MED != 0,
+    )?;
     Ok((Dims { width, height }, pixels, backend))
 }
 
@@ -536,10 +588,14 @@ mod tests {
             Profile::Balanced,
         );
         assert_eq!(backend, BACKEND_ZSTD19);
+        // MEASURED pick (v1.2.1 round): on this body MED-alone wins (105 B vs
+        // planar 177 / interleaved 401); assert the winner carries MED — the
+        // invariant is "measured, not hardcoded", the winning id moves with
+        // the data.
         assert_eq!(
-            st.chosen_flags & FLAG_PLANAR,
-            FLAG_PLANAR,
-            "balanced must MEASURE and pick planar on gradient-like bodies"
+            st.chosen_flags & FLAG_PRED_MED,
+            FLAG_PRED_MED,
+            "balanced must MEASURE the variants and pick the med-bearing winner here"
         );
         let (_, out, _) = decode_mnf8(&buf).expect("decode");
         assert_eq!(out, px);
@@ -614,6 +670,7 @@ mod tests {
                 false,
                 flags,
                 planar,
+                false,
                 &Coder::Zstd(19),
                 BACKEND_ZSTD19,
             )
@@ -624,6 +681,39 @@ mod tests {
         }
         let (f, s, b) = best.expect("variant");
         (f, s, b)
+    }
+
+    #[test]
+    fn mnf8_med_flag_roundtrip_photo_like() {
+        // FLAG_PRED_MED (v1.2 gate item 2): gradient-like image where the
+        // image-wide MED pre-predictor wins; the rate-aware loop must MEASURE
+        // the med variant and pick it, and decode must reconstruct exactly
+        // through the causal in-walker MED inversion.
+        let (w, h) = (64u32, 64u32);
+        let mut px = vec![0u8; (w * h * 3) as usize];
+        for y in 0..h {
+            for x in 0..w {
+                let i = ((y * w + x) * 3) as usize;
+                px[i] = (x * 4) as u8;
+                px[i + 1] = (y * 4) as u8;
+                px[i + 2] = ((x + y) / 2) as u8;
+            }
+        }
+        let d = Dims {
+            width: w,
+            height: h,
+        };
+        let (buf, st, _) = encode_mnf8(&px, d, false, Profile::Balanced);
+        assert_eq!(
+            st.chosen_flags & FLAG_PRED_MED,
+            FLAG_PRED_MED,
+            "measured selection must pick MED on gradient content (stats: lit={} ex={} y={})",
+            st.literal,
+            st.ref_exact,
+            st.ycocg_literal
+        );
+        let (_, out, _) = decode_mnf8(&buf).expect("decode");
+        assert_eq!(out, px, "MED-flag exact reconstruction");
     }
 
     #[test]

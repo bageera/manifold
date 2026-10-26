@@ -538,7 +538,7 @@ pub fn decode_mnf7(buf: &[u8]) -> Result<(Dims, Vec<u8>), String> {
         return Err("bomb".into());
     }
 
-    let pixels = decode_record_walk(&raw, width, height, tile_count, planar)?;
+    let pixels = decode_record_walk(&raw, width, height, tile_count, planar, false)?;
     Ok((Dims { width, height }, pixels))
 }
 
@@ -552,6 +552,7 @@ pub fn decode_record_walk(
     height: u32,
     tile_count: u32,
     planar: bool,
+    med: bool,
 ) -> Result<Vec<u8>, String> {
     let cols = div_ceil(width, TILE_SIZE);
     let mut pixels = vec![0u8; width as usize * height as usize * 3];
@@ -577,8 +578,71 @@ pub fn decode_record_walk(
                 }
                 let body = raw[ip..ip + n].to_vec();
                 ip += n;
-                if planar {
-                    planar_unpack(&body)
+                let body = if planar { planar_unpack(&body) } else { body };
+                if med {
+                    // FLAG_PRED_MED (MNF8 bit2): body = (X - MED(X_causal)) mod
+                    // 256. Context discipline (the audit bug): IN-TILE causal
+                    // neighbors live in `recon` (only blitted into `pixels`
+                    // after the whole tile reconstructs); OUT-OF-TILE
+                    // neighbors (above tile-row or left tile-column) are
+                    // already decoded in `pixels` (scan order guarantees the
+                    // earlier tiles finished). Read each sample from the
+                    // buffer that actually holds it.
+                    let mut recon = vec![0u8; n];
+                    let gy0 = row as usize * TILE_SIZE as usize;
+                    let gx0 = col as usize * TILE_SIZE as usize;
+                    for y in 0..th as usize {
+                        for x in 0..tw as usize {
+                            for c in 0..3usize {
+                                let k = (y * tw as usize + x) * 3 + c;
+                                let gy = gy0 + y;
+                                let gx = gx0 + x;
+                                // tile-local coords for recon reads
+                                let tl = |ggy: usize, ggx: usize| -> u32 {
+                                    if ggy >= gy0 && ggx >= gx0 {
+                                        u32::from(
+                                            recon
+                                                [((ggy - gy0) * tw as usize + (ggx - gx0)) * 3 + c],
+                                        )
+                                    } else {
+                                        u32::from(pixels[(ggy * width as usize + ggx) * 3 + c])
+                                    }
+                                };
+                                let pred: u32 = if gy == 0 && gx == 0 {
+                                    127
+                                } else if gy == 0 {
+                                    // top row: left neighbor (out-of-tile or in-tile)
+                                    if gx - 1 < gx0 {
+                                        u32::from(pixels[(gy * width as usize + gx - 1) * 3 + c])
+                                    } else {
+                                        u32::from(recon[(y * tw as usize + x - 1) * 3 + c])
+                                    }
+                                } else if gx == 0 {
+                                    // left col: top neighbor (out-of-tile above or in-tile)
+                                    if gy - 1 < gy0 {
+                                        u32::from(pixels[((gy - 1) * width as usize + gx) * 3 + c])
+                                    } else {
+                                        u32::from(recon[((y - 1) * tw as usize + x) * 3 + c])
+                                    }
+                                } else {
+                                    let a = tl(gy, gx - 1);
+                                    let b = tl(gy - 1, gx);
+                                    let cc = tl(gy - 1, gx - 1);
+                                    med_predict_pixel(a, b, cc)
+                                };
+                                recon[k] =
+                                    (pred + u32::from(body[k])).wrapping_rem_euclid(256) as u8;
+                            }
+                        }
+                    }
+                    if std::env::var("MNF8_DEBUG").is_ok() && i < 3 {
+                        eprintln!(
+                            "[dbg-w] tile {i} recon[:9]={:?} body[:9]={:?}",
+                            &recon[..9],
+                            &body[..9]
+                        );
+                    }
+                    recon
                 } else {
                     body
                 }
@@ -672,6 +736,75 @@ pub fn decode_record_walk(
     }
     // note: Ok(Dims..) tuple-return belonged to decode_mnf7; this walker returns pixels
     Ok(pixels)
+}
+
+/// Image-wide MED (JPEG-LS LOCO-I) predictor over RGB8: pixel (x,y) predicts
+/// from left/top/topleft true pixels (edge-sense: flat branches take the
+/// plane a+b-cc). First pixel = 127; top row = left; left col = above.
+/// Deterministic; encoder and decoder compute the identical progression
+/// from reconstructed causal neighbors.
+pub fn med_predict(rgb: &[u8], w: usize, h: usize) -> Vec<u8> {
+    assert_eq!(rgb.len(), w * h * 3, "rgb size");
+    let mut out = vec![0u8; rgb.len()];
+    for y in 0..h {
+        for x in 0..w {
+            for c in 0..3usize {
+                let i = (y * w + x) * 3 + c;
+                if x == 0 && y == 0 {
+                    out[i] = 127;
+                } else if y == 0 {
+                    out[i] = rgb[i - 3];
+                } else if x == 0 {
+                    out[i] = rgb[i - w * 3];
+                } else {
+                    let a = i32::from(rgb[i - 3]);
+                    let b = i32::from(rgb[i - w * 3]);
+                    let cc = i32::from(rgb[i - w * 3 - 3]);
+                    let plane = a + b - cc;
+                    let flat = (a >= b && a >= cc && b >= cc) || (a <= b && a <= cc && b <= cc);
+                    let p = if flat {
+                        plane
+                    } else {
+                        let pa = (plane - a).abs();
+                        let pb = (plane - b).abs();
+                        let pcc = (plane - cc).abs();
+                        if pa <= pb && pa <= pcc {
+                            a
+                        } else if pb <= pcc {
+                            b
+                        } else {
+                            cc
+                        }
+                    };
+                    out[i] = p.clamp(0, 255) as u8;
+                }
+            }
+        }
+    }
+    out
+}
+
+#[inline]
+fn med_predict_pixel(a: u32, b: u32, cc: u32) -> u32 {
+    let plane = a as i64 + b as i64 - cc as i64;
+    let flat = (a >= b && a >= cc && b >= cc) || (a <= b && a <= cc && b <= cc);
+    if flat {
+        // plane branch; clamp into byte range — NOTE the encoder's predictor
+        // values live in 0..=255 after its own clamp; identical formula both
+        // sides (med_predict clamps identically)
+        plane.max(0).min(255) as u32
+    } else {
+        let pa = (plane - a as i64).abs();
+        let pb = (plane - b as i64).abs();
+        let pcc = (plane - cc as i64).abs();
+        if pa <= pb && pa <= pcc {
+            a
+        } else if pb <= pcc {
+            b
+        } else {
+            cc
+        }
+    }
 }
 
 #[cfg(test)]
