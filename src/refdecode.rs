@@ -12,6 +12,7 @@
 //   residuals via iterator zip.
 
 use crate::codec::Dims;
+use crate::error::{Error, Result};
 use std::io::Read;
 
 const HEADER: usize = 24;
@@ -19,8 +20,11 @@ const TS: u32 = 16;
 const MAX_PIXELS: u64 = 1 << 26;
 const MAX_PAYLOAD: u32 = (1 << 31) - 1;
 
+/// Result of the independent MNF5 decode.
 pub struct RefDecodeResult {
+    /// Decoded dimensions.
     pub dims: Dims,
+    /// RGB8 pixels, row-major.
     pub pixels: Vec<u8>,
 }
 
@@ -74,38 +78,39 @@ fn push_transform(t: u8, w: u32, h: u32, data: &[u8]) -> Vec<u8> {
     out
 }
 
-pub fn ref_decode(buf: &[u8]) -> Result<RefDecodeResult, String> {
+/// Reference-implementation decode of MNF5 (independent path for differential testing).
+pub fn ref_decode(buf: &[u8]) -> Result<RefDecodeResult> {
     if buf.len() < HEADER {
-        return Err("short".into());
+        return Err(Error::fmt_msg("short"));
     }
     if buf[0..4] != *b"MNF5" {
-        return Err("magic".into());
+        return Err(Error::fmt_msg("magic"));
     }
     let u32le = |o: usize| u32::from_le_bytes(buf[o..o + 4].try_into().unwrap());
     let width = u32le(4);
     let height = u32le(8);
     if width == 0 || height == 0 {
-        return Err("dims".into());
+        return Err(Error::fmt_msg("dims"));
     }
     if width as u64 * height as u64 > MAX_PIXELS {
-        return Err("pixels".into());
+        return Err(Error::fmt_msg("pixels"));
     }
     let ts = u32le(12);
     if ts != TS {
-        return Err("tilesize".into());
+        return Err(Error::fmt_msg("tilesize"));
     }
     let cols = div_ceil(width, TS);
     let rows = div_ceil(height, TS);
     let tile_count = u32le(16);
     if tile_count != cols * rows {
-        return Err("tilecount".into());
+        return Err(Error::fmt_msg("tilecount"));
     }
     let payload_len = u32le(20);
     if payload_len > MAX_PAYLOAD {
-        return Err("payloadlen".into());
+        return Err(Error::fmt_msg("payloadlen"));
     }
     if buf.len() != HEADER + payload_len as usize {
-        return Err("filelen".into());
+        return Err(Error::fmt_msg("filelen"));
     }
     let zlib = &buf[HEADER..];
 
@@ -113,10 +118,11 @@ pub fn ref_decode(buf: &[u8]) -> Result<RefDecodeResult, String> {
     let mut raw: Vec<u8> = Vec::new();
     {
         let mut d = flate2::read::ZlibDecoder::new(zlib).take(limit + 1);
-        d.read_to_end(&mut raw).map_err(|_| "zlib".to_string())?;
+        d.read_to_end(&mut raw)
+            .map_err(|_| Error::Decompress("corrupt zlib stream"))?;
     }
     if raw.len() as u64 > limit {
-        return Err("bomb".into());
+        return Err(Error::fmt_msg("bomb"));
     }
 
     let mut pixels = vec![0u8; width as usize * height as usize * 3];
@@ -130,7 +136,7 @@ pub fn ref_decode(buf: &[u8]) -> Result<RefDecodeResult, String> {
         let n = (tw * th * 3) as usize;
 
         if ip >= raw.len() {
-            return Err("eof".into());
+            return Err(Error::fmt_msg("eof"));
         }
         let mode = raw[ip];
         ip += 1;
@@ -139,7 +145,7 @@ pub fn ref_decode(buf: &[u8]) -> Result<RefDecodeResult, String> {
             0 => None,
             1 => {
                 if ip + 4 > raw.len() {
-                    return Err("refmeta".into());
+                    return Err(Error::fmt_msg("refmeta"));
                 }
                 let idx = u32::from_le_bytes(raw[ip..ip + 4].try_into().unwrap()) as usize;
                 ip += 4;
@@ -147,18 +153,18 @@ pub fn ref_decode(buf: &[u8]) -> Result<RefDecodeResult, String> {
             }
             2 => {
                 if ip + 5 > raw.len() {
-                    return Err("refmeta".into());
+                    return Err(Error::fmt_msg("refmeta"));
                 }
                 let idx = u32::from_le_bytes(raw[ip..ip + 4].try_into().unwrap()) as usize;
                 let tr = raw[ip + 4];
                 ip += 5;
                 Some((idx, tr))
             }
-            _ => return Err("mode".into()),
+            _ => return Err(Error::fmt_msg("mode")),
         };
 
         if ip + n > raw.len() {
-            return Err("body".into());
+            return Err(Error::fmt_msg("body"));
         }
         let body = raw[ip..ip + n].to_vec();
         ip += n;
@@ -167,17 +173,17 @@ pub fn ref_decode(buf: &[u8]) -> Result<RefDecodeResult, String> {
             None => body,
             Some((src, tr)) => {
                 if src >= i as usize {
-                    return Err("reforder".into());
+                    return Err(Error::fmt_msg("reforder"));
                 }
                 if tr >= 8 {
-                    return Err("tranform-range".into());
+                    return Err(Error::fmt_msg("tranform-range"));
                 }
                 let (rw, rh, ref_rgb) = &decoded[src];
                 if *rw != tw || *rh != th {
-                    return Err("refshape".into());
+                    return Err(Error::fmt_msg("refshape"));
                 }
                 if tw != th && tr >= 4 {
-                    return Err("xform-shape".into());
+                    return Err(Error::fmt_msg("xform-shape"));
                 }
                 let base = if tr == 0 {
                     ref_rgb.clone()
@@ -205,7 +211,7 @@ pub fn ref_decode(buf: &[u8]) -> Result<RefDecodeResult, String> {
         }
     }
     if ip != raw.len() {
-        return Err("extra".into());
+        return Err(Error::fmt_msg("extra"));
     }
     Ok(RefDecodeResult {
         dims: Dims { width, height },

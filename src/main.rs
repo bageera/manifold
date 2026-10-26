@@ -5,7 +5,8 @@ use manifold::codec::*;
 use manifold::img::{self, Image};
 use manifold::mnf6::{decode_mnf7, encode_mnf7};
 use manifold::mnf8::{decode_mnf8, encode_mnf8, Profile};
-use manifold::vis;
+#[path = "vis_cli.rs"]
+mod vis;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
