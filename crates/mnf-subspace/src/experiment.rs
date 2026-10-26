@@ -259,7 +259,6 @@ mod tests {
         let ts = 16usize;
         let cols = (wu + ts - 1) / ts;
         let rows = (hu + ts - 1) / ts;
-        let mut med_pred_tiles: Vec<Vec<u8>> = Vec::with_capacity(cols * rows);
         let mut med_resid: Vec<Vec<u8>> = Vec::with_capacity(cols * rows);
         for t in 0..cols * rows {
             let tw = ts.min(wu - (t % cols) * ts);
@@ -276,7 +275,6 @@ mod tests {
                 }
             }
             med_resid.push(residual(&tsr, &tm));
-            med_pred_tiles.push(tm.clone());
         }
         let mut b_stream = Vec::new();
         for r in &med_resid {

@@ -264,6 +264,8 @@ fn flag_variants() -> Vec<(u32, bool, Coder)> {
 /// Supersedes encode_mnf6 (same flags + modes 0-3; adds color-domain modes 4/5).
 pub fn encode_mnf7(pixels: &[u8], dims: Dims, use_geom: bool) -> (Vec<u8>, MnF6Stats) {
     let tiles = crate::codec::split_tiles(pixels, dims);
+    // ponytail: only the best variant is kept — earlier drafts retained all
+    // four; the stats of the winner are the only ones callers read.
     let mut best: Option<(Vec<u8>, u32, MnF6Stats)> = None;
 
     for (flags, planar, coder) in flag_variants() {
@@ -495,8 +497,15 @@ pub fn decode_mnf7(buf: &[u8]) -> Result<(Dims, Vec<u8>), String> {
     let zlib_in = flags & FLAG_ZSTD == 0;
 
     let zlib_data = &buf[HEADER6..];
-    // max record: 1 mode + 5 refmeta + 768 residual (+2 = mode3 planes 256+288+288 - 768)
-    let limit = tile_count as u64 * (1 + 5 + (TILE_SIZE * TILE_SIZE * 3) as u64 + 2);
+    // Max record size, over all modes:
+    //   literal/refs:      1 mode + 5 refmeta + 768 bytes
+    //   mode 3 (YCoCg-R):  1 mode + np bytes Y + 2 * ceil(9*np/8) bytes, np <= 256
+    //                      => 1 + 256 + 2 * 288 = 833 (larger than the 776
+    //                      implied by the other modes; previously undercounted,
+    //                      which rejected all-mode-3 files as bombs — audit fix)
+    let mode3_max: u64 = 1 + 256 + 2 * u64::from((256u32 * 9).div_ceil(8));
+    let per_tile_max = 1 + 5 + (TILE_SIZE * TILE_SIZE * 3) as u64;
+    let limit = tile_count as u64 * per_tile_max.max(mode3_max) + per_tile_max + mode3_max;
     let raw: Vec<u8> = if zlib_in {
         let mut d = flate2::read::ZlibDecoder::new(zlib_data).take(limit + 1);
         let mut v = Vec::new();

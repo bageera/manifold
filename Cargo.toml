@@ -3,7 +3,7 @@ members = [".", "crates/mnf-subspace"]
 
 [package]
 name = "manifold"
-version = "1.1.0"
+version = "1.1.2"
 edition = "2021"
 description = "Lossless RGB8 shared-patch atlas image codecs (MNF5/MNF6/MNF7)"
 license = "MIT"
