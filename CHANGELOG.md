@@ -21,13 +21,14 @@ current stable = 1.91):
   consumers build with `--no-default-features`); `image` also added as a
   dev-dependency for tests. The `brotli` dependency is gone (backend never
   shipped).
-- New crate `crates/manifold-capi`: C ABI (`manifold_decode`,
+- New crate `crates/manifold-capi` (published as `manifold-codec-capi`): C ABI (`manifold_decode`,
   `manifold_encode`, `manifold_encode_mnf8`) — never panics, status codes
   (stable), caller-owned buffers with the size-query idiom. Ships
   `include/manifold.h`; C smoke test compiles + roundtrips against the
   staticlib. `Error::msg` is public (FFI constructor).
 - Crate metadata: `rust-version = "1.91"`, description/repository/keywords/
-  categories; `mnf-subspace` + `mnf-mans` marked `publish = false`
+  categories; publishes as `manifold-codec` (plain "manifold" is taken on
+  crates.io); `mnf-subspace` + `mnf-mans` marked `publish = false`
   (workspace-only research crates). Crate-level rustdoc on `lib.rs` +
   missing_docs discipline (113 items documented; `cargo doc` warnings = 0,
   CI now denies them).
