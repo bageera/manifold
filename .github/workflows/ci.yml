@@ -41,3 +41,15 @@ jobs:
           cargo run --release -- encode testdata/screenshot_640x400.png -o /tmp/g.mnf5 --geom
           cargo run --release -- verify testdata/screenshot_640x400.png /tmp/g.mnf5
           python3 scripts/fuzz.py --trials 300
+  semver:
+    runs-on: ubuntu-latest
+    needs: test
+    # Advisory until 2.0: report breaking changes vs the published 1.3.0 baseline.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          crate-name: manifold-codec
+          # baseline defaults to the latest published version

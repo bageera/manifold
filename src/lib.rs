@@ -1,5 +1,16 @@
 //! Manifold: lossless RGB8 shared-patch-atlas image codecs (MNF5/6/7/8).
 //!
+//! NOTE on names: the published *package* is `manifold-codec`, but the lib
+//! target is `manifold` (the original crate name, kept for path stability).
+//! Depend on `manifold-codec` in Cargo.toml and import as `manifold`:
+//!
+//! ```toml
+//! [dependencies]
+//! manifold-codec = "1.3"
+//! ```
+//! ```no_run
+//! use manifold::codec::Dims;
+//! ```
 //! Entry points:
 //! - [`codec`]: MNF5 (v0.5 format) encode/decode; [`codec::DecodeLimits`].
 //! - [`mnf6`]: MNF6/7 (zstd container, planar, YCoCg, color modes) —
