@@ -281,8 +281,10 @@ the mode-3-aware decompression bound. Total file length MUST be exactly
     0 = zlib-9     payload is a zlib stream (control arm; MNF7 flag-free parity)
     1 = zstd-19    payload is a zstd frame (xxh64 checksum MANDATORY — encoder
                    side; the decoder rejects checksum failures)
-    2 = brotli-9   payload is a brotli stream (static dictionary applies;
-                   its size cost is in the decoder artifact, not the file)
+    2 = RESERVED   brotli prototype — unshipped (the static dictionary's
+                   cost was accounted only in the study harness; the corpus
+                   gate moved zstd/brotli within measurement error).
+                   Decoders MUST reject.
     3 = RESERVED   custom mixed run/rANS coder — NOT shipped; decoders MUST
                    reject. Reserved for the mnf-mans prototype pending the
                    retention gate (docs/entropy-backends-v13.md stage 2).
@@ -297,12 +299,19 @@ walker is shared with the MNF7 decoder (src/mnf6.rs::decode_record_walk).
 ## 4. Encoder profiles (informative; not a wire property)
 
 - balanced (default): zstd-19 pinned; flags measured as MNF7 measures
-  (planar vs interleaved under zstd).
+  (planar vs interleaved under zstd). The winner's flags id is recorded
+  in the stats (`chosen_flags`).
+- Arm controls for ablations: `use_atlas` (references at all) and
+  `use_geom` (D8 transforms; false = exact references only, t=0,
+  codec.rs v0.5 semantics). Shared YCoCg mode 3 and the planar layout
+  flag stay available in all arms.
 - maximum: builds the tile stream under each backend x flags candidate,
   re-costing per-tile mode selection through that candidate's own coder
   (stage-2 evidence: selection is backend-dependent), and emits the
   smallest file. Measured never worse than MNF7 + 4 bytes (the backend
-  field's own wire cost).
+  field's own wire cost) — an EMPIRICAL gate on stable corpus files
+  (the two encoders' candidate sets differ; never-loses is measured,
+  not structural).
 
 ## 5. Versioning
 
