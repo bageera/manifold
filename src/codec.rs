@@ -156,10 +156,10 @@ impl Atlas {
 fn rgb_mean(rgb: &[u8]) -> (i64, i64, i64) {
     let n = (rgb.len() / 3) as i64;
     let mut s = (0i64, 0i64, 0i64);
-    for px in rgb.chunks_exact(3) {
-        s.0 += px[0] as i64;
-        s.1 += px[1] as i64;
-        s.2 += px[2] as i64;
+    for [r, g, b] in rgb.as_chunks::<3>().0 {
+        s.0 += i64::from(*r);
+        s.1 += i64::from(*g);
+        s.2 += i64::from(*b);
     }
     (s.0 / n, s.1 / n, s.2 / n)
 }
@@ -184,7 +184,12 @@ fn luma(px: &[u8]) -> i64 {
 /// Compute a tile's signature for atlas ranking.
 pub fn tile_sig(w: u32, h: u32, data: &[u8]) -> Sig {
     let n = (w * h) as i64;
-    let l = data.chunks_exact(3).map(luma).collect::<Vec<i64>>();
+    let l = data
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .map(|px| luma(px.as_slice()))
+        .collect::<Vec<i64>>();
     let (wu, hu) = (w as usize, h as usize);
     let mut gdx = 0i64;
     let mut gdy = 0i64;

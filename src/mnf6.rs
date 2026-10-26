@@ -128,7 +128,7 @@ pub fn ycocg_forward(rgb: &[u8]) -> (Vec<u8>, Vec<u16>, Vec<u16>) {
         Vec::with_capacity(n),
         Vec::with_capacity(n),
     );
-    for px in rgb.chunks_exact(3) {
+    for px in rgb.as_chunks::<3>().0 {
         let (r, g, b) = (px[0] as i32, px[1] as i32, px[2] as i32);
         let co_v = r - b;
         let tmp = b + (co_v >> 1);
@@ -225,11 +225,14 @@ pub mod modcolor {
 /// Forward transform, one tile (bytes).
 pub fn modcolor_forward(rgb: &[u8]) -> Vec<u8> {
     let mut out = vec![0u8; rgb.len()];
-    for (o, px) in out.chunks_exact_mut(3).zip(rgb.chunks_exact(3)) {
-        let t = modcolor::forward([px[0], px[1], px[2]]);
-        o[0] = t[0];
-        o[1] = t[1];
-        o[2] = t[2];
+    for (o, px) in out
+        .as_chunks_mut::<3>()
+        .0
+        .iter_mut()
+        .zip(rgb.as_chunks::<3>().0)
+    {
+        let t = modcolor::forward(*px);
+        *o = t;
     }
     out
 }
@@ -237,11 +240,14 @@ pub fn modcolor_forward(rgb: &[u8]) -> Vec<u8> {
 /// Forward transform, iterator-friendly (avoids re-collect).
 pub fn modcolor_forward_iter(rgb: &[u8]) -> Vec<u8> {
     let mut out = vec![0u8; rgb.len()];
-    for (o, px) in out.chunks_exact_mut(3).zip(rgb.chunks_exact(3)) {
-        let t = modcolor::forward([px[0], px[1], px[2]]);
-        o[0] = t[0];
-        o[1] = t[1];
-        o[2] = t[2];
+    for (o, px) in out
+        .as_chunks_mut::<3>()
+        .0
+        .iter_mut()
+        .zip(rgb.as_chunks::<3>().0)
+    {
+        let t = modcolor::forward(*px);
+        *o = t;
     }
     out
 }
@@ -249,8 +255,13 @@ pub fn modcolor_forward_iter(rgb: &[u8]) -> Vec<u8> {
 /// Inverse transform (exact).
 pub fn modcolor_inverse(ycocg: &[u8]) -> Vec<u8> {
     let mut out = vec![0u8; ycocg.len()];
-    for (o, px) in out.chunks_exact_mut(3).zip(ycocg.chunks_exact(3)) {
-        let t = modcolor::inverse([px[0], px[1], px[2]]);
+    for (o, px) in out
+        .as_chunks_mut::<3>()
+        .0
+        .iter_mut()
+        .zip(ycocg.as_chunks::<3>().0)
+    {
+        let t = modcolor::inverse(*px);
         o[0] = t[0];
         o[1] = t[1];
         o[2] = t[2];
