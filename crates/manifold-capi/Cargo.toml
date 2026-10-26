@@ -5,6 +5,7 @@ edition = "2021"
 rust-version = "1.91"
 description = "C FFI for the Manifold lossless RGB8 codecs"
 license = "MIT"
+repository = "https://github.com/bageera/manifold"
 publish = true
 
 [lib]
