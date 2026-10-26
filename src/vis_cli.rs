@@ -3,7 +3,7 @@
 // Savings heat: black (no gain) -> white (max gain). Reads straight from
 // encode_stats output; no bitstream parsing.
 
-use crate::codec::{tile_grid, Dims, GeomStats};
+use manifold::codec::{tile_grid, Dims, GeomStats};
 use std::io::BufWriter;
 use std::path::Path;
 
