@@ -1,0 +1,5 @@
+# Dev-only (scripts/, not codec): backend ablation harness
+brotli
+zstandard
+numpy
+Pillow
