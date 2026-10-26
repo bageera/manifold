@@ -1,9 +1,9 @@
 [workspace]
-members = [".", "crates/mnf-subspace"]
+members = [".", "crates/mnf-subspace", "crates/mnf-mans"]
 
 [package]
 name = "manifold"
-version = "1.1.2"
+version = "1.2.0"
 edition = "2021"
 description = "Lossless RGB8 shared-patch atlas image codecs (MNF5/MNF6/MNF7)"
 license = "MIT"
@@ -17,3 +17,4 @@ flate2 = "1.0"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 png = "0.17"
 zstd = "0.13"
+brotli = "8"

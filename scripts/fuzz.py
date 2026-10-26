@@ -33,7 +33,7 @@ def main() -> int:
     panics = accepted = rejected = 0
     total = 0
     for img in images:
-        for extra in ([], ["--geom"], ["--mnf6"]):
+        for extra in ([], ["--geom"], ["--mnf6"], ["--mnf8"]):
             subprocess.run(
                 [BIN, "encode", str(img), "-o", "/tmp/fz_base.mnf5", *extra],
                 check=True, capture_output=True,

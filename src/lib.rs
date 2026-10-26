@@ -3,5 +3,6 @@
 pub mod codec;
 pub mod img;
 pub mod mnf6;
+pub mod mnf8;
 pub mod refdecode;
 pub mod vis;

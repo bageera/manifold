@@ -4,14 +4,16 @@
 use manifold::codec::*;
 use manifold::img::{self, Image};
 use manifold::mnf6::{decode_mnf7, encode_mnf7};
+use manifold::mnf8::{decode_mnf8, encode_mnf8, Profile};
 use manifold::vis;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-const USAGE: &str = "manifold v1.1.2 (MNF5/MNF6/MNF7)
+const USAGE: &str = "manifold v1.2.0 (MNF5/6/7/8)
 usage:
   manifold benchmark <image>
   manifold encode <image> -o out.mnf5 [--no-atlas] [--geom] [--mnf6]
+                                    [--mnf8[=balanced|maximum]]
   manifold decode <file.mnf5> -o out.png
   manifold verify <image> <file.mnf5>
   manifold vis <image> [prefix]     atlas mode/savings maps";
@@ -41,7 +43,14 @@ fn encode_image(src: &Image, use_atlas: bool, use_geom: bool) -> Vec<u8> {
     buf
 }
 
-fn encode_cmd(path: &Path, out: &Path, use_atlas: bool, use_geom: bool, mnf6: bool) {
+fn encode_cmd(
+    path: &Path,
+    out: &Path,
+    use_atlas: bool,
+    use_geom: bool,
+    mnf6: bool,
+    mnf8: Option<Profile>,
+) {
     let src = load_rgb(path);
     let dims = Dims {
         width: src.width,
@@ -49,7 +58,21 @@ fn encode_cmd(path: &Path, out: &Path, use_atlas: bool, use_geom: bool, mnf6: bo
     };
     let tiles = split_tiles(&src.pixels, dims);
     let t0 = Instant::now();
-    let buf = if mnf6 {
+    let buf = if let Some(profile) = mnf8 {
+        let (buf, st, backend) = encode_mnf8(&src.pixels, dims, use_geom, profile);
+        println!(
+            "  [mnf8] backend={} flags={:#04x} literal={} ycocg={} exact={} geom={} color={} (nontrivial transforms: {})",
+            backend,
+            st.chosen_flags,
+            st.literal,
+            st.ycocg_literal,
+            st.ref_exact,
+            st.ref_geom,
+            st.ref_exact_color + st.ref_geom_color,
+            st.refs.iter().flatten().filter(|(_, t)| *t != 0).count()
+        );
+        buf
+    } else if mnf6 {
         let (buf, st) = encode_mnf7(&src.pixels, dims, use_geom);
         println!(
             "  [mnf6] flags={:#04x} literal={} ycocg={} exact={} geom={} color={} (nontrivial transforms: {})",
@@ -67,7 +90,13 @@ fn encode_cmd(path: &Path, out: &Path, use_atlas: bool, use_geom: bool, mnf6: bo
     };
     let enc_ms = t0.elapsed().as_millis();
     std::fs::write(out, &buf).unwrap_or_else(|e| die(&format!("write {}: {e}", out.display())));
-    let mode_label = if mnf6 { "mnf6" } else { "mnf5" };
+    let mode_label = if mnf8.is_some() {
+        "mnf8"
+    } else if mnf6 {
+        "mnf6"
+    } else {
+        "mnf5"
+    };
     println!(
         "encode [{mode_label}] {}: {} bytes, {}x{} px, {} tiles, atlas={}, geom={}, {} ms",
         out.display(),
@@ -83,13 +112,15 @@ fn encode_cmd(path: &Path, out: &Path, use_atlas: bool, use_geom: bool, mnf6: bo
 
 fn decode_cmd(file: &Path, out: &Path) {
     let buf = std::fs::read(file).unwrap_or_else(|e| die(&format!("read {}: {e}", file.display())));
-    let (res_dims, res_pixels) =
-        if buf.len() >= 4 && (&buf[0..4] == b"MNF6" || &buf[0..4] == b"MNF7") {
-            decode_mnf7(&buf).unwrap_or_else(|e| die(&format!("decode mnf6/7: {e}")))
-        } else {
-            let res = decode(&buf).unwrap_or_else(|e| die(&format!("decode: {e}")));
-            (res.dims, res.pixels)
-        };
+    let (res_dims, res_pixels) = if buf.len() >= 4 && &buf[0..4] == b"MNF8" {
+        let (d, px, _) = decode_mnf8(&buf).unwrap_or_else(|e| die(&format!("decode mnf8: {e}")));
+        (d, px)
+    } else if buf.len() >= 4 && (&buf[0..4] == b"MNF6" || &buf[0..4] == b"MNF7") {
+        decode_mnf7(&buf).unwrap_or_else(|e| die(&format!("decode mnf6/7: {e}")))
+    } else {
+        let res = decode(&buf).unwrap_or_else(|e| die(&format!("decode: {e}")));
+        (res.dims, res.pixels)
+    };
     img::save_png(out, res_dims, &res_pixels)
         .unwrap_or_else(|e| die(&format!("save {}: {e}", out.display())));
     println!(
@@ -104,7 +135,10 @@ fn decode_cmd(file: &Path, out: &Path) {
 fn verify_cmd(image: &Path, file: &Path) {
     let src = load_rgb(image);
     let buf = std::fs::read(file).unwrap_or_else(|e| die(&format!("read {}: {e}", file.display())));
-    let (rdims, rpx) = if buf.len() >= 4 && (&buf[0..4] == b"MNF6" || &buf[0..4] == b"MNF7") {
+    let (rdims, rpx) = if buf.len() >= 4 && &buf[0..4] == b"MNF8" {
+        let (d, px, _) = decode_mnf8(&buf).unwrap_or_else(|e| die(&format!("decode mnf8: {e}")));
+        (d, px)
+    } else if buf.len() >= 4 && (&buf[0..4] == b"MNF6" || &buf[0..4] == b"MNF7") {
         decode_mnf7(&buf).unwrap_or_else(|e| die(&format!("decode mnf6/7: {e}")))
     } else {
         let res = decode(&buf).unwrap_or_else(|e| die(&format!("decode: {e}")));
@@ -248,8 +282,8 @@ pub fn main() {
             }
         }
         "encode" => {
-            let (path, out, use_atlas, use_geom, mnf6) = parse_encode(&args[1..]);
-            encode_cmd(&path, &out, use_atlas, use_geom, mnf6);
+            let (path, out, use_atlas, use_geom, mnf6, mnf8) = parse_encode(&args[1..]);
+            encode_cmd(&path, &out, use_atlas, use_geom, mnf6, mnf8);
         }
         "decode" => {
             let (file, out) = parse_flag(&args[1..], "decode <file.mnf5>");
@@ -278,13 +312,14 @@ pub fn main() {
     }
 }
 
-fn parse_encode(a: &[String]) -> (PathBuf, PathBuf, bool, bool, bool) {
+fn parse_encode(a: &[String]) -> (PathBuf, PathBuf, bool, bool, bool, Option<Profile>) {
     let mut path: Option<PathBuf> = None;
     let mut out: Option<PathBuf> = None;
     let mut atlas = true;
     let mut mnf6 = false;
-    // v0.6 geometric mode is OPT-IN: default output stays v0.5-format
-    // (modes 0/1 only) for compatibility with the packaged v0.5 decoder.
+    let mut mnf8: Option<Profile> = None;
+    // MNF6+ modes stay OPT-IN (format-freeze policy); MNF8 likewise:
+    // --mnf8 (balanced) / --mnf8=maximum
     let mut geom = false;
     let mut i = 0;
     while i < a.len() {
@@ -298,6 +333,14 @@ fn parse_encode(a: &[String]) -> (PathBuf, PathBuf, bool, bool, bool) {
             "--no-atlas" => atlas = false,
             "--geom" => geom = true,
             "--mnf6" => mnf6 = true,
+            "--mnf8" => mnf8 = Some(Profile::Balanced),
+            v if v.starts_with("--mnf8=") => {
+                mnf8 = Some(match v.trim_start_matches("--mnf8=") {
+                    "maximum" => Profile::Maximum,
+                    "balanced" => Profile::Balanced,
+                    other => die(&format!("unknown profile '{other}' (balanced|maximum)")),
+                })
+            }
             _ => {
                 if path.is_none() {
                     path = Some(PathBuf::from(&a[i]));
@@ -312,6 +355,7 @@ fn parse_encode(a: &[String]) -> (PathBuf, PathBuf, bool, bool, bool) {
         atlas,
         geom,
         mnf6,
+        mnf8,
     )
 }
 

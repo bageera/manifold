@@ -51,7 +51,7 @@ pub fn compress_stream(coder: &Coder, buf: &[u8]) -> Vec<u8> {
     }
 }
 
-fn proxy_cost(coder: &Coder, buf: &[u8]) -> u64 {
+pub fn proxy_cost(coder: &Coder, buf: &[u8]) -> u64 {
     match coder {
         Coder::Zlib => compress_stream(coder, buf).len() as u64,
         // probe at level 3 for speed; final stream uses level 19
@@ -206,6 +206,17 @@ pub mod modcolor {
 }
 
 pub fn modcolor_forward(rgb: &[u8]) -> Vec<u8> {
+    let mut out = vec![0u8; rgb.len()];
+    for (o, px) in out.chunks_exact_mut(3).zip(rgb.chunks_exact(3)) {
+        let t = modcolor::forward([px[0], px[1], px[2]]);
+        o[0] = t[0];
+        o[1] = t[1];
+        o[2] = t[2];
+    }
+    out
+}
+
+pub fn modcolor_forward_iter(rgb: &[u8]) -> Vec<u8> {
     let mut out = vec![0u8; rgb.len()];
     for (o, px) in out.chunks_exact_mut(3).zip(rgb.chunks_exact(3)) {
         let t = modcolor::forward([px[0], px[1], px[2]]);
@@ -522,6 +533,22 @@ pub fn decode_mnf7(buf: &[u8]) -> Result<(Dims, Vec<u8>), String> {
         return Err("bomb".into());
     }
 
+    let pixels = decode_record_walk(&raw, width, height, tile_count, planar)?;
+    Ok((Dims { width, height }, pixels))
+}
+
+/// Shared MNF7/MNF8 record walk: decodes tile records (modes 0-5) over an
+/// already-decompressed `raw` stream into a width*height RGB8 buffer
+/// (extracted from decode_mnf7 for MNF8 reuse; semantics frozen — see
+/// docs/format.md §3/§MNF7).
+pub fn decode_record_walk(
+    raw: &[u8],
+    width: u32,
+    height: u32,
+    tile_count: u32,
+    planar: bool,
+) -> Result<Vec<u8>, String> {
+    let cols = div_ceil(width, TILE_SIZE);
     let mut pixels = vec![0u8; width as usize * height as usize * 3];
     let mut decoded: Vec<(u32, u32, Vec<u8>)> = Vec::with_capacity(tile_count as usize);
     let mut ip = 0usize;
@@ -638,7 +665,8 @@ pub fn decode_mnf7(buf: &[u8]) -> Result<(Dims, Vec<u8>), String> {
     if ip != raw.len() {
         return Err("extra".into());
     }
-    Ok((Dims { width, height }, pixels))
+    // note: Ok(Dims..) tuple-return belonged to decode_mnf7; this walker returns pixels
+    Ok(pixels)
 }
 
 #[cfg(test)]
