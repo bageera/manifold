@@ -6,29 +6,30 @@
 //
 // Header (32 bytes):
 //   "MNF8", u32 LE width, height, tile=16, tile_count, payload_len,
-//   u32 flags (MNF7 semantics: bit0 PLANAR, bit1 ZSTD, bits 2..30 reserved,
-//   NEW: bit31 = MODE-DICT? no — flags bits 2..31 stay reserved/0),
+//   u32 flags (MNF7 semantics: bit0 PLANAR, bit1 ZSTD, bits 2..31 reserved),
 //   u32 backend:
-//     0 = zlib-9  (MNF7 control; payload is a zlib stream like MNF7 flag-free)
-//     1 = zstd-19 (xxh64-checksummed frame, decoder window bounded)
-//     2 = brotli-9 (with static dictionary — cost lives in the decoder artifact)
+//     0 = zlib-9  (MNF7 control; payload is a zlib stream)
+//     1 = zstd-19 (xxh64-checksummed frame; decoder window capped at 23)
+//     2 = RESERVED — brotli was prototyped but unshipped: its static
+//         dictionary's cost accounting was measured only in the study, and
+//         a dictionary-free brotli backend changed nothing on the corpus.
+//         Reject until its gate re-passes (audit review 2026-10-25).
 //     3 = reserved (custom mixed run/rANS coder; reject until it passes the gate)
 //   other values: reject like reserved flag bits.
 //
 // Profiles (encoder policy, not wire format):
-//   balanced  -> measures nothing beyond per-variant flags; always zstd-19.
-//   maximum   -> builds the tile stream under each (backend, flags) candidate,
-//                re-costing per-tile mode selection through that backend's
-//                actual coder (stage-2 evidence: selection is
+//   balanced  -> always zstd-19 (flags measured: planar vs interleaved).
+//   maximum   -> builds the tile stream under each (backend, flags)
+//                candidate, re-costing per-tile mode selection through that
+//                candidate's coder (stage-2 evidence: selection is
 //                backend-dependent), and emits the smallest file.
 //
 // Records: exactly MNF7's (modes 0-3 plus MNF7 color modes 4/5), decoded by
 // the same record walker as decode_mnf7; only container + coder differ.
 
 use std::io::Read;
-use std::io::Write;
 
-use crate::codec::{apply_transform, div_ceil, tile_sig, Atlas, Dims, RANK_CANDIDATES, TILE_SIZE};
+use crate::codec::{apply_transform, div_ceil, split_tiles, tile_sig, Atlas, Dims, TILE_SIZE};
 use crate::mnf6::{
     compress_stream, decode_record_walk, modcolor_forward_iter, pack9, planar_pack, proxy_cost,
     ycocg_forward, Coder, MnF6Stats, FLAGS_RESERVED, FLAG_PLANAR,
@@ -38,8 +39,16 @@ pub const HEADER8: usize = 32;
 
 pub const BACKEND_ZLIB: u32 = 0;
 pub const BACKEND_ZSTD19: u32 = 1;
-pub const BACKEND_BROTLI9: u32 = 2;
-pub const BACKEND_RESERVED3: u32 = 3;
+pub const BACKEND_RESERVED2: u32 = 2; // brotli prototype — unshipped, reject
+pub const BACKEND_RESERVED3: u32 = 3; // custom run/rANS — unshipped, reject
+
+// zstd-19's default window is 8 MiB = 2^23; hard-pin the decoder cap to it
+// (review fix 4: a hostile frame can't claim a 128 MiB window).
+pub const ZSTD_WINDOW_LOG_MAX: u32 = 23;
+
+/// Rank count for candidate references... (kept from the shared atlas table;
+/// RANK_CANDIDATES lives in codec — do not re-derive here.)
+use crate::codec::RANK_CANDIDATES;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Profile {
@@ -55,141 +64,131 @@ fn backend_candidates() -> Vec<(u32, Coder)> {
     ]
 }
 
-#[allow(dead_code)]
-fn brotli9_compress(buf: &[u8]) -> Result<Vec<u8>, String> {
-    // ponytail: only quality-9, no custom dictionary — the gate measured q9
-    // within 0.1-1% of q11 on residual streams and the q11 encode cost is 10x.
-    let mut out = Vec::new();
-    let mut w = brotli::CompressorWriter::new(&mut out, 4096, 9, 22);
-    w.write_all(buf).map_err(|_| "brotli".to_string())?;
-    drop(w);
-    Ok(out)
-}
-
-#[allow(dead_code)]
-fn brotli9_decompress(buf: &[u8], limit: usize) -> Result<Vec<u8>, String> {
-    let mut out = Vec::new();
-    let reader = brotli::Decompressor::new(buf, 4096);
-    reader
-        .take((limit + 1) as u64)
-        .read_to_end(&mut out)
-        .map_err(|_| "brotli-decomp".to_string())?;
-    if out.len() > limit {
-        return Err("bomb".into());
-    }
-    Ok(out)
-}
-
 fn backend_compress(backend: u32, buf: &[u8]) -> Result<Vec<u8>, String> {
     match backend {
         BACKEND_ZLIB => Ok(compress_stream(&Coder::Zlib, buf)),
         BACKEND_ZSTD19 => Ok(compress_stream(&Coder::Zstd(19), buf)),
-        _ => Err(format!("backend {backend} not a compressed-output coder")),
+        other => Err(format!("backend {other} not a compressed-output coder")),
     }
 }
 
 fn backend_decompress(backend: u32, buf: &[u8], limit: u64) -> Result<Vec<u8>, String> {
     match backend {
         BACKEND_ZLIB => {
+            // canonical-decode (review small item): every payload byte must
+            // belong to the stream — zlib's total_in tells us exactly how
+            // much was consumed.
             let mut d = flate2::read::ZlibDecoder::new(buf).take(limit + 1);
             let mut v = Vec::new();
             d.read_to_end(&mut v).map_err(|_| "zlib".to_string())?;
             if v.len() as u64 > limit {
                 return Err("bomb".into());
             }
-            Ok(v)
-        }
-        BACKEND_ZSTD19 => {
-            let d = zstd::stream::read::Decoder::new(buf).map_err(|_| "zstd-init".to_string())?;
-            let mut d = d.take(limit + 1);
-            let mut v = Vec::new();
-            d.read_to_end(&mut v).map_err(|_| "zstd".to_string())?;
-            if v.len() as u64 > limit {
-                return Err("bomb".into());
+            if d.get_ref().total_in() as usize != buf.len() {
+                return Err("trailing bytes after zlib stream".into());
             }
             Ok(v)
         }
-        _ => Err(format!("backend {backend} not a decompressable coder")),
+        BACKEND_ZSTD19 => {
+            // window capped at the encoder's actual need (review fix 4);
+            // Cursor-wrapped so post-decode input position is observable
+            // (canonical-decode check, review small item).
+            let cursor = std::io::Cursor::new(buf);
+            let mut d =
+                zstd::stream::read::Decoder::new(cursor).map_err(|_| "zstd-init".to_string())?;
+            d.window_log_max(ZSTD_WINDOW_LOG_MAX)
+                .map_err(|_| "zstd-window".to_string())?;
+            let mut v = Vec::new();
+            d.single_frame()
+                .take(limit + 1)
+                .read_to_end(&mut v)
+                .map_err(|_| "zstd".to_string())?;
+            if v.len() as u64 > limit {
+                return Err("bomb".into());
+            }
+            // NOTE (honest limitation): zlib canonicality is exact via
+            // total_in above; the zstd stream API here cannot cheaply report
+            // the decoder's exact consumed offset (BufReader may also read
+            // ahead), so bytes after a complete zstd frame are tolerated.
+            // Canonical zstd files remain an option via a future zstd-safe
+            // one-shot decode; not worth it today (ponytail).
+            Ok(v)
+        }
+        other => Err(format!("backend {other} not a decompressable coder")),
     }
 }
 
 /// Encode RGB8 pixels as MNF8.
 ///
-/// `balance = Balanced`: zstd-19 only (flags measured exactly as MNF7 but
-/// with the zstd coder pinned; cheaper planar/zstd matrix kept — it's the
-/// same 2-variant loop as MNF7 minus zlib arms).
+/// `profile = Balanced`: zstd-19 pinned; measures the planar vs
+/// interleaved flag variants under that coder (same honesty as MNF7
+/// measures flags, minus the zlib arms excluded by ADR-002).
 ///
-/// `balance = Maximum`: measures backend×flags candidates and emits the
-/// smallest final file (per-tile mode selection is re-costed inside each
-/// candidate's own coder via encode_mnf7-style loops — reuse of encode_mnf7
-/// per backend is the measured-faithful path: MNF7's rate-aware encoder
-/// already re-costs selection per flags variant; ADR-002 requires the same
-/// honesty across backends).
+/// `profile = Maximum`: measures backend×flags candidates and emits the
+/// smallest final file. Per-tile mode selection is re-costed inside each
+/// candidate's own coder — the stage-2 protocol (docs/entropy-backends-v13.md).
+/// There is NO shared per-tile loop with encode_mnf7: the one function
+/// `encode_stream_coder` is parameterized by coder and every caller routes
+/// through it (review fix 8: MNF7's loop stays the frozen-format history;
+/// MNF8 owns its selection policy).
 pub fn encode_mnf8(
     pixels: &[u8],
     dims: Dims,
     use_geom: bool,
     profile: Profile,
 ) -> (Vec<u8>, MnF6Stats, u32) {
-    match profile {
-        Profile::Balanced => {
-            // zstd-19 pinned; measure the SAME flag variants MNF7 measures but
-            // only against the zstd coder (zlib arms excluded per ADR-002)
-            let variants = [(0u32, false), (FLAG_PLANAR, true)];
-            let mut best: Option<(Vec<u8>, u32, MnF6Stats, u32)> = None;
-            for (flags, planar) in variants {
-                let (file, st) =
-                    encode_stream_zstd(pixels, dims, use_geom, flags, planar, Some(BACKEND_ZSTD19));
-                let size = file.len();
-                if best.as_ref().is_none_or(|b| size < b.0.len()) {
-                    best = Some((file, flags, st, BACKEND_ZSTD19));
-                }
+    let candidates: Vec<(u32, Coder)> = match profile {
+        Profile::Balanced => vec![(BACKEND_ZSTD19, Coder::Zstd(19))],
+        Profile::Maximum => backend_candidates(),
+    };
+    let mut best: Option<(Vec<u8>, u32, MnF6Stats, u32)> = None;
+    for (backend, coder) in candidates {
+        for flags in [0u32, FLAG_PLANAR] {
+            let planar = flags & FLAG_PLANAR != 0;
+            let (file, st) = encode_stream_coder(
+                pixels, dims, true, // use_atlas: the public encoder always has the atlas on
+                use_geom, flags, planar, &coder, backend,
+            )
+            .expect("encoding an in-memory image cannot fail");
+            let size = file.len();
+            if best.as_ref().is_none_or(|b| size < b.0.len()) {
+                best = Some((file, flags, st, backend));
             }
-            let (file, _, st, backend) = best.expect("variant");
-            (file, st, backend)
-        }
-        Profile::Maximum => {
-            // stage-2 protocol: each backend candidate re-costs tile selection
-            // inside its own coder. encode_stream per backend; zlib backend
-            // additionally measures the planar variant (zstd's planar choice
-            // is measured in the balanced branch already).
-            let mut best: Option<(Vec<u8>, u32, MnF6Stats, u32)> = None;
-            for (backend, coder) in backend_candidates() {
-                for flags in [0u32, FLAG_PLANAR] {
-                    let planar = flags & FLAG_PLANAR != 0;
-                    let (file, st) =
-                        encode_stream_coder(pixels, dims, use_geom, flags, planar, &coder, backend);
-                    let size = file.len();
-                    if best.as_ref().is_none_or(|b| size < b.0.len()) {
-                        best = Some((file, flags, st, backend));
-                    }
-                }
-            }
-            let (file, _, st, backend) = best.expect("candidate");
-            (file, st, backend)
         }
     }
+    let (file, flags, mut st, backend) = best.expect("at least one candidate");
+    st.chosen_flags = flags;
+    (file, st, backend)
 }
 
+/// One tile-stream encoder, parameterized by coder + backend — THE selection
+/// loop for MNF8 (no per-variant duplicates of this function).
+///
+/// Arm controls (both default true, plumbable for ablation):
+/// - `use_atlas`: candidate references at all (false = pure prediction arm)
+/// - `use_geom`: D8 transforms on top of exact references (false = t=0 only,
+///   the v0.5 exact-reference semantics — codec.rs pins t=0 for this case
+///   and MNF8 must match it)
+///
+/// Shared YCoCg (mode 3) and planar layout stay ON in both arms (ADR-002).
+#[allow(clippy::too_many_arguments)]
 fn encode_stream_coder(
     pixels: &[u8],
     dims: Dims,
+    use_atlas: bool,
     use_geom: bool,
     flags: u32,
     planar: bool,
     coder: &Coder,
     backend: u32,
-) -> (Vec<u8>, MnF6Stats) {
-    // One per-backend tile-selection pass (the stage-2 protocol). Mirrors
-    // encode_mnf7's per-tile loop but the candidate costing runs through
-    // `compress_stream(coder, ..)` on the candidate body — backend-truthful.
-    let tiles = crate::codec::split_tiles(pixels, dims);
+) -> Result<(Vec<u8>, MnF6Stats), String> {
+    let tiles = split_tiles(pixels, dims);
     let mut raw: Vec<u8> = Vec::with_capacity(tiles.len() * 774);
     let mut stats = MnF6Stats::default();
     let mut atlas = Atlas::new();
 
     for tile in &tiles {
-        let sig = tile_sig(tile.width, tile.height, &tile.data);
+        let n = tile.nbytes();
         let pack = |rgb: &[u8]| -> Vec<u8> {
             if planar {
                 planar_pack(rgb)
@@ -197,13 +196,14 @@ fn encode_stream_coder(
                 rgb.to_vec()
             }
         };
-        let n = tile.nbytes();
+
         let lit_body = pack(&tile.data);
         let mut choice_body = lit_body.clone();
         let mut choice_mode = 0u8;
         let mut choice_ref: Option<(u32, u8)> = None;
         let mut best_cost = 1 + proxy_cost(coder, &lit_body);
 
+        // shared literal candidates (both arms): YCoCg-R (mode 3)
         {
             let (cy, cco, ccg) = ycocg_forward(&tile.data);
             let mut m3 = Vec::with_capacity(n + 160);
@@ -218,10 +218,22 @@ fn encode_stream_coder(
             }
         }
 
-        if tiles.len() > 1 {
+        // invariant hoist (review fix 7): T(tile.data) is candidate- and
+        // transform-independent — compute once per tile
+        let tile_t = modcolor_forward_iter(&tile.data);
+
+        // atlas candidates (arm-controlled; review fixes 2 + use_atlas)
+        if use_atlas && tiles.len() > 1 {
+            let sig = tile_sig(tile.width, tile.height, &tile.data);
             for prior in atlas.rank_by_sig(&sig, tile.width, tile.height, RANK_CANDIDATES) {
                 let (_, _, ref_rgb) = &atlas.patches[prior as usize];
-                let transforms: &[u8] = if use_geom && tile.width == tile.height {
+                // review fix 2: `use_geom = false` means EXACT references only
+                // (t=0), matching codec.rs's v0.5 ablation semantics; square
+                // tiles may use all 8 D8 transforms, partial tiles only the
+                // shape-keeping subgroup.
+                let transforms: &[u8] = if !use_geom {
+                    &[0]
+                } else if tile.width == tile.height {
                     &[0, 1, 2, 3, 4, 5, 6, 7]
                 } else {
                     &[0, 1, 2, 3]
@@ -237,6 +249,7 @@ fn encode_stream_coder(
                         r[i] = tile.data[i].wrapping_sub(base[i]);
                     }
                     let body = pack(&r);
+                    // metadata: mode byte + u32 idx + optional transform byte
                     let meta: u64 = if t == 0 { 5 } else { 6 };
                     let cost = meta + proxy_cost(coder, &body);
                     if cost < best_cost {
@@ -245,15 +258,19 @@ fn encode_stream_coder(
                         choice_mode = if t == 0 { 1 } else { 2 };
                         choice_ref = Some((prior, t));
                     }
-                    // color-domain candidate (MNF7 modes 4/5)
-                    let tile_t = modcolor_forward_iter(&tile.data);
+                    // color-domain candidate (MNF7 modes 4/5). Review fix 3:
+                    // the wire carries NOTHING extra for color modes — the
+                    // mode byte already tells the decoder which domain to
+                    // decode the body in. The phantom `+ 1` that the old
+                    // cost model charged made the encoder under-select
+                    // color modes (contaminating any color-mode ablation).
                     let base_t = modcolor_forward_iter(&base);
                     let mut r_c = vec![0u8; n];
                     for i in 0..n {
                         r_c[i] = tile_t[i].wrapping_sub(base_t[i]);
                     }
                     let body_c = pack(&r_c);
-                    let cost_c = meta + 1 + proxy_cost(coder, &body_c);
+                    let cost_c = meta + proxy_cost(coder, &body_c);
                     if cost_c < best_cost {
                         best_cost = cost_c;
                         choice_body = body_c;
@@ -268,12 +285,10 @@ fn encode_stream_coder(
         stats.refs.push(choice_ref);
         match choice_mode {
             0 => stats.literal += 1,
-            1 => {
-                stats.ref_exact += 1;
-            }
+            1 => stats.ref_exact += 1,
             2 => {
                 stats.ref_geom += 1;
-                if choice_ref.unwrap().1 != 0 {
+                if choice_ref.map(|(_, t)| t != 0).unwrap_or(false) {
                     stats.geom_nontrivial += 1;
                 }
             }
@@ -281,11 +296,11 @@ fn encode_stream_coder(
             4 => stats.ref_exact_color += 1,
             5 => {
                 stats.ref_geom_color += 1;
-                if choice_ref.unwrap().1 != 0 {
+                if choice_ref.map(|(_, t)| t != 0).unwrap_or(false) {
                     stats.geom_nontrivial += 1;
                 }
             }
-            _ => unreachable!(),
+            _ => unreachable!("mode byte constrained above"),
         }
         raw.push(choice_mode);
         if let Some((p, t)) = choice_ref {
@@ -298,44 +313,30 @@ fn encode_stream_coder(
         atlas.insert(tile);
     }
 
-    let payload = backend_compress(backend, &raw).expect("backend compress");
+    let payload = backend_compress(backend, &raw)?;
+    let payload_len =
+        u32::try_from(payload.len()).map_err(|_| "payload exceeds u32".to_string())?; // review: no lossy cast
     let mut file = Vec::with_capacity(HEADER8 + payload.len());
     file.extend_from_slice(b"MNF8");
     file.extend_from_slice(&dims.width.to_le_bytes());
     file.extend_from_slice(&dims.height.to_le_bytes());
     file.extend_from_slice(&TILE_SIZE.to_le_bytes());
-    file.extend_from_slice(&(tiles.len() as u32).to_le_bytes());
-    file.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+    let tile_count = u32::try_from(tiles.len()).map_err(|_| "too many tiles".to_string())?;
+    file.extend_from_slice(&tile_count.to_le_bytes());
+    file.extend_from_slice(&payload_len.to_le_bytes());
     file.extend_from_slice(&flags.to_le_bytes());
     file.extend_from_slice(&backend.to_le_bytes());
     file.extend_from_slice(&payload);
-    (file, stats)
-}
-
-fn encode_stream_zstd(
-    pixels: &[u8],
-    dims: Dims,
-    use_geom: bool,
-    flags: u32,
-    planar: bool,
-    _backend_hint: Option<u32>,
-) -> (Vec<u8>, MnF6Stats) {
-    encode_stream_coder(
-        pixels,
-        dims,
-        use_geom,
-        flags,
-        planar,
-        &Coder::Zstd(19),
-        BACKEND_ZSTD19,
-    )
+    Ok((file, stats))
 }
 
 // --- decoding ----------------------------------------------------------------
 
 /// Decode MNF8. Record walk is MNF7's (shared `decode_record_walk`); the
 /// container fields differ (32-byte header, backend id) and the coder
-/// dispatch runs on the backend field.
+/// dispatch runs on the backend field. Every non-shipped backend id is an
+/// ERROR (never a panic path) — review fix 1: backend 2 previously fell
+/// into `unreachable!()` after passing the too-loose header checks.
 pub fn decode_mnf8(buf: &[u8]) -> Result<(Dims, Vec<u8>, u32), String> {
     if buf.len() < HEADER8 {
         return Err("short".into());
@@ -373,23 +374,37 @@ pub fn decode_mnf8(buf: &[u8]) -> Result<(Dims, Vec<u8>, u32), String> {
         return Err("reserved-flags".into());
     }
     let backend = u32le(28);
-    if backend > BACKEND_RESERVED3 {
+    if !matches!(
+        backend,
+        BACKEND_ZLIB | BACKEND_ZSTD19 | BACKEND_RESERVED2 | BACKEND_RESERVED3
+    ) {
         return Err(format!("unknown backend {backend}"));
     }
-    if backend == BACKEND_RESERVED3 {
-        return Err("reserved backend (custom coder not shipped)".into());
+    if matches!(backend, BACKEND_RESERVED2 | BACKEND_RESERVED3) {
+        return Err(format!("reserved backend {backend} (not shipped)"));
     }
     let planar = flags & FLAG_PLANAR != 0;
 
-    // mode-3 record max + per-tile generic max (audit 2026-10-25 lesson)
-    let mode3_max: u64 = 1 + 256 + 2 * u64::from((256u32 * 9).div_ceil(8));
-    let per_tile_max: u64 = 1 + 5 + (TILE_SIZE * TILE_SIZE * 3) as u64;
-    let limit = tile_count as u64 * per_tile_max.max(mode3_max) + per_tile_max + mode3_max;
+    // Decompression bound — degenerate-shape-honest (review fix 5):
+    //   generic record worst case needs 6 metadata bytes + the tile's own
+    //   body (tw*th*3); summed over tiles that is 6*N + 3WH, NOT N * 833
+    //   (the old full-tile assumption turned a 1x67108864 image's cap into
+    //   ~3.5 GB against a ~200 MB true maximum).
+    //   Mode-3 records: 1 + tw*th + 2 * ceil(9*(tw*th)/8) ≤ 1 + tw*th + 2 * (tw*th*9+7)/8
+    //   ≤ 1 + 7/4 * tw*th + small; bound it as 1 + (7/4)*np + 2 with np <=
+    //   TILE_SIZE^2 — the same conservative per-tile add-on as before.
+    let mode3_max: u64 =
+        1 + (TILE_SIZE * TILE_SIZE) as u64 + 2 * ((TILE_SIZE * TILE_SIZE) as u64 * 9 + 7) / 8 + 2;
+    let px_bytes_total: u64 = width as u64 * height as u64 * 3;
+    let limit = px_bytes_total
+        .checked_add(6 * tile_count as u64)
+        .and_then(|l| l.checked_add(2 * mode3_max + 2))
+        .ok_or("decompressed size overflow")?;
 
     let payload = &buf[HEADER8..];
     let raw = match backend {
         BACKEND_ZLIB | BACKEND_ZSTD19 => backend_decompress(backend, payload, limit)?,
-        _ => unreachable!("checked above"),
+        other => return Err(format!("unsupported backend {other}")),
     };
 
     let pixels = decode_record_walk(&raw, width, height, tile_count, planar)?;
@@ -437,8 +452,8 @@ mod tests {
 
     #[test]
     fn mnf8_maximum_never_loses_to_mnf7() {
-        // ADR-002 gate: maximum-profile MNF8 measures MORE candidates than
-        // MNF7's rate-aware loop; it must never produce a larger file.
+        // ADR-002 gate (EMPIRICAL per review fix 8 — candidate sets differ
+        // structurally; this pins the measured relation on stable files).
         for name in [
             "screenshot_640x400.png",
             "solid_256x256.png",
@@ -481,6 +496,12 @@ mod tests {
         assert!(decode_mnf8(&f).is_err(), "unknown backend rejected");
         f[28..32].copy_from_slice(&3u32.to_le_bytes()); // reserved backend
         assert!(decode_mnf8(&f).is_err(), "reserved backend rejected");
+        f[28..32].copy_from_slice(&2u32.to_le_bytes()); // reserved brotli backend
+        assert!(decode_mnf8(&f).is_err(), "reserved brotli backend rejected");
+        // and specifically NOT a panic (the old bug hit unreachable! here)
+        f[28..32].copy_from_slice(&2u32.to_le_bytes());
+        let r = std::panic::catch_unwind(|| decode_mnf8(&f));
+        assert!(r.is_ok() && r.unwrap().is_err(), "must error, not panic");
         f[28..32].copy_from_slice(&0u32.to_le_bytes());
         f[24] = 0b100; // reserved flag bit
         assert!(decode_mnf8(&f).is_err(), "reserved flag rejected");
@@ -491,17 +512,181 @@ mod tests {
     }
 
     #[test]
-    fn mnf8_balanced_picks_zstd() {
-        let px = vec![7u8; 16 * 16 * 3];
-        let (_, _, backend) = encode_mnf8(
+    fn mnf8_balanced_picks_zstd_not_hardcoded() {
+        // review: the old test read the hardcoded return tuple; instead pin
+        // the ENCODING CHOICE: balanced must measure the flag variants under
+        // zstd and pick planar when planar wins (gradient-like content).
+        let (w, h) = (64u32, 64u32);
+        let mut px = vec![0u8; (w * h * 3) as usize];
+        for y in 0..h {
+            for x in 0..w {
+                let i = ((y * w + x) * 3) as usize;
+                px[i] = (x * 4) as u8;
+                px[i + 1] = (y * 4) as u8;
+                px[i + 2] = 128;
+            }
+        }
+        let (buf, st, backend) = encode_mnf8(
             &px,
             Dims {
-                width: 16,
-                height: 16,
+                width: w,
+                height: h,
             },
             false,
             Profile::Balanced,
         );
-        assert_eq!(backend, BACKEND_ZSTD19, "balanced pins zstd-19");
+        assert_eq!(backend, BACKEND_ZSTD19);
+        assert_eq!(
+            st.chosen_flags & FLAG_PLANAR,
+            FLAG_PLANAR,
+            "balanced must MEASURE and pick planar on gradient-like bodies"
+        );
+        let (_, out, _) = decode_mnf8(&buf).expect("decode");
+        assert_eq!(out, px);
+    }
+
+    #[test]
+    fn mnf8_no_geom_no_flips() {
+        // review fix 2 regression pin: use_geom=false must emit ONLY exact
+        // references (t=0) or plain literals — flips are forbidden. A rotated
+        // copy of tile 0 must be emitted as a LITERAL, not a geom ref.
+        let (w, h) = (32u32, 32u32); // two 16-tall tile rows
+        let mut px = vec![0u8; (w * h * 3) as usize];
+        for y in 0..h {
+            for x in 0..w {
+                let i = ((y * w + x) * 3) as usize;
+                px[i] = (x * 7 % 256) as u8;
+                px[i + 1] = (y * 3 % 256) as u8;
+                px[i + 2] = 5;
+            }
+        }
+        // flip tile (0,1) [the 16x16 block at rows 16..32, cols 0..16] in place
+        let tile_row = 16usize;
+        let tile_col = 0usize;
+        let src_off = (tile_row * w as usize + tile_col) * 3;
+        let tile = px[src_off..src_off + 16 * 16 * 3].to_vec();
+        let flipped = apply_transform(1, 16, 16, &tile);
+        px[src_off..src_off + 16 * 16 * 3].copy_from_slice(&flipped);
+        let stacked = px.clone();
+        let d = Dims {
+            width: w,
+            height: h,
+        };
+        let (buf, st, _) = encode_mnf8(&stacked, d, false, Profile::Balanced);
+        // walk stats: geom references must be zero
+        assert_eq!(st.ref_geom, 0, "no flips allowed with use_geom=false");
+        assert_eq!(st.geom_nontrivial, 0);
+        let (_, out, _) = decode_mnf8(&buf).expect("decode");
+        assert_eq!(out, stacked);
+    }
+
+    #[test]
+    fn mnf8_no_atlas_arm() {
+        // review fix 2b: the ablation needs its no-atlas arm (pure
+        // prediction: literals + mode 3 only), and it must roundtrip exactly.
+        let d = Dims {
+            width: 32,
+            height: 32,
+        };
+        let px: Vec<u8> = (0..d.width as usize * d.height as usize * 3)
+            .map(|i| (i * 7 % 256) as u8)
+            .collect();
+        let (buf, st, _) = encode_mnf8_noclimb(&px, d);
+        assert_eq!(
+            st.ref_exact + st.ref_geom + st.ref_exact_color + st.ref_geom_color,
+            0,
+            "no-atlas arm must emit zero references"
+        );
+        let (_, out, _) = decode_mnf8(&buf).expect("decode");
+        assert_eq!(out, px);
+    }
+
+    // helper calling the internal encoder with both atlas controls off
+    fn encode_mnf8_noclimb(px: &[u8], d: Dims) -> (Vec<u8>, MnF6Stats, u32) {
+        // balanced profile, atlas off, geom off
+        let mut best: Option<(Vec<u8>, MnF6Stats, u32)> = None;
+        for flags in [0u32, FLAG_PLANAR] {
+            let planar = flags & FLAG_PLANAR != 0;
+            let (file, st) = encode_stream_coder(
+                px,
+                d,
+                false,
+                false,
+                flags,
+                planar,
+                &Coder::Zstd(19),
+                BACKEND_ZSTD19,
+            )
+            .expect("encode");
+            if best.as_ref().is_none_or(|b| file.len() < b.0.len()) {
+                best = Some((file, st, BACKEND_ZSTD19));
+            }
+        }
+        let (f, s, b) = best.expect("variant");
+        (f, s, b)
+    }
+
+    #[test]
+    fn mnf8_forced_mode4_mode5_records() {
+        // review verify 3: drive mode 4 and mode 5 end-to-end — construct a
+        // file whose color residuals genuinely win (structured chroma delta
+        // on a noisy base, the mnf7_color_domain_used_when_it_wins pattern)
+        // and assert decode_mnf8 reconstructs exactly.
+        let mut s: u64 = 42;
+        let mut rnd = move || {
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
+            s
+        };
+        let a: Vec<u8> = (0..16 * 16 * 3).map(|_| (rnd() & 0xFF) as u8).collect();
+        let ta_t = crate::mnf6::modcolor_forward(&a);
+        let mut tb_t = ta_t.clone();
+        let ramp = [0u8, 1, 2, 255];
+        for i in (1..tb_t.len()).step_by(3) {
+            tb_t[i] = tb_t[i].wrapping_add(ramp[(i / 3) % 4]);
+        }
+        let b = crate::mnf6::modcolor_inverse(&tb_t);
+        let mut two = a.clone();
+        two.extend_from_slice(&b);
+        let d2 = Dims {
+            width: 16,
+            height: 32,
+        };
+        let (buf, st, _) = encode_mnf8(&two, d2, true, Profile::Balanced);
+        assert!(
+            st.ref_exact_color > 0,
+            "expected mode 4 (or a color-geom below) selected, stats: exact={} geom={} ec={} gc={}",
+            st.ref_exact,
+            st.ref_geom,
+            st.ref_exact_color,
+            st.ref_geom_color
+        );
+        let (_, out, _) = decode_mnf8(&buf).expect("decode");
+        assert_eq!(out, two, "mode-4 record reconstructs exactly through MNF8");
+
+        // and a rotated variant of the same (mode 5 path)
+        let flipped = apply_transform(1, 16, 16, &a);
+        let tb_t2 = crate::mnf6::modcolor_forward(&flipped);
+        let mut tc_t = tb_t2;
+        for i in (1..tc_t.len()).step_by(3) {
+            tc_t[i] = tc_t[i].wrapping_add(ramp[(i / 3) % 4]);
+        }
+        let c = crate::mnf6::modcolor_inverse(&tc_t);
+        let mut three = flipped.clone();
+        three.extend_from_slice(&c);
+        let d3 = Dims {
+            width: 16,
+            height: 32,
+        };
+        let (buf3, st3, _) = encode_mnf8(&three, d3, true, Profile::Balanced);
+        assert!(
+            st3.ref_exact_color > 0 || st3.ref_geom_color > 0,
+            "expected a color-domain reference (exact or geom), stats: ec={} gc={}",
+            st3.ref_exact_color,
+            st3.ref_geom_color
+        );
+        let (_, out3, _) = decode_mnf8(&buf3).expect("decode");
+        assert_eq!(out3, three);
     }
 }

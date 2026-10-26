@@ -524,6 +524,11 @@ pub fn decode_mnf7(buf: &[u8]) -> Result<(Dims, Vec<u8>), String> {
         v
     } else {
         let d = zstd::stream::read::Decoder::new(zlib_data).map_err(|_| "zstd-init".to_string())?;
+        // same window cap as MNF8: level 19 uses <= 8 MiB; a hostile frame
+        // must not claim the 128 MiB library default (review fix 4)
+        let mut d = d;
+        d.window_log_max(23)
+            .map_err(|_| "zstd-window".to_string())?;
         let mut d = d.take(limit + 1);
         let mut v = Vec::new();
         d.read_to_end(&mut v).map_err(|_| "zstd".to_string())?;

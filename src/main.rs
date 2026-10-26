@@ -9,7 +9,7 @@ use manifold::vis;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-const USAGE: &str = "manifold v1.2.0 (MNF5/6/7/8)
+const USAGE: &str = "manifold v1.2.1 (MNF5/6/7/8)
 usage:
   manifold benchmark <image>
   manifold encode <image> -o out.mnf5 [--no-atlas] [--geom] [--mnf6]
