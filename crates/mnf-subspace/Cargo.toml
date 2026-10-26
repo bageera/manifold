@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "MNF Subspace v0.1: exact low-rank predictive atlas research"
 license = "MIT"
+publish = false
 
 [dependencies]
 flate2 = "1.0"

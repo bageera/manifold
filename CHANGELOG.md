@@ -1,5 +1,48 @@
 # Changelog
 
+## v1.3.0 — library readiness + C API (2026-10-26)
+
+Eight-item library-readiness pass (approved scope: 1–8 with C-API, MSRV =
+current stable = 1.91):
+
+- Error taxonomy: shared `error::Error` / `error::Result` for every fallible
+  call (all String-typed errors removed from codec/mnf6/mnf8/refdecode/img);
+  malformed input = `Error::Format{detail, position}`, matchable categories
+  `Limits` / `Decompress` / `Unsupported` / `Io` / `ImageIo`.
+- `decode_mnf7_with_limits` / `decode_mnf8_with_limits`: configurable
+  ceilings (max_pixels/max_tiles) at header validation — MNF6/7/8 now honor
+  the same limit contract MNF5 already had.
+- Debug probes (`MNF6_DEBUG`/`MNF7_DEBUG`/`MNF8_DEBUG`) removed from library
+  paths (non-hermetic; findings were test-pinned before removal).
+- `vis` demoted to CLI-only module (`src/vis_cli.rs`, `#[path]` include);
+  the library root no longer exports it. `refdecode` stays public — it is
+  the independent differential decoder the format spec cites.
+- `image`/`png` moved behind the `image-io` feature (default on; codec-only
+  consumers build with `--no-default-features`); `image` also added as a
+  dev-dependency for tests. The `brotli` dependency is gone (backend never
+  shipped).
+- New crate `crates/manifold-capi`: C ABI (`manifold_decode`,
+  `manifold_encode`, `manifold_encode_mnf8`) — never panics, status codes
+  (stable), caller-owned buffers with the size-query idiom. Ships
+  `include/manifold.h`; C smoke test compiles + roundtrips against the
+  staticlib. `Error::msg` is public (FFI constructor).
+- Crate metadata: `rust-version = "1.91"`, description/repository/keywords/
+  categories; `mnf-subspace` + `mnf-mans` marked `publish = false`
+  (workspace-only research crates). Crate-level rustdoc on `lib.rs` +
+  missing_docs discipline (113 items documented; `cargo doc` warnings = 0,
+  CI now denies them).
+- README: "Library surface" table (stable vs research vs C-API since-versions).
+- CI: doc warnings denied, codec-only build, `cargo package -p manifold`,
+  C-API tests.
+
+- MNF8 MED feed indexing fix (regression by the library pass, caught by
+  the test gates): the encoder sliced the flat per-pixel `med_pred` with
+  tile-grid row strides instead of pixel width — for any image wider than
+  one tile, `FLAG_PRED_MED` streams decoded wrong (the synthetic 64×64
+  gates missed it: the measured pick chose references there; the failing
+  case was `gradient_320x240.png` under the maximum profile, wrong from
+  pixel (1,0)). Stride fixed; all MNF8 pins + the never-loses gate green.
+
 ## v1.2.1 — MNF8 review: decoder panic + encoder arm fixes (2026-10-25)
 
 External review of mnf8.rs (9 findings, all dispositioned):

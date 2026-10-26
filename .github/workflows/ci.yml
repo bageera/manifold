@@ -14,6 +14,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Format
         run: cargo fmt --all -- --check
+      - name: Docs (warnings denied)
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+      - name: Codec-only build (no image io)
+        run: cargo build -p manifold --no-default-features
+      - name: Package dry-run
+        run: cargo package -p manifold --no-verify --allow-dirty && echo packaged
+      - name: C-API tests
+        run: cargo test -p manifold-capi
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
       - name: Unit + conformance tests
