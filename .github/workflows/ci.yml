@@ -17,11 +17,11 @@ jobs:
       - name: Docs (warnings denied)
         run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
       - name: Codec-only build (no image io)
-        run: cargo build -p manifold --no-default-features
+        run: cargo build -p manifold-codec --no-default-features
       - name: Package dry-run
-        run: cargo package -p manifold --no-verify --allow-dirty && echo packaged
+        run: cargo package -p manifold-codec --no-verify --allow-dirty && echo packaged
       - name: C-API tests
-        run: cargo test -p manifold-capi
+        run: cargo test -p manifold-codec-capi
       - name: Examples
         run: cargo run --example roundtrip
       - name: External consumer install (published crate)
