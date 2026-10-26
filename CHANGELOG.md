@@ -1,5 +1,55 @@
 # Changelog
 
+## v1.2.1 — MNF8 review: decoder panic + encoder arm fixes (2026-10-25)
+
+External review of mnf8.rs (9 findings, all dispositioned):
+
+- Backend 2 (brotli prototype) reached `unreachable!()` after the header
+  checks — a crafted 32-byte header panicked the decoder. Every
+  non-shipped backend is now an explicit error; `mnf8_rejects` covers
+  backend 2 with a catch_unwind not-a-panic pin. Backend 2 is marked
+  RESERVED like 3 (brotli unshipped: dictionary cost accounting measured
+  only in the study; dead code deleted).
+- `use_geom = false` still tried hflip/vflip/rot180 — restored the
+  three-way split matching codec.rs v0.5 semantics (no-geom = exact
+  references only). Regression: mnf8_no_geom_no_flips.
+- Added the missing **no-atlas arm** (`use_atlas` parameter; shared
+  YCoCg mode 3 + planar layout stay on in both arms) — the ablation's
+  pure-prediction control exists again. Regression: mnf8_no_atlas_arm.
+- Color modes 4/5 carried a phantom +1 in the cost model (the wire has
+  no extra byte) — the encoder under-selected color modes; fixed and
+  pinned with forced mode-4/mode-5 end-to-end records through
+  decode_mnf8 (structured chroma delta on a noisy base).
+- zstd decoder window was the 128 MiB library default — now
+  window_log_max(23) + single_frame() in BOTH MNF8 and MNF6 (hostile
+  frames can't claim long windows; concatenated frames reject).
+- Decompression bound was N x 833 (full-tile assumption) — now
+  3WH + 6N + mode-3 overhead with checked arithmetic (the 1x67108864
+  degenerate case drops from ~3.5 GB to its true maximum).
+- Canonical decode: zlib payloads now reject trailing bytes
+  (total_in == payload.len()); zstd tolerated (honest limitation noted
+  in code — the stream API can't cheaply report the exact consumed
+  offset).
+- chosen_flags was never written to the winner's stats in encode_mnf8
+  (the old balanced test read a hardcoded tuple and could not fail);
+  wired, and the test now verifies a MEASURED pick (planar 231 B vs
+  interleaved 7,640 B under zstd-19 on gradient-like bodies).
+- Tile loop factored into ONE encode_stream_coder parameterized by
+  coder/backend/flags/planar/use_atlas/use_geom (review fix 8);
+  maximum_never_loses_to_mnf7 documented as an empirical gate,
+  never_loses is not a structural identity.
+- modcolor T(tile) hoisted out of the candidate x transform loop.
+- payload_len / tile_count: u32::try_from (no lossy casts).
+- Encode-cost premise (#6) measured, did not reproduce: the candidate
+  screen already runs at zstd level 3 (proxy_cost); zstd-19 runs once
+  per candidate on the final whole stream — no cut made.
+
+Validated: fmt clean, clippy 0 warnings, 45 tests / 7 suites green
+(release), fuzz 540/540 rejected 0 panics (incl. --mnf8 arm), CLI
+roundtrips exact on both profiles.
+
+---
+
 ## v1.2.0 — MNF8: entropy backend field + profiles (ADR-002)
 
 Implements ADR-002 (docs/adr-002-entropy-backends.md), evidence in
