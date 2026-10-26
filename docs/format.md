@@ -249,3 +249,64 @@ RGB-domain residual already captures the correlation structure there.
 The mechanism is exercised by a dedicated structured-color-delta test
 and proven exact; adoption remains cost-based selection, so MNF7 costs
 at most 4 extra mode bytes vs MNF6 on streams that never choose it.
+
+
+---
+
+# MNF8 Bitstream Format — Normative Specification (format v4, ADR-2026-10-25)
+
+Status: implemented (`--mnf8[=balanced|maximum]` emits MNF8; superset of
+MNF7). MNF5/MNF6/MNF7 files remain readable by their own decoders; the
+MNF8 decoder accepts only the `MNF8` magic. ADR: docs/adr-002-entropy-backends.md.
+
+## 1. Container
+
+    file := header(32) payload(payload_len)
+
+    0   4   magic            ASCII "MNF8" exactly
+    4   4   width            u32 LE, > 0
+    8   4   height           u32 LE, > 0
+    12  4   tile_size        u32 LE, MUST be 16
+    16  4   tile_count       u32 LE, MUST equal ceil(width/16)*ceil(height/16)
+    20  4   payload_len      u32 LE, MUST be <= 2^31 - 1
+    24  4   flags            u32 LE bitmask — MNF7 semantics (§2)
+    28  4   backend          u32 LE identifier (§2)
+
+Validation order and bounds are those of MNF5/MNF6 (docs/format.md §1), plus
+the mode-3-aware decompression bound. Total file length MUST be exactly
+`32 + payload_len`.
+
+## 2. Backend identifier
+
+    0 = zlib-9     payload is a zlib stream (control arm; MNF7 flag-free parity)
+    1 = zstd-19    payload is a zstd frame (xxh64 checksum MANDATORY — encoder
+                   side; the decoder rejects checksum failures)
+    2 = brotli-9   payload is a brotli stream (static dictionary applies;
+                   its size cost is in the decoder artifact, not the file)
+    3 = RESERVED   custom mixed run/rANS coder — NOT shipped; decoders MUST
+                   reject. Reserved for the mnf-mans prototype pending the
+                   retention gate (docs/entropy-backends-v13.md stage 2).
+    other          decoders MUST reject (unknown backend)
+
+## 3. Records and flags
+
+Records and the flags bitmask are EXACTLY MNF7's (docs/format.md §3/§MNF7):
+modes 0-5, FLAG_PLANAR layout semantics, reserved-bit rejection. The record
+walker is shared with the MNF7 decoder (src/mnf6.rs::decode_record_walk).
+
+## 4. Encoder profiles (informative; not a wire property)
+
+- balanced (default): zstd-19 pinned; flags measured as MNF7 measures
+  (planar vs interleaved under zstd).
+- maximum: builds the tile stream under each backend x flags candidate,
+  re-costing per-tile mode selection through that candidate's own coder
+  (stage-2 evidence: selection is backend-dependent), and emits the
+  smallest file. Measured never worse than MNF7 + 4 bytes (the backend
+  field's own wire cost).
+
+## 5. Versioning
+
+MNF8 = MNF7 semantics + 4-byte backend field (new magic per the freeze
+rule). Conformance vectors under tests/conformance/ are extended with MNF8
+golden + rejection vectors (unknown backend, reserved backend, reserved
+flag bit, bad magic).

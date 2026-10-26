@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.2.0 — MNF8: entropy backend field + profiles (ADR-002)
+
+Implements ADR-002 (docs/adr-002-entropy-backends.md), evidence in
+docs/entropy-backends-v13.md (stages 1-2):
+
+- MNF8 (new magic, 32-byte header = MNF7 + 4-byte backend id): backends
+  0 zlib-9 (control), 1 zstd-19 (checksummed), 2 brotli-9 (dictionary
+  cost documented at the decoder-artifact level), 3 RESERVED (custom
+  mixed run/rANS coder — prototype in crates/mnf-mans beats zlib-9 8/10
+  but loses to zstd-19 8/10; not shipped until its gate passes),
+  unknown values reject.
+- Profiles: balanced (default; zstd-19 pinned, flags measured as MNF7)
+  and maximum (backend x flags candidates, per-tile mode selection
+  re-costed through each candidate's own coder — stage-2 evidence shows
+  selection is backend-dependent; emits the smallest file). Measured:
+  MNF8-maximum <= MNF7 + 4 on all corpus images (+4 = the backend
+  field's own wire cost; measurement parity).
+- Record walk shared with MNF7 (decode_record_walk extraction — one
+  grammar, two containers); MNF8 rejection vectors (unknown/reserved
+  backend, reserved flag, bad magic) + golden vector (balanced profile,
+  zstd-19) in tests/conformance/; tests/mnf8_conformance.rs.
+- CLI: --mnf8[=balanced|maximum]; fuzz.py gains the --mnf8 arm
+  (540/540 trials: all malformed rejected, 0 panics).
+- Stage-1/2 tooling (scripts/entropy_backends*.py) + findings doc +
+  docs/science.md (informative theory doc) included in this line.
+- No MNF5/6/7 changes; their decoders/files untouched.
+
 ## v1.1.0 — MNF7: modular RGB8 color-domain residuals (ADR-001)
 
 Implements the color-transform ADR (docs/adr-001-color-transform.md):
