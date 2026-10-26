@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.3.1 — adoption readiness: CI green on the published surface (2026-10-26)
+
+Three CI fixes, each a distinct root cause found by the gate itself:
+
+- Crate-name flags: `-p manifold` / `-p manifold-capi` resolved outside the
+  workspace after the publish rename — all CI `-p` flags now use the real
+  package names (`manifold-codec`, `manifold-codec-capi`).
+- Newer-stable clippy: the CI toolchain denies const-size
+  `chunks_exact(_mut)`; 6 sites migrated to `as_chunks::<3>()` (1.88+-stable,
+  MSRV-safe).
+- `*.mnf5` ignored the conformance fixtures themselves — CI never received
+  the golden/rejection vectors (tests passed only on machines with stale
+  files). Fixed the ignore (`!tests/conformance/*.mnf5`) and committed all
+  16 fixtures.
+- Plus: consumer stumbling block documented in lib.rs (package
+  `manifold-codec` vs lib target `manifold`), and an advisory
+  cargo-semver-checks job against the published baseline.
+
+External verification: fresh consumer project at /tmp installs
+manifold-codec v1.3.0 from the registry and roundtrips MNF7/MNF8 exactly;
+docs.rs serves all module pages.
 ## v1.3.0 — library readiness + C API (2026-10-26)
 
 Eight-item library-readiness pass (approved scope: 1–8 with C-API, MSRV =
