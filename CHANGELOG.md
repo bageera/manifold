@@ -44,9 +44,18 @@ External review of mnf8.rs (9 findings, all dispositioned):
   screen already runs at zstd level 3 (proxy_cost); zstd-19 runs once
   per candidate on the final whole stream — no cut made.
 
-Validated: fmt clean, clippy 0 warnings, 45 tests / 7 suites green
-(release), fuzz 540/540 rejected 0 panics (incl. --mnf8 arm), CLI
-roundtrips exact on both profiles.
+- Implemented the flagship review item: FLAG_PRED_MED (bit2,
+  image-wide LOCO-I MED pre-predictor in front of literal bodies) with
+  causal in-walker inversion in decode_record_walk (MNF6/7 pass
+  med=false — frozen semantics untouched); rate-aware measured
+  selection over {none, planar} x {med, no-med}. Measured on the new
+  photo corpora: MED wins 20/20 (zlib-9 avg -21%, zstd-19 avg -19%).
+  Regression: mnf8_med_flag_roundtrip_photo_like.
+- Context-fetch discipline fix (audit bug found during the gate):
+  in-tile MED neighbors live in `recon` until the tile blits;
+  out-of-tile neighbors in `pixels`. The first draft read everything
+  from `pixels` and decoded garbage at pixel (0,1)+.
+- Photo-corpus CLI sweep: 40/40 roundtrips exact (both profiles).
 
 ---
 

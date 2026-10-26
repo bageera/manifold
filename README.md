@@ -21,7 +21,10 @@ All tile the image at 16×16 (row-major, partial edge tiles), rank up to 8
 candidates from the last-128-window atlas by structural signature
 (RGB mean + gradient + luma + variance), and pick each tile's mode by
 cost. MNF6/MNF7 encoders are rate-aware: they build the full tile stream
-under every flag variant and emit the smallest file.
+under every flag variant and emit the smallest file. MNF8 additionally
+measures FLAG_PRED_MED (image-wide JPEG-LS MED pre-predictor in front of
+literal bodies, causal inversion in the decoder) — it wins on photographic
+content 20/20 (zlib-9 avg −21%).
 
 ## Results snapshot (v1.1.2, synthetic + held-out corpus)
 
