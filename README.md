@@ -3,9 +3,10 @@
 A lossless RGB8 image codec suite in Rust, built as compression research:
 shared-patch atlas prediction, geometric transforms, rate-aware coding.
 
-Status: MNF5/MNF6/MNF7 frozen formats (v1.1.2) · hardened decoders
-(bounded, checksummed, fuzzed) · independently validated · normative
-format spec at [docs/format.md](docs/format.md)
+Status: MNF5/MNF6/MNF7 frozen formats + MNF8 backend-field format
+(v1.2.0, ADR-002) · hardened decoders (bounded, checksummed, fuzzed) ·
+independently validated · normative format spec at
+[docs/format.md](docs/format.md)
 
 ## Formats
 
@@ -14,6 +15,7 @@ format spec at [docs/format.md](docs/format.md)
 | MNF5 | `MNF5` | 24 B | zlib | 0 literal, 1 exact ref, 2 geometric (D8, opt-in `--geom`) | v0.5 |
 | MNF6 | `MNF6` | 28 B + flags | zlib or zstd-19 (bit 1), planar RGB bodies (bit 0) | 0-3 (3 = YCoCg-R literal, 9-bit packed chroma) | v0.9 |
 | MNF7 | `MNF7` | 28 B + flags | as MNF6 | 0-5 (4/5 = color-domain residuals, [ADR-001](docs/adr-001-color-transform.md)) | v1.1 |
+| MNF8 | `MNF8` | 32 B + flags + backend | zlib-9 / zstd-19 / brotli-9 per-image ([ADR-002](docs/adr-002-entropy-backends.md); balanced/maximum profiles) | as MNF7 | v1.2 |
 
 All tile the image at 16×16 (row-major, partial edge tiles), rank up to 8
 candidates from the last-128-window atlas by structural signature
