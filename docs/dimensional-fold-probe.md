@@ -84,3 +84,28 @@ the fold is incidental. This lands the same verdict as v12's atlas study
 but at a third axis, and it sharpens arm P: the multi-view case should be
 attacked with SHARED-MODEL + MEASURED-COORDINATE machinery (phase/repeat
 discovery), not geometric re-layout.
+
+## Addendum (2026-10-27): first REAL cryo-EM data point
+
+Corpus: EMPIAR-10061 average micrograph (7676×7420, float32 MRC) rendered
+to u8 (per-plane min-max; the probe's bit-exact subject = the rendered
+plane, declared). Probe script commits with the repo
+(scripts/cryoem_plane_probe.py + scripts/fetch_cryoem.sh; all numbers
+reproducible by those two files alone).
+
+| arm | fraction of raw |
+| --- | --- |
+| zlib-9 | 0.5406 |
+| vertical-delta + zlib-9 | 0.6226 (LOSES to base) |
+| row-LOCO MED + zlib-9 | 0.6495 (LOSES to base) |
+| solid 16×16 tiles | 0 of 221,777 |
+
+Reading: a real cryo-EM u8 plane is measurement-noise dominated (std 3.76,
+mean 7.38 — mostly empty detector). In-plane predictors do NOT beat plain
+zlib here — the opposite of the photographic single-image class where MED
+wins 20/20. The structural wins (slice-rule/phase) remain UNTESTED on real
+data pending an event/stack corpus: EMPIAR's cryo-EM movies from 10061 are
+EER-wrapped (event blocks inside the MRC container — dims not dense frames;
+the reader that decodes events is the pending infra). No format item; the
+slice-rule and phase arms stay candidate-pending on real stacks, exactly
+where the gate wants them.
