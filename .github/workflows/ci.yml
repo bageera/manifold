@@ -12,10 +12,8 @@ jobs:
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
-      - name: Format
-        run: cargo fmt --all -- --check
-      - name: Docs (warnings denied)
-        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+      - name: Gate (fmt, clippy, tests, docs)
+        run: make gate
       - name: Codec-only build (no image io)
         run: cargo build -p manifold-codec --no-default-features
       - name: Package dry-run
@@ -28,10 +26,6 @@ jobs:
         run: |
           cargo new --lib /tmp/manifold-consumer-ci
           (cd /tmp/manifold-consumer-ci && cargo add manifold-codec && cargo check)
-      - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
-      - name: Unit + conformance tests
-        run: cargo test
       - name: Release build
         run: cargo build --release
       - name: CLI roundtrip + fuzz (bounded)
