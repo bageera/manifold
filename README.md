@@ -84,6 +84,18 @@ Full tables: [docs/benchmarks.md](docs/benchmarks.md).
 
 ## Build and run
 
+Developer gate (run before pushing; CI runs the same via `make gate`):
+
+```
+make gate        # fmt --check, clippy -D warnings, tests, docs
+make bench       # criterion decode-throughput benches
+make sizes       # deterministic bitstream-size report (30 corpus roundtrips)
+make corpus      # one-command fair lossless comparison (png/webp/jxl)
+make fuzz        # bounded mutation fuzzer (must exit 0)
+```
+
+## Build and run
+
 Requires Rust stable (crate pins MSRV 1.73+) and crates.io access.
 
     cargo build --release
