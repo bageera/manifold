@@ -10,9 +10,9 @@
 //! Run: cargo bench -p manifold-codec
 
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-use std::hint::black_box;
 use manifold::codec::Dims;
 use manifold::mnf8::{decode_mnf8, encode_mnf8, Profile};
+use std::hint::black_box;
 
 fn load(name: &str) -> (Dims, Vec<u8>) {
     let path = format!("{}/testdata/{name}", env!("CARGO_MANIFEST_DIR"));
@@ -52,7 +52,11 @@ fn bench_decode_throughput(c: &mut Criterion, name: &str) {
 }
 
 fn corpora(c: &mut Criterion) {
-    for name in ["solid_256x256.png", "gradient_320x240.png", "screenshot_640x400.png"] {
+    for name in [
+        "solid_256x256.png",
+        "gradient_320x240.png",
+        "screenshot_640x400.png",
+    ] {
         bench_class(c, name);
         bench_decode_throughput(c, name);
     }
