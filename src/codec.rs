@@ -473,6 +473,20 @@ pub fn decode(buf: &[u8]) -> Result<DecodeResult> {
     decode_with_limits(buf, &DecodeLimits::default())
 }
 
+/// One-call MNF5 encode (the CLI's pipeline exposed as API): split, encode
+/// the tile stream, compress, and assemble header + payload.
+///
+/// The other formats have one-call fns (`mnf6::encode_mnf7`,
+/// `mnf8::encode_mnf8`); this closes the same convenience gap for MNF5.
+pub fn encode_mnf5(pixels: &[u8], dims: Dims, use_atlas: bool, use_geom: bool) -> Result<Vec<u8>> {
+    let tiles = split_tiles(pixels, dims);
+    let (raw, _stats) = encode_stats(&tiles, use_atlas, use_geom);
+    let payload = compress_payload(&raw);
+    let mut buf = build_header(dims, tiles.len() as u32, payload.len() as u32);
+    buf.extend_from_slice(&payload);
+    Ok(buf)
+}
+
 /// Decode MNF5 with configurable ceilings.
 pub fn decode_with_limits(buf: &[u8], lim: &DecodeLimits) -> Result<DecodeResult> {
     if buf.len() < HEADER_SIZE {
@@ -843,6 +857,23 @@ mod tests {
                 ]
             })
             .collect()
+    }
+
+    #[test]
+    fn encode_mnf5_one_call_roundtrip() {
+        let (w, h) = (48u32, 36u32); // 3x3 tiles incl. partial edges
+        let mut px = vec![0u8; (w * h * 3) as usize];
+        for (i, b) in px.iter_mut().enumerate() {
+            *b = (i % 251) as u8;
+        }
+        let d = Dims {
+            width: w,
+            height: h,
+        };
+        let buf = encode_mnf5(&px, d, true, true).expect("encode");
+        let res = decode(&buf).expect("decode");
+        assert_eq!(res.pixels, px, "one-call MNF5 exact");
+        assert_eq!((res.dims.width, res.dims.height), (w, h));
     }
 
     #[test]
