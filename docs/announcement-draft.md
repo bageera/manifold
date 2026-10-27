@@ -70,9 +70,13 @@ photo-class. A new codec that publishes its own losses is the point.
    slice-phase arm on synthetic depth already shows 0.26× base with exact
    phase recovery; real cryo-EM event stacks are the deciding corpus.
 2. **Low-dose event coding (arm S).** EMPIAR's Falcon 4i movies ARE event
-   streams: the vendor's wire at high dose ≈ dense-z9 (measured), but the
-   low-dose regime — where the EER paper places the wire far below dense
-   coding — is being probed now.
+   streams. Both dose regimes now measured: at high dose (7 e/px/s) dense-LZ
+   wins and the vendor wire = dense-z9; at low dose (553-frame
+   fractionation) our event-list matches the vendor wire (0.996×) and beats
+   dense 1.74× — the Shannon H(p) density threshold the EER paper predicts
+   confirmed at both extremes. Honest verdict: the vendor wire already sits
+   near the entropy bound; this arm stays a research record, not a format
+   item.
 3. **Regional-class selection (arm F).** Score spatial/edge/periodic/
    projection predictors per region instead of per image.
 

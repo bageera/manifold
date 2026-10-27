@@ -10,7 +10,7 @@ are cited; the repo reproduces each measurement (scripts/ + docs/).
 | EER RLE (7-bit/subpixel) stores counting-dose movies far below dense formats | EMPIAR-10943 Falcon 4i wire = 3.93 MiB/frame vs 16 MiB dense-u8 render (4.1×) | CONFIRMED |
 | Shannon bound: frames compress further only when event density p ≠ 0.5 (H(p) < 1) | measured p = 0.52 on the 7 e/px/s super-res render → H ≈ 1: NO headroom at that dose/render | CONFIRMED (and explains why our sparse-event arm cannot beat the wire there; lossless record) |
 | u=4 subpixels cost extra 2·log2(u) bits/electron | explains the high render density that defeated the arm at high dose | CONFIRMED |
-| low-dose regime: wire ≪ dense (the regime EER exists for) | PENDING probe: EMPIAR-11213 (553-frame fractionated movies, ~0.37 MB/frame wire) fetch in flight | — |
+| low-dose regime: wire ≪ dense (the regime EER exists for) | EMPIAR-11213 measured: p=0.015 → H=0.112 bits/px; event-list 0.996× of wire; dense 1.73× worse | CONFIRMED (both regimes; vendor wire already near H-bound) |
 
 ## 2. Precision requirements and data compression in CryoEM/CryoET (PMC9645247, JSB 2022, Fluty & Ludtke)
 
