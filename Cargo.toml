@@ -41,3 +41,9 @@ zstd = "0.13"
 
 [dev-dependencies]
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+criterion = { package = "criterion", version = "0.7" }
+
+[[bench]]
+name = "decode"
+harness = false
+required-features = ["image-io"]
