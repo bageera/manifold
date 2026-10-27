@@ -36,6 +36,13 @@ int32_t manifold_decode(const uint8_t *buf, size_t len,
                         uint32_t *width, uint32_t *height);
 
 /*
+ * Encode MNF5 (v0.5 format, zlib container) from raw RGB8.
+ * use_geom: 0 = identity transform only, nonzero = D8 search.
+ */
+int32_t manifold_encode_mnf5(const uint8_t *pixels, uint32_t width, uint32_t height,
+                             uint32_t use_geom, uint8_t *out, size_t *out_len);
+
+/*
  * Encode MNF7 (zstd container) from raw RGB8 (w*elen*3 bytes).
  * out_len: buffer size on input; required size when TOO_SMALL.
  */

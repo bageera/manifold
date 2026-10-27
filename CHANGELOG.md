@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.4.0 — adoption readiness: packaging + API convenience (2026-10-26)
+
+From docs/audit-crate-131.md (published-crate audit):
+
+- `[package] exclude` for testdata/, scripts/, .github/, .gitlab-ci.yml —
+  the published tarball drops from 1.4 MiB to 307 KiB; repo tests keep
+  their corpora via CARGO_MANIFEST_DIR (dep tests don't compile for
+  consumers, so no surface loss).
+- One-call MNF5 encode: `codec::encode_mnf5(pixels, dims, use_atlas,
+  use_geom)` — parity with `mnf6::encode_mnf7` / `mnf8::encode_mnf8`
+  (regression: encode_mnf5_one_call_roundtrip).
+- ONE DecodeLimits: `mnf6::DecodeLimits` is now a re-export of
+  `codec::DecodeLimits` (non-breaking alias; consumers stopped needing two
+  imports; MNF5/6/7/8 all share the same ceilings type).
+- C-API: added `manifold_encode_mnf5` (append-only ABI addition;
+  include/manifold.h updated; rust test + C smoke cover the export).
+
 ## v1.3.1 — adoption readiness: CI green on the published surface (2026-10-26)
 
 Three CI fixes, each a distinct root cause found by the gate itself:

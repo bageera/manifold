@@ -494,25 +494,10 @@ pub fn encode_mnf7(pixels: &[u8], dims: Dims, use_geom: bool) -> (Vec<u8>, MnF6S
 /// Configurable ceilings for MNF6/MNF7/MNF8 decoding (mirror of
 /// codec::DecodeLimits; the same limit semantics at the header-validation
 /// points). Defaults = the format-derived maxima (identical to codec's).
-#[derive(Debug, Clone, Copy)]
-pub struct DecodeLimits {
-    /// Max total pixels (w*h).
-    pub max_pixels: u64,
-    /// Max tiles.
-    pub max_tiles: u32,
-    /// Max decompressed payload bytes.
-    pub max_decompressed: u64,
-}
-
-impl Default for DecodeLimits {
-    fn default() -> Self {
-        DecodeLimits {
-            max_pixels: 1 << 26,
-            max_tiles: u32::MAX,
-            max_decompressed: u64::MAX, // replaced by the checked per-file bound
-        }
-    }
-}
+/// Limits for MNF6/7/8 decoding: the canonical [`crate::codec::DecodeLimits`]
+/// (re-exported under this name to keep one type across all decoders — the
+/// capi + docs surface stays single-struct).
+pub use crate::codec::DecodeLimits;
 
 /// Decode MNF6/7 with configurable ceilings (library API; decode_mnf7 is the
 /// defaults wrapper).

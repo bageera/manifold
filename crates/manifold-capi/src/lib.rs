@@ -110,6 +110,31 @@ pub unsafe extern "C" fn manifold_encode(
     copy_out(encoded, out, out_len)
 }
 
+/// Encode MNF5 (v0.5 format, zlib container) from raw RGB8.
+/// use_geom: 0 = t=0 only, nonzero = D8 geometry search. Same out/out_len
+/// convention as the other encoders.
+#[no_mangle]
+pub unsafe extern "C" fn manifold_encode_mnf5(
+    pixels: *const u8,
+    width: u32,
+    height: u32,
+    use_geom: u32,
+    out: *mut u8,
+    out_len: *mut usize,
+) -> i32 {
+    if pixels.is_null() || out_len.is_null() {
+        return STATUS_NULL_ARG;
+    }
+    let px_len = (width as usize) * (height as usize) * 3;
+    let px = std::slice::from_raw_parts(pixels, px_len);
+    let d = manifold::codec::Dims { width, height };
+    let encoded = match manifold::codec::encode_mnf5(px, d, use_geom == 0, use_geom != 0) {
+        Ok(e) => e,
+        Err(e) => return status(&e),
+    };
+    copy_out(encoded, out, out_len)
+}
+
 /// Encode MNF8 (backend auto-select; profile: 0=balanced, 1=maximum).
 #[no_mangle]
 pub unsafe extern "C" fn manifold_encode_mnf8(
@@ -230,6 +255,29 @@ mod tests {
                 &mut oh,
             );
             assert_eq!(st, STATUS_FORMAT_INVALID);
+        }
+    }
+    #[test]
+    fn roundtrip_mnf5_via_ffi() {
+        let (w, h) = (32u32, 32u32);
+        let px: Vec<u8> = (0..w as usize * h as usize * 3)
+            .map(|i| (i % 251) as u8)
+            .collect();
+        unsafe {
+            let mut n = 0usize;
+            let st = manifold_encode_mnf5(px.as_ptr(), w, h, 1, std::ptr::null_mut(), &mut n);
+            assert_eq!(st, STATUS_BUF_TOO_SMALL, "query pass");
+            let mut enc = vec![0u8; n];
+            let st = manifold_encode_mnf5(px.as_ptr(), w, h, 1, enc.as_mut_ptr(), &mut n);
+            assert_eq!(st, STATUS_OK);
+            let mut wn = 0usize;
+            let (mut ow, mut oh) = (0u32, 0u32);
+            let st = manifold_decode(enc.as_ptr(), n, std::ptr::null_mut(), &mut wn, &mut ow, &mut oh);
+            assert_eq!(st, STATUS_BUF_TOO_SMALL);
+            let mut out = vec![0u8; wn];
+            let st = manifold_decode(enc.as_ptr(), n, out.as_mut_ptr(), &mut wn, &mut ow, &mut oh);
+            assert_eq!(st, STATUS_OK);
+            assert_eq!(out[..wn], px[..]);
         }
     }
 }

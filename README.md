@@ -17,7 +17,7 @@ the in-repo crate and lib name stay `manifold`) and **`manifold-codec-capi`**
 | API | Status | Since |
 | --- | ------ | ----- |
 | `manifold-codec` / `codec::*` (MNF5 encode/decode, `DecodeLimits`) | stable (v1.x semver) | v1.0 |
-| `mnf6::*` MNF6/7 encode/decode + `decode_mnf7_with_limits` | stable | v1.2.1 |
+| `mnf6::*` MNF6/7 encode/decode + `decode_mnf7_with_limits` (`mnf6::DecodeLimits` = the codec type) | stable | v1.2.1 |
 | `mnf8::*` MNF8 encode/decode, profiles, `FLAG_PRED_MED` | stable | v1.2.0 |
 | `error::Error` / `error::Result` (matchable categories) | stable | v1.2.1 |
 | `refdecode::ref_decode` (independent MNF5 decoder) | stable | v1.2.1 |
