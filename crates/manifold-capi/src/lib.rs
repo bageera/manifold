@@ -272,7 +272,14 @@ mod tests {
             assert_eq!(st, STATUS_OK);
             let mut wn = 0usize;
             let (mut ow, mut oh) = (0u32, 0u32);
-            let st = manifold_decode(enc.as_ptr(), n, std::ptr::null_mut(), &mut wn, &mut ow, &mut oh);
+            let st = manifold_decode(
+                enc.as_ptr(),
+                n,
+                std::ptr::null_mut(),
+                &mut wn,
+                &mut ow,
+                &mut oh,
+            );
             assert_eq!(st, STATUS_BUF_TOO_SMALL);
             let mut out = vec![0u8; wn];
             let st = manifold_decode(enc.as_ptr(), n, out.as_mut_ptr(), &mut wn, &mut ow, &mut oh);
