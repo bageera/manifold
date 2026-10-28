@@ -63,6 +63,11 @@ metadata counted and exact reconstruction asserted:
   post-residual); 2D-token column-layout RETAINED as a pick candidate
   (−576 B/30-file, text/screen classes); arm F recorded as the pick's
   own per-file readout.
+- [mnf9-erdos-probe.md](mnf9-erdos-probe.md) — Erdős-offset candidate
+  generation DENIED (equal-budget content-key chains dominate; A+B union
+  worse everywhere); (m,dir) address coding DENIED (u8 coordinate pair
+  beats any structured address); blob far-offset signal recorded, not
+  retained.
 
 Earlier research notes: [v07-charts-replication.md](v07-charts-replication.md),
 [cy01-torus.md](cy01-torus.md), [dimensional-fold-probe.md](dimensional-fold-probe.md),
