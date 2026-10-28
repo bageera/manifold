@@ -1,0 +1,38 @@
+class          n       med       lag  d_med%       hyb       raw wins(lag)
+synthetic      1      5297      2875 -45.72%      None      3829 True
+photographic   1     11667     10892  -6.64%      None     13045 True
+photographic   1      6922      7037   1.66%      6953      9642 False
+photographic   1     27523     24631 -10.51%      None     25250 True
+photographic   1     20814     18779  -9.78%      None     19571 True
+photographic   1     26298     23686  -9.93%      None     25060 True
+photographic   1     11809     11747  -0.53%     11859     16206 True
+photographic   1     19555     17817  -8.89%      None     19617 True
+photographic   1     20803     18983  -8.75%      None     20407 True
+photographic   1     12281     11237  -8.50%      None     12557 True
+photographic   1      6976      6946  -0.43%      7012      9499 True
+heldout        1      5055      3033 -40.00%      None      3728 True
+heldout        1       830       827  -0.36%      None       818 True
+heldout        1       803       480 -40.22%      None       428 True
+heldout        1     10660     11891  11.55%     10691     17861 False
+heldout        1      2088       615 -70.55%      None       574 True
+synthetic      1     60176     55776  -7.31%      None     49989 True
+photographic   1      9653      9744   0.94%      9673     13873 False
+photographic   1     12366     11188  -9.53%      None     12714 True
+photographic   1     27329     24204 -11.43%      None     24186 True
+photographic   1     19022     17308  -9.01%      None     18948 True
+photographic   1     14302     13044  -8.80%      None     14099 True
+photographic   1     20407     18568  -9.01%      None     19956 True
+photographic   1     29204     26050 -10.80%      None     26341 True
+photographic   1      6568      6735   2.54%      6585      9274 False
+photographic   1     14144     12877  -8.96%      None     14151 True
+photographic   1     22321     20282  -9.13%      None     23062 True
+synthetic      1       976       644 -34.02%       708      1219 True
+synthetic      1       687       604 -12.08%       739      1175 True
+synthetic      1        86        88   2.33%       120        85 False
+
+TOTAL         30    426622    388588  -8.92%              427164 25/30
+
+synthetic favorable classes (known period):
+  vrepeat_p8     med     1330 lag     1145 ( -13.91%, axis 0 off 8) hyb     1287 raw     1203
+  vrepeat_p8_n2  med    16395 lag     8612 ( -47.47%, axis 0 off 8) hyb     8735 raw    16047
+  diag_str17     med       85 lag       44 ( -48.24%, axis 0 off 1) hyb      103 raw      719
