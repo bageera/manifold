@@ -56,6 +56,35 @@ fn mnf8_rejection_vectors_rejected_without_panic() {
 }
 
 #[test]
+fn mnf8_branch_golden_vector_exact() {
+    // ADR-004: LEFT-predictor golden vector (the measured left-winner file);
+    // flags must carry FLAG_PRED_LEFT, decode exact via the ADR-004 walk.
+    use manifold::mnf8::FLAG_PRED_LEFT;
+    let buf = load("mnf8_branch_left_poster.mnf8");
+    let expect = load("mnf8_branch_left_poster.expected.pixels");
+    let (dims, px, backend) = decode_mnf8(&buf).expect("branch golden decode");
+    assert_eq!(dims.width as usize, expect.len() / 3 / dims.height as usize);
+    assert_eq!(px, expect, "MNF8 branch golden pixels");
+    assert_eq!(backend, 1);
+    let flags = u32::from_le_bytes([buf[24], buf[25], buf[26], buf[27]]);
+    assert!(
+        flags & FLAG_PRED_LEFT != 0,
+        "golden vector is a LEFT-pick file"
+    );
+}
+
+#[test]
+fn mnf8_branch_rejections() {
+    // ADR-004 validation vectors: two predictor bits / tokens+left — each
+    // Err without panic.
+    for name in ["rej_mnf8_two_predictors.mnf8", "rej_mnf8_tokens_left.mnf8"] {
+        let buf = load(name);
+        let r = std::panic::catch_unwind(|| decode_mnf8(&buf));
+        assert!(r.is_ok() && r.unwrap().is_err(), "{name}: must reject");
+    }
+}
+
+#[test]
 fn mnf8_corpus_roundtrips_both_profiles() {
     let base = env!("CARGO_MANIFEST_DIR");
     for name in [

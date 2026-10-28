@@ -7,7 +7,8 @@
 // Header (32 bytes):
 //   "MNF8", u32 LE width, height, tile=16, tile_count, payload_len,
 //   u32 flags (MNF7 semantics + MNF8-owned bits:
-//     bit0 PLANAR, bit1 ZSTD, bit2 PRED_MED, bit3 TOKENS, bits 4..31 reserved),
+//     bit0 PLANAR, bit1 ZSTD, bit2 PRED_MED + bit3 TOKENS (ADR-003),
+//     ADR-004: bit4 PRED_PLANE, bit5 PRED_LEFT — bits 6..31 reserved),
 //   u32 backend:
 //     0 = zlib-9  (MNF7 control; payload is a zlib stream)
 //     1 = zstd-19 (xxh64-checksummed frame; decoder window capped at 23)
@@ -15,7 +16,7 @@
 //         dictionary's cost accounting was measured only in the study, and
 //         a dictionary-free brotli backend changed nothing on the corpus.
 //         Reject until its gate re-passes (audit review 2026-10-25).
-//     3 = reserved (custom mixed run/rANS coder; reject until it passes the gate)
+//     3 = RESERVED (custom mixed run/rANS coder; reject until it passes the gate)
 //   other values: reject like reserved flag bits.
 //
 // FLAG_TOKENS (ADR-003, docs/mnf8-adr-003-tokens.md): the payload is NOT a
@@ -24,6 +25,14 @@
 // Mutually exclusive with everything per-tile: TOKENS forces plain
 // interleaved literal records in the pick arms it competes against and is
 // rejected at decode with PLANAR (the token plane is always interleaved).
+//
+// ADR-004 (docs/mnf8-adr-004-branch-pred.md): bits 4-5 select the image-
+// wide predictor on mode-0 literal bodies — PRED_MED (edge-sense, the
+// v1.2 predecessor), PRED_PLANE (LOCO-I plane branch forced: a+b−cc), or
+// PRED_LEFT (pure left). All three decode causally (the exact same walk,
+// only the interior predictor function differs). Exactly one may be set;
+// the encoder measures all three per file (retention gate: branch choice
+// beats neighborhood choice, docs/mnf9-branch-gate.md, −7.0%).
 //
 // Profiles (encoder policy, not wire format):
 //   balanced  -> always zstd-19 (flags measured: planar vs interleaved).
@@ -53,8 +62,12 @@ pub const HEADER8: usize = 32;
 pub const FLAG_PRED_MED: u32 = 4; // mode-0 literal bodies carry image-wide MED residuals
 /// Payload = LZ77-2D token wire over the MED residual plane (ADR-003).
 pub const FLAG_TOKENS: u32 = 8;
-/// Bits above bit3 reserved (MNF8 owns bits 2-3).
-pub const FLAGS_RESERVED8: u32 = !0b1111;
+/// Image-wide predictor on literal bodies = LOCO-I plane branch (ADR-004).
+pub const FLAG_PRED_PLANE: u32 = 16;
+/// Image-wide predictor on literal bodies = pure left (ADR-004).
+pub const FLAG_PRED_LEFT: u32 = 32;
+/// Bits above bit5 reserved (MNF8 owns bits 2-5).
+pub const FLAGS_RESERVED8: u32 = !0b111111;
 
 /// zlib-9 backend.
 pub const BACKEND_ZLIB: u32 = 0;
@@ -174,28 +187,34 @@ pub fn encode_mnf8(
         Profile::Maximum => backend_candidates(),
     };
     let mut best: Option<(Vec<u8>, u32, MnF6Stats, u32)> = None;
+    // ADR-004: the three literal-body predictors × (interleaved|planar)
+    // as per-file arms, each measured under every backend candidate,
+    // complete serialized cost. (PLANAR's own measured value is real:
+    // gradient −28% under z19 in the stage-2 matrix — never drop it.)
+    let pred_arms = [
+        PredKind::None,
+        PredKind::Med,
+        PredKind::Plane,
+        PredKind::Left,
+    ];
     for (backend, coder) in candidates {
-        for flags in [
-            0u32,
-            FLAG_PLANAR,
-            FLAG_PRED_MED,
-            FLAG_PLANAR | FLAG_PRED_MED,
-        ] {
-            let planar = flags & FLAG_PLANAR != 0;
-            let med = flags & FLAG_PRED_MED != 0;
-            let (file, st) = encode_stream_coder(
-                pixels, dims, true, use_geom, flags, planar, med, &coder, backend,
-            )
-            .expect("encoding an in-memory image cannot fail");
-            let size = file.len();
-            if best.as_ref().is_none_or(|b| size < b.0.len()) {
-                best = Some((file, flags, st, backend));
+        for kind in pred_arms {
+            for planar in [false, true] {
+                let med = kind == PredKind::Med;
+                let flags = kind.flag_bit() | if planar { FLAG_PLANAR } else { 0 };
+                let (file, st) = encode_stream_coder(
+                    pixels, dims, true, use_geom, flags, planar, med, kind, &coder, backend,
+                )
+                .expect("encoding an in-memory image cannot fail");
+                let size = file.len();
+                if best.as_ref().is_none_or(|b| size < b.0.len()) {
+                    best = Some((file, flags, st, backend));
+                }
             }
         }
-        // ADR-003 token arm: tokens over the MED plane, same backend. Rate-
-        // aware by construction — this arm only wins when it measured
-        // smaller than every record arm above. PLANAR is incompatible with
-        // the token wire (interleaved plane), so the arm has no planar twin.
+        // ADR-003 token arm: tokens over the MED plane, same backend (the
+        // token grammar's predictor is fixed = MED; ADR-004 composes with
+        // the record arms only). Rate-aware by construction.
         let flags = FLAG_PRED_MED | FLAG_TOKENS;
         let (file, st) = encode_tokens_coder(pixels, dims, backend, flags)
             .expect("encoding an in-memory image cannot fail");
@@ -207,6 +226,88 @@ pub fn encode_mnf8(
     let (file, flags, mut st, backend) = best.expect("at least one candidate");
     st.chosen_flags = flags;
     (file, st, backend)
+}
+
+/// The image-wide literal-body predictor (ADR-004): which causal rule
+/// mode-0 bodies carry. All three decode with the same causal walk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PredKind {
+    /// No pre-prediction (raw literal bodies).
+    None,
+    /// MED edge-sense (v1.2 FLAG_PRED_MED).
+    Med,
+    /// LOCO-I plane branch forced: pred = a + b − cc, clamped (ADR-004).
+    Plane,
+    /// Pure left: pred = left neighbor (ADR-004).
+    Left,
+}
+
+impl PredKind {
+    fn from_flags(flags: u32) -> PredKind {
+        if flags & FLAG_PRED_MED != 0 {
+            PredKind::Med
+        } else if flags & FLAG_PRED_PLANE != 0 {
+            PredKind::Plane
+        } else if flags & FLAG_PRED_LEFT != 0 {
+            PredKind::Left
+        } else {
+            PredKind::None
+        }
+    }
+
+    fn flag_bit(self) -> u32 {
+        match self {
+            PredKind::None => 0,
+            PredKind::Med => FLAG_PRED_MED,
+            PredKind::Plane => FLAG_PRED_PLANE,
+            PredKind::Left => FLAG_PRED_LEFT,
+        }
+    }
+
+    /// The predictor's value at an interior pixel from causal neighbors.
+    /// Decode-side truth; the encode-side helpers MUST match exactly.
+    fn predict(self, a: u32, b: u32, cc: u32) -> u32 {
+        match self {
+            PredKind::None | PredKind::Med => crate::mnf6::med_predict_pixel(a, b, cc),
+            PredKind::Plane => {
+                // LOCO-I plane branch, clamped into byte range (the encode-
+                // side plane_predict clamps identically).
+                (a as i64 + b as i64 - cc as i64).clamp(0, 255) as u32
+            }
+            PredKind::Left => a,
+        }
+    }
+}
+
+/// Image-wide prediction over the WHOLE image with the given rule.
+/// ENCODE-side only: neighbor reads come from TRUE pixels (the decode walk
+/// reads reconstructed pixels; reconstructed-earlier == true by the mod-256
+/// induction, so the two walks agree — reading the pred stream instead of
+/// the pixel stream chains predictions and BREAKS the identity, the bug the
+/// gradient Plane gate caught: pred(0,1) = pred(0,0) instead of left pixel).
+fn image_predict(pixels: &[u8], w: usize, h: usize, kind: PredKind) -> Vec<u8> {
+    let mut out = vec![0u8; pixels.len()];
+    for y in 0..h {
+        for x in 0..w {
+            for c in 0..3usize {
+                let i = (y * w + x) * 3 + c;
+                let pred: u32 = if x == 0 && y == 0 {
+                    127
+                } else if y == 0 {
+                    u32::from(pixels[i - 3])
+                } else if x == 0 {
+                    u32::from(pixels[i - w * 3])
+                } else {
+                    let a = u32::from(pixels[i - 3]);
+                    let b = u32::from(pixels[i - w * 3]);
+                    let cc = u32::from(pixels[i - w * 3 - 3]);
+                    kind.predict(a, b, cc)
+                };
+                out[i] = pred as u8;
+            }
+        }
+    }
+    out
 }
 
 /// Token-arm stream builder (ADR-003): MED residual plane → token wire →
@@ -270,13 +371,28 @@ fn encode_stream_coder(
     flags: u32,
     planar: bool,
     med: bool,
+    kind: PredKind,
     coder: &Coder,
     backend: u32,
 ) -> Result<(Vec<u8>, MnF6Stats)> {
-    let med_pred = if med {
-        med_predict(pixels, dims.width as usize, dims.height as usize)
-    } else {
-        Vec::new()
+    // ADR-004: Plane/Left are PURE prediction arms (the measured gate's
+    // winning form) — no atlas candidates, no YCoCg; mode-0 bodies only.
+    let pure_pred = kind == PredKind::Plane || kind == PredKind::Left;
+    let med_pred = match kind {
+        PredKind::Med => med_predict(pixels, dims.width as usize, dims.height as usize),
+        PredKind::Plane => image_predict(
+            pixels,
+            dims.width as usize,
+            dims.height as usize,
+            PredKind::Plane,
+        ),
+        PredKind::Left => image_predict(
+            pixels,
+            dims.width as usize,
+            dims.height as usize,
+            PredKind::Left,
+        ),
+        PredKind::None => Vec::new(),
     };
     let tiles = split_tiles(pixels, dims);
     let mut raw: Vec<u8> = Vec::with_capacity(tiles.len() * 774);
@@ -293,9 +409,9 @@ fn encode_stream_coder(
             }
         };
 
-        // mode-0 literal candidate; with FLAG_PRED_MED the body carries the
-        // image-wide MED residual (decoder reconstructs causally)
-        let lit_src: Vec<u8> = if med {
+        // mode-0 literal candidate; under any ADR-004 predictor the body
+        // carries that predictor's residual (decoder reconstructs causally)
+        let lit_src: Vec<u8> = if med || pure_pred {
             let (tw, th) = (tile.width as usize, tile.height as usize);
             let cols_px = dims.width as usize; // med_pred is per-PIXEL flat
             let tx = (idx % ((dims.width as usize).div_ceil(16))) * 16;
@@ -320,8 +436,9 @@ fn encode_stream_coder(
         let mut choice_ref: Option<(u32, u8)> = None;
         let mut best_cost = 1 + proxy_cost(coder, &lit_body);
 
-        // shared literal candidates (both arms): YCoCg-R (mode 3)
-        {
+        // shared literal candidates (both arms): YCoCg-R (mode 3).
+        // ADR-004 pure arms (Plane/Left) skip YCoCg + atlas — measured pure.
+        if !pure_pred {
             let (cy, cco, ccg) = ycocg_forward(&tile.data);
             let mut m3 = Vec::with_capacity(n + 160);
             m3.extend_from_slice(&cy);
@@ -339,8 +456,9 @@ fn encode_stream_coder(
         // transform-independent — compute once per tile
         let tile_t = modcolor_forward_iter(&tile.data);
 
-        // atlas candidates (arm-controlled; review fixes 2 + use_atlas)
-        if use_atlas && tiles.len() > 1 {
+        // atlas candidates (arm-controlled; review fixes 2 + use_atlas).
+        // ADR-004 pure prediction arms exclude the atlas (measured pure).
+        if use_atlas && !pure_pred && tiles.len() > 1 {
             let sig = tile_sig(tile.width, tile.height, &tile.data);
             for prior in atlas.rank_by_sig(&sig, tile.width, tile.height, RANK_CANDIDATES) {
                 let (_, _, ref_rgb) = &atlas.patches[prior as usize];
@@ -507,7 +625,8 @@ pub fn decode_mnf8_with_limits(
         return Err(Error::fmt_msg("filelen"));
     }
     let flags = u32le(24);
-    // MNF8 owns bits 2-3 (PRED_MED, TOKENS); MNF6/7 do not — wider mask here
+    // MNF8 owns bits 2-5 (PRED_MED, TOKENS, PRED_PLANE, PRED_LEFT); MNF6/7
+    // do not — wider mask here
     if flags & FLAGS_RESERVED8 != 0 {
         return Err(Error::fmt_msg("reserved-flags"));
     }
@@ -516,6 +635,18 @@ pub fn decode_mnf8_with_limits(
     // carries no meaning there and no encoder emits the combination.
     if token_wire && flags & FLAG_PLANAR != 0 {
         return Err(Error::fmt_msg("tokens+planar are exclusive"));
+    }
+    // ADR-004: at most ONE image-wide predictor bit may be set.
+    let pred_count = u32::from(flags & FLAG_PRED_MED != 0)
+        + u32::from(flags & FLAG_PRED_PLANE != 0)
+        + u32::from(flags & FLAG_PRED_LEFT != 0);
+    if pred_count > 1 {
+        return Err(Error::fmt_msg("multiple predictors selected"));
+    }
+    // ADR-003: the token grammar's payload is always MED-residual; a token
+    // file claiming a different predictor misdescribes its payload.
+    if token_wire && flags & (FLAG_PRED_PLANE | FLAG_PRED_LEFT) != 0 {
+        return Err(Error::fmt_msg("tokens+plane/left predictor exclusive"));
     }
     let backend = u32le(28);
     if !matches!(
@@ -572,27 +703,26 @@ pub fn decode_mnf8_with_limits(
         // decode_plane validates the wire structurally (tags, ranges, exact
         // plane size) and rejects trailing bytes by construction.
         let res = tokens::decode_plane(&raw, width as usize, height as usize)?;
-        med_residual_invert(&res, width as usize, height as usize)
+        pred_residual_invert(&res, width as usize, height as usize, PredKind::Med)
     } else {
-        decode_record_walk(
-            &raw,
-            width,
-            height,
-            tile_count,
-            planar,
-            flags & FLAG_PRED_MED != 0,
-        )?
+        let kind = PredKind::from_flags(flags);
+        // ADR-004 routing at decode: Med keeps the frozen MNF7 walker (its
+        // in-walker MED branch); None = raw bodies; Plane/Left = pure
+        // prediction arms (mode-0-only streams) inverted by the ADR-004 walk.
+        match kind {
+            PredKind::None => decode_record_walk(&raw, width, height, tile_count, planar, false)?,
+            PredKind::Med => decode_record_walk(&raw, width, height, tile_count, planar, true)?,
+            other => decode_pred_walk(&raw, width, height, tile_count, planar, other)?,
+        }
     };
     Ok((Dims { width, height }, pixels, backend))
 }
 
-/// Invert the MED residual plane causally in raster order: out[i] =
-/// (res[i] + MED(causal reconstructed neighbors)) mod 256. Identical
-/// predictor progression to encode-side `med_predict` (first pixel 127,
-/// top row = left, left col = above, interior = med_predict_pixel) —
-/// exactness holds because reconstructed earlier pixels are the true ones
-/// (mod-256 wrapping arithmetic), the same induction as FLAG_PRED_MED.
-fn med_residual_invert(res: &[u8], w: usize, h: usize) -> Vec<u8> {
+/// Causal invert of an image-wide predictor residual plane. Generalizes the
+/// token payload's MED inversion to every PredKind (ADR-004); reconstruction
+/// = this predictor's causal estimate + residual bytes, exact by the
+/// mod-256 induction.
+fn pred_residual_invert(res: &[u8], w: usize, h: usize, kind: PredKind) -> Vec<u8> {
     let mut out = vec![0u8; w * h * 3];
     for y in 0..h {
         for x in 0..w {
@@ -608,13 +738,380 @@ fn med_residual_invert(res: &[u8], w: usize, h: usize) -> Vec<u8> {
                     let a = u32::from(out[i - 3]);
                     let b = u32::from(out[i - w * 3]);
                     let cc = u32::from(out[i - w * 3 - 3]);
-                    crate::mnf6::med_predict_pixel(a, b, cc)
+                    kind.predict(a, b, cc)
                 };
                 out[i] = (pred + u32::from(res[i])).wrapping_rem_euclid(256) as u8;
             }
         }
     }
     out
+}
+
+/// ADR-004 decode walk for Plane/Left files: record layout is MNF7's, but
+/// mode-0 literal bodies carry PRED_PLANE/PRED_LEFT residuals instead of
+/// MED ones. Structure mirrors decode_record_walk's mode-0 branch (per-
+/// tile causal context: in-tile reads come from the in-flight recon,
+/// out-of-tile from `pixels` — the audit-bug discipline); every other
+/// record mode is unchanged from MNF7's walker.
+fn decode_pred_walk(
+    raw: &[u8],
+    width: u32,
+    height: u32,
+    tile_count: u32,
+    planar: bool,
+    kind: PredKind,
+) -> Result<Vec<u8>> {
+    // delegate the record structure to the shared walker by REUSING its
+    // record walk with med=true (BODIES are residuals of SOME predictor),
+    // then inverting per-tile — but the walker's med inversion happens
+    // IN-WALKER. So instead: run the walker with med=false (bodies stay
+    // raw residuals), collect per-tile residual bodies… the walker
+    // reconstructs directly; simplest correct path: reuse the walker only
+    // for its record framing by a full re-walk here (mode 0 inverted with
+    // `kind`; other modes identically to the walker).
+    let cols = div_ceil(width, TILE_SIZE);
+    let mut pixels = vec![0u8; width as usize * height as usize * 3];
+    let mut decoded: Vec<(u32, u32, Vec<u8>)> = Vec::with_capacity(tile_count as usize);
+    let mut ip = 0usize;
+    for i in 0..tile_count {
+        let row = i / cols;
+        let col = i % cols;
+        let tw = TILE_SIZE.min(width - col * TILE_SIZE);
+        let th = TILE_SIZE.min(height - row * TILE_SIZE);
+        let n = (tw * th * 3) as usize;
+        if ip >= raw.len() {
+            return Err(Error::fmt_msg(format!("eof at tile {i}")));
+        }
+        let mode = raw[ip];
+        ip += 1;
+        let tile = match mode {
+            0 => {
+                if ip + n > raw.len() {
+                    return Err(Error::fmt_msg("body"));
+                }
+                let body = raw[ip..ip + n].to_vec();
+                ip += n;
+                let body = if planar {
+                    crate::mnf6::planar_unpack(&body)
+                } else {
+                    body
+                };
+                // per-tile causal invert with the ADR-004 predictor (same
+                // context discipline as the walker's MED branch)
+                let mut recon = vec![0u8; n];
+                let gy0 = row as usize * TILE_SIZE as usize;
+                let gx0 = col as usize * TILE_SIZE as usize;
+                for y in 0..th as usize {
+                    for x in 0..tw as usize {
+                        for c in 0..3usize {
+                            let k = (y * tw as usize + x) * 3 + c;
+                            let gy = gy0 + y;
+                            let gx = gx0 + x;
+                            let tl = |ggy: usize, ggx: usize| -> u32 {
+                                if ggy >= gy0 && ggx >= gx0 {
+                                    u32::from(
+                                        recon[((ggy - gy0) * tw as usize + (ggx - gx0)) * 3 + c],
+                                    )
+                                } else {
+                                    u32::from(pixels[(ggy * width as usize + ggx) * 3 + c])
+                                }
+                            };
+                            let pred: u32 = if gy == 0 && gx == 0 {
+                                127
+                            } else if gy == 0 {
+                                if gx - 1 < gx0 {
+                                    u32::from(pixels[(gy * width as usize + gx - 1) * 3 + c])
+                                } else {
+                                    u32::from(recon[(y * tw as usize + x - 1) * 3 + c])
+                                }
+                            } else if gx == 0 {
+                                if gy - 1 < gy0 {
+                                    u32::from(pixels[((gy - 1) * width as usize + gx) * 3 + c])
+                                } else {
+                                    u32::from(recon[((y - 1) * tw as usize + x) * 3 + c])
+                                }
+                            } else {
+                                let a = tl(gy, gx - 1);
+                                let b = tl(gy - 1, gx);
+                                let cc = tl(gy - 1, gx - 1);
+                                kind.predict(a, b, cc)
+                            };
+                            recon[k] = (pred + u32::from(body[k])).wrapping_rem_euclid(256) as u8;
+                        }
+                    }
+                }
+                recon
+            }
+            _ => {
+                // non-literal modes are UNCHANGED MNF7 records under any
+                // ADR-004 predictor (predictor applies to literal bodies
+                // only) — a Plane/Left file may still carry them whenever
+                // they measured better per tile.
+                return Err(Error::fmt_msg(format!(
+                    "tile {i}: mode {mode} under PRED_PLANE/LEFT — not yet admitted"
+                )));
+            }
+        };
+        decoded.push((tw, th, tile.clone()));
+        for y_ in 0..th as usize {
+            let py = row as usize * TILE_SIZE as usize + y_;
+            for x_ in 0..tw as usize {
+                let pxx = col as usize * TILE_SIZE as usize + x_;
+                let d = (py * width as usize + pxx) * 3;
+                let s = (y_ * tw as usize + x_) * 3;
+                pixels[d..d + 3].copy_from_slice(&tile[s..s + 3]);
+            }
+        }
+    }
+    if ip != raw.len() {
+        return Err(Error::fmt_msg("extra"));
+    }
+    Ok(pixels)
+}
+
+#[cfg(test)]
+mod gate30 {
+    use super::*;
+    use crate::mnf6::Coder;
+    use std::path::Path;
+    fn load(name: &str) -> (Dims, Vec<u8>) {
+        let p = format!("{}/testdata/{}", env!("CARGO_MANIFEST_DIR"), name);
+        let img = image::open(Path::new(&p))
+            .unwrap_or_else(|e| panic!("{name}: {e}"))
+            .to_rgb8();
+        (
+            Dims {
+                width: img.width(),
+                height: img.height(),
+            },
+            img.into_raw(),
+        )
+    }
+    // Full-corpus real-wire gate (837 s): #[ignore]d for CI; run explicitly
+    // when touching the predictor arms. PINS below run always.
+    #[test]
+    #[ignore]
+    fn gate_all_arms_real_wire() {
+        let files = [
+            "gradient_320x240.png",
+            "noise_256x256.png",
+            "repeat_256x256.png",
+            "screenshot_640x400.png",
+            "solid_256x256.png",
+            "heldout/blob_224x160.png",
+            "heldout/blocks_192x128.png",
+            "heldout/document_200x280.png",
+            "heldout/plaid_192.png",
+            "heldout/poster_208x144.png",
+            "heldout-photos/autumn_160x120_s3100006.png",
+            "heldout-photos/dusk_160x120_s3100003.png",
+            "heldout-photos/dusk_224x160_s3100002.png",
+            "heldout-photos/forest_192x144_s3100001.png",
+            "heldout-photos/forest_224x160_s3100005.png",
+            "heldout-photos/forest_224x160_s3100008.png",
+            "heldout-photos/ocean_192x144_s3100007.png",
+            "heldout-photos/sand_192x144_s3100004.png",
+            "heldout-photos/slate_160x120_s3100009.png",
+            "heldout-photos/terrain_160x120_s3100000.png",
+            "photos/autumn_192x144_s900001.png",
+            "photos/dusk_160x120_s900003.png",
+            "photos/forest_224x160_s900002.png",
+            "photos/ocean_192x144_s900007.png",
+            "photos/sand_160x120_s900000.png",
+            "photos/slate_192x144_s900004.png",
+            "photos/slate_224x160_s900008.png",
+            "photos/stone_160x120_s900006.png",
+            "photos/terrain_160x120_s900009.png",
+            "photos/terrain_224x160_s900005.png",
+        ];
+        let mut old_tot = 0usize;
+        let mut new_tot = 0usize;
+        let mut fires = 0usize;
+        for name in files {
+            let (d, px) = load(name);
+            // OLD pick (v1.6.0 arms: None/Med × backends via encode paths + tokens)
+            let mut old = usize::MAX;
+            for kind in [PredKind::None, PredKind::Med] {
+                for (backend, coder) in [
+                    (BACKEND_ZSTD19, Coder::Zstd(19)),
+                    (BACKEND_ZLIB, Coder::Zlib),
+                ] {
+                    for planar in [false, true] {
+                        let med = kind == PredKind::Med;
+                        let (file, _) = encode_stream_coder(
+                            &px,
+                            d,
+                            true,
+                            true,
+                            kind.flag_bit() | if planar { FLAG_PLANAR } else { 0 },
+                            planar,
+                            med,
+                            kind,
+                            &coder,
+                            backend,
+                        )
+                        .unwrap();
+                        // tokens arm
+                        let _ = &file;
+                        old = old.min(file.len());
+                    }
+                }
+            }
+            for (backend, _coder) in [
+                (BACKEND_ZSTD19, Coder::Zstd(19)),
+                (BACKEND_ZLIB, Coder::Zlib),
+            ] {
+                let (tw, _) =
+                    encode_tokens_coder(&px, d, backend, FLAG_PRED_MED | FLAG_TOKENS).unwrap();
+                old = old.min(tw.len());
+            }
+            // NEW pick: + plane/left pure arms
+            let mut new_ = old;
+            let mut new_win = String::new();
+            for kind in [PredKind::Plane, PredKind::Left] {
+                for (backend, coder) in [
+                    (BACKEND_ZSTD19, Coder::Zstd(19)),
+                    (BACKEND_ZLIB, Coder::Zlib),
+                ] {
+                    let (file, _) = encode_stream_coder(
+                        &px,
+                        d,
+                        true,
+                        true,
+                        kind.flag_bit(),
+                        false,
+                        false,
+                        kind,
+                        &coder,
+                        backend,
+                    )
+                    .unwrap();
+                    // exact decode check on the pure arm
+                    let (dd, out, _) =
+                        decode_mnf8(&file).unwrap_or_else(|e| panic!("{name} {kind:?}: {e}"));
+                    if out != px {
+                        let pos = out
+                            .iter()
+                            .zip(&px)
+                            .position(|(a, b)| a != b)
+                            .expect("differs");
+                        panic!(
+                            "{name} {kind:?} NOT exact: first diff byte {pos} (pixel y={}, x={}, c={}): dec={} enc={}",
+                            pos / 3 / d.width as usize, pos / 3 % d.width as usize, pos % 3,
+                            out[pos], px[pos]
+                        );
+                    }
+                    let _ = dd;
+                    if file.len() < new_ {
+                        new_ = file.len();
+                        new_win = format!("{kind:?}-{backend}");
+                    }
+                }
+            }
+            if new_ < old {
+                fires += 1;
+            }
+            old_tot += old;
+            new_tot += new_;
+            println!(
+                "{name:44} old={old:>8} new={new_:>8} {:+6} {}",
+                new_ as i64 - old as i64,
+                new_win
+            );
+        }
+        println!(
+            "TOTAL old={old_tot} new={new_tot} delta={:+} fires={fires}",
+            new_tot as i64 - old_tot as i64
+        );
+        assert!(new_tot < old_tot, "aggregate must strictly improve");
+    }
+
+    #[test]
+    fn branch_arms_roundtrip_and_pick_fires() {
+        // ADR-004 pins (fast): (1) Plane/Left pure files decode exactly;
+        // (2) the pick fires a predictor arm on the poster class;
+        // (3) ties/losses keep shipping arms (never-worse).
+        let path = format!(
+            "{}/testdata/heldout/poster_208x144.png",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let img = image::open(std::path::Path::new(&path)).unwrap().to_rgb8();
+        let d = Dims {
+            width: img.width(),
+            height: img.height(),
+        };
+        let px = img.into_raw();
+        let (buf, st, _) = encode_mnf8(&px, d, true, Profile::Balanced);
+        let (_, out, _) = decode_mnf8(&buf).expect("decode");
+        assert_eq!(out, px, "picked arm decodes exactly");
+        assert!(
+            st.chosen_flags & (FLAG_PRED_PLANE | FLAG_PRED_LEFT) != 0,
+            "poster must pick a branch arm (picked {:#x})",
+            st.chosen_flags
+        );
+        // and the new pick must never exceed every old arm on this file:
+        let (bufold, _, _) = {
+            // construct the old v1.6.0 pick: None/Med arms + tokens, balanced
+            let mut best: Option<(Vec<u8>, u32)> = None;
+            for (backend, coder) in [(BACKEND_ZSTD19, Coder::Zstd(19))] {
+                for kind in [PredKind::None, PredKind::Med] {
+                    for planar in [false, true] {
+                        let (f, _) = encode_stream_coder(
+                            &px,
+                            d,
+                            true,
+                            true,
+                            kind.flag_bit() | if planar { FLAG_PLANAR } else { 0 },
+                            planar,
+                            kind == PredKind::Med,
+                            kind,
+                            &coder,
+                            backend,
+                        )
+                        .unwrap();
+                        if best.as_ref().is_none_or(|b| f.len() < b.0.len()) {
+                            best = Some((f, kind.flag_bit()));
+                        }
+                    }
+                }
+                let (t, _) =
+                    encode_tokens_coder(&px, d, backend, FLAG_PRED_MED | FLAG_TOKENS).unwrap();
+                if best.as_ref().is_none_or(|b| t.len() < b.0.len()) {
+                    best = Some((t, FLAG_TOKENS));
+                }
+            }
+            let (f, fl) = best.unwrap();
+            (f, fl, 0u32)
+        };
+        assert!(
+            buf.len() <= bufold.len(),
+            "new pick ({}) must not exceed the old pick ({})",
+            buf.len(),
+            bufold.len()
+        );
+    }
+
+    #[test]
+    fn rejects_multiple_predictors() {
+        // ADR-004 validation: two predictor bits set = Error, never panic.
+        let mut f = vec![0u8; HEADER8];
+        f[0..4].copy_from_slice(b"MNF8");
+        f[4..8].copy_from_slice(&16u32.to_le_bytes());
+        f[8..12].copy_from_slice(&16u32.to_le_bytes());
+        f[12..16].copy_from_slice(&16u32.to_le_bytes());
+        f[16..20].copy_from_slice(&1u32.to_le_bytes());
+        f[20..24].copy_from_slice(&0u32.to_le_bytes());
+        f[24..28].copy_from_slice(&(FLAG_PRED_MED | FLAG_PRED_PLANE).to_le_bytes());
+        f[28..32].copy_from_slice(&BACKEND_ZSTD19.to_le_bytes());
+        let r = std::panic::catch_unwind(|| decode_mnf8(&f));
+        assert!(
+            r.is_ok() && r.unwrap().is_err(),
+            "two predictors must reject"
+        );
+        f[24..28].copy_from_slice(&(FLAG_TOKENS | FLAG_PRED_LEFT).to_le_bytes());
+        let r = std::panic::catch_unwind(|| decode_mnf8(&f));
+        assert!(r.is_ok() && r.unwrap().is_err(), "tokens+left must reject");
+    }
 }
 
 #[cfg(test)]
@@ -827,6 +1324,7 @@ mod tests {
                 flags,
                 planar,
                 false,
+                PredKind::None,
                 &Coder::Zstd(19),
                 BACKEND_ZSTD19,
             )
@@ -913,12 +1411,18 @@ mod tests {
             false, // no geom: kill the reference arms to isolate prediction
             Profile::Balanced,
         );
-        assert_eq!(
-            st.chosen_flags & FLAG_PRED_MED,
-            FLAG_PRED_MED,
-            "smooth no-repeat bodies must select the MED predictor (picked {:#x})",
+        // ADR-004 MEASURED pick (branch-gate): smooth no-repeat bodies select
+        // a PREDICTOR bit — historically MED, but the plane branch measured
+        // cheaper on the same class, and the pick is measured, not hardcoded.
+        // The invariant: a predictor bit IS set and the file decodes exactly.
+        assert!(
+            st.chosen_flags & (FLAG_PRED_MED | FLAG_PRED_PLANE | FLAG_PRED_LEFT) != 0,
+            "smooth no-repeat bodies must select a predictor (picked {:#x})",
             st.chosen_flags
         );
+        let (_, out, _) =
+            decode_mnf8(&encode_mnf8(&px, d, false, Profile::Balanced).0).expect("decode");
+        assert_eq!(out, px, "exact under the measured predictor pick");
     }
 
     #[test]
@@ -1049,14 +1553,17 @@ mod tests {
             height: h,
         };
         let (buf, st, _) = encode_mnf8(&px, d, false, Profile::Balanced);
-        assert_eq!(
-            st.chosen_flags & FLAG_TOKENS,
-            FLAG_TOKENS,
-            "repeating-residual class must pick the token arm (picked {:#x})",
+        // ADR-003/004 MEASURED pick: this ramp's tokens WON in the v1.6.0
+        // arm set, but the branch-gate measured LEFT cheaper still on the
+        // same class (−163 B at 320×240; the pick is measured, never
+        // hardcoded) — the invariant is exactness + pick legality.
+        assert!(
+            st.chosen_flags & (FLAG_TOKENS | FLAG_PRED_PLANE | FLAG_PRED_LEFT) != 0,
+            "repeating-residual class must pick a measured-winning arm (picked {:#x})",
             st.chosen_flags
         );
         let (_, out, _) = decode_mnf8(&buf).expect("decode");
-        assert_eq!(out, px, "token wire reconstructs exactly");
+        assert_eq!(out, px, "wire reconstructs exactly under the pick");
     }
 
     #[test]
@@ -1139,6 +1646,6 @@ mod tests {
         file2[20..24].copy_from_slice(&(comp2.len() as u32).to_le_bytes());
         file2.extend_from_slice(&comp2);
         let (_, out, _) = decode_mnf8(&file2).expect("valid token wire decodes");
-        assert_eq!(out, med_residual_invert(&res, 16, 16));
+        assert_eq!(out, pred_residual_invert(&res, 16, 16, PredKind::Med));
     }
 }

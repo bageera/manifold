@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.7.0 — MNF8 ADR-004: branch-prediction flags (PRED_PLANE / PRED_LEFT) (2026-10-28)
+
+The branch-choice retention gate (docs/mnf9-branch-gate.md) PASSED on
+the real wire: per-file pick extended with the two new predictor arms
+totals 958,550 vs the v1.6.0 pick's 1,007,891 (−49,341, −4.9%), fires
+on 27/30 files, never-worse per file by construction, every arm
+decode-asserted exactly (full-corpus gate `#[ignore]`d at 837 s;
+repo-copy of the run output in docs/mnf9-branch-gate.md). Implemented:
+
+- `FLAG_PRED_PLANE` (bit 4): LOCO-I plane branch forced, clamped.
+- `FLAG_PRED_LEFT` (bit 5): pure left predictor.
+- Exactly one predictor bit per file (bits 2/4/5); TOKENS stays MED-only
+  (two-predictor and tokens+left files reject); Plane/Left files are
+  pure mode-0 prediction streams (the measured winning form).
+- Encode-side neighbors read TRUE pixels; decode reads reconstructed —
+  the mod-256 induction glues them; reading the prediction stream
+  instead chains predictions and breaks exactness (the gradient-gate
+  bug, now a normative rule in format.md §3.2).
+- Conformance: mnf8_branch_left_poster golden + two rejections; lib
+  pins (poster must pick a branch arm; never-worse vs the old pick on
+  the same file); the 30-file real-wire gate #[ignore]d (837 s).
+- MNF5-7 untouched; magics unchanged; ADR-004
+  (docs/mnf8-adr-004-branch-pred.md) records the decision.
+
 ## v1.6.0 — MNF8 FLAG_TOKENS: the LZ77-2D token arm ships on the wire (2026-10-28)
 
 ADR-003 ([mnf8-adr-003-tokens.md](docs/mnf8-adr-003-tokens.md)): MNF8 gains
