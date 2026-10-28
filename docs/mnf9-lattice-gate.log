@@ -1,0 +1,37 @@
+file                        cart-med cart-plano left-only  tri-med  hex-med
+gradient_320x240.png            1948       2061      1703     2388     1931
+noise_256x256.png             196674     196674    196674   196674   196674
+repeat_256x256.png              1459       1613      1382     1804     1679
+screenshot_640x400.png          1358       1258      2356     2550     2142
+solid_256x256.png                224        224       520      520      218
+heldout/blob_224x160.png        9230       9074      9718    16718    14395
+heldout/blocks_192x128.png      2119       2127      2371     4405     3756
+heldout/document_200x280.p      1133        962      1050     1157     1129
+heldout/plaid_192.png          38693      27326     47099    65927    55005
+heldout/poster_208x144.png      3365       3380      1390     3435     3874
+heldout-photos/autumn_160x     30374      29136     29705    34431    32444
+heldout-photos/dusk_160x12     18938      17138     21636    27608    24818
+heldout-photos/dusk_224x16     65655      62301     61089    70100    67954
+heldout-photos/forest_192x     48191      46580     44445    51741    50073
+heldout-photos/forest_224x     59395      57594     53388    63438    61469
+heldout-photos/forest_224x     30934      28905     33519    43108    40040
+heldout-photos/ocean_192x1     45621      43644     42061    49813    47588
+heldout-photos/sand_192x14     50752      48966     47479    54402    52488
+heldout-photos/slate_160x1     30081      28952     28085    33135    31595
+heldout-photos/terrain_160     18360      16671     20918    26812    24109
+photos/autumn_192x144_s900     25501      23091     28283    36597    33247
+photos/dusk_160x120_s90000     29452      27468     27733    33160    31322
+photos/forest_224x160_s900     62274      59783     57930    66951    64781
+photos/ocean_192x144_s9000     46508      44453     43472    50668    48665
+photos/sand_160x120_s90000     35058      33939     32943    37593    36312
+photos/slate_192x144_s9000     49459      47734     46223    53071    51309
+photos/slate_224x160_s9000     69840      67528     65784    73831    71905
+photos/stone_160x120_s9000     17056      15515     17559    22871    21420
+photos/terrain_160x120_s90     33811      32696     31189    36052    34975
+photos/terrain_224x160_s90     54875      52363     51100    60848    57951
+
+TOTALS: {'cart': 1078338, 'cartplane': 1029156, 'left': 1048804, 'tri': 1221808, 'hex': 1165268}
+  hex-vs-cart: +86930
+  tri-vs-cart: +143470
+  cart-plane vs cart-med: -49182
+  left-only vs cart-med: -29534

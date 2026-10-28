@@ -84,3 +84,16 @@ split on + one photo smoke. Harness committed:
   equal-distance structure ≠ compression gain; the gain must come from
   data redundancy, and where that redundancy exists the content-keyed
   chain already exploits it at lower search cost.
+
+## Scope of this closure (explicit)
+
+This record closes THREE hypotheses and NO more: (1) Erdős offsets as
+reference-search candidates, (2) Erdős+hash union at a shared budget,
+(3) structured (m, dir) address encoding. It does NOT close alternative
+grid TOPOLOGY as a compression representation: a differently-shaped
+prediction lattice changes the causal-neighborhood structure (who MED's
+neighbors are), which changes the residual plane itself — a
+prediction-context question, not a candidate-search question. That
+hypothesis is Open and is measured separately (mnf9-lattice-probe.md),
+per §11's rule that ordering/traversal claims refine into
+prediction-context claims.
