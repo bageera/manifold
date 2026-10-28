@@ -271,6 +271,20 @@ measured record; the bracketed docs are canonical.
    [mnf8-riemann-conformal-probe]). The denials are part of the science
    record, not footnotes: each one is where a plausible-sounding theorem
    met the counting argument.
+7. **Periodic recurrence must be modeled where it lives — across the whole
+   field — and the win must be attributed to the right mechanism.** The
+   v0.6 lag predictor beats MED on 25/30 corpus files (−8.92% total, period
+   + axis described and counted), but the per-file offsets split the win:
+   photos win at T=1 (the plain vertical-delta predictor — established, a
+   histogram-level entropy effect, not periodic structure) while true
+   periodic content wins at its own period (repeat T=32 −34.0%, poster
+   T=16 −37.5%, document T=10 −17.1%, gradient T=4 −32.9%) — exactly the
+   classes with strong periodic redundancy, at prediction positions
+   throughout the field, unlike the boundary wrap's 1/W lever. The
+   memo's coefficient hybrid a·x[t−1]+b·x[t−T] measured +50…+112% WORSE
+   than pure lag on every T>1 class: at true period T, nonzero weight on
+   x[t−1] injects vertical-delta noise the pure-lag stream does not carry
+   [periodic-prediction-v06-probe].
 
 ## References
 

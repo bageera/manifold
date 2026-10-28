@@ -1,5 +1,32 @@
 # Changelog
 
+## Research — Riemann Array v0.6: periodic structure prediction (2026-10-27)
+
+Measured record; MNF5–8 bitstream unchanged ([periodic-prediction-v06-probe.md](docs/periodic-prediction-v06-probe.md),
+gate log [periodic-prediction-v06-gate.log](docs/periodic-prediction-v06-gate.log),
+probe `scripts/periodic_structure_probe.py`, committed and reproducing).
+
+The v0.6 work order's hypothesis — a predictor recognizing repeated structure
+across the entire signal beats local spatial prediction where periodic
+redundancy exists — **confirmed at mechanism level**: a vertical/horizontal
+period-lag predictor with swept T (1..64), rate-aware whole-image pick, period
++ axis cost counted, exactness asserted per record, beats raster MED on
+**25/30 corpus files (−8.92% total: 426,622 → 388,588 B)**. The per-file
+offsets split the finding honestly: photos all win at **T=1** — the plain
+vertical-delta predictor (established; order-0 residual entropy drops
+~0.6–0.8 bits/symbol vs MED, a histogram effect, not periodic structure) —
+while true periodicity wins at its own period on repeat T=32 (−34.0%),
+poster T=16 (−37.5%), document T=10 (−17.1%), gradient T=4 (−32.9%); MED
+holds on plaid (+11.6%), solid, stone. Known-period synthetics confirm
+(±2-noise exact-period rows −47.5%). The memo's coefficient hybrid
+a·x[t−1]+b·x[t−T] measured **+50…+112% worse than pure lag** on every T>1
+class — at true period, nonzero weight on x[t−1] injects the vertical-delta
+noise component — DENIED; pure lag is the arm. Next decision (separate
+session): the format question splits into a second-whole-image-predictor
+flag (T=1 vertical-delta vs MED rate-aware) and a periodic-lag flag whose
+decisive same-basis comparison is vs the retained MNF9 token arm in the
+repeat/poster/document classes.
+
 ## v1.5.1 — research records: engine ladder + conformal probe (2026-10-27)
 
 Docs-only release; code identical to v1.5.0 (MNF5–8 streams

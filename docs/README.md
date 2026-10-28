@@ -43,6 +43,9 @@ metadata counted and exact reconstruction asserted:
   (single-class candidate).
 - [riemann-array-v05-probe.md](riemann-array-v05-probe.md) — shear-wrap torus
   prediction (1/W lever; 0/30 corpus wins).
+- [periodic-prediction-v06-probe.md](periodic-prediction-v06-probe.md) — periodic
+  structure prediction (25/30 corpus wins, −8.92%; mechanism split T=1 vs true T;
+  coefficient hybrid denied).
 - [webp-hybrid-probe.md](webp-hybrid-probe.md) — WebP-style predictors on the
   MNF8 coder (DENIED) + the fair corpora comparison table.
 - [mnf9-engine-ladder-probe.md](mnf9-engine-ladder-probe.md) — the ladder:
