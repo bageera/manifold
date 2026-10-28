@@ -131,7 +131,13 @@ MNF7 (latest format; the flag predates the MNF7 rename).
   JPEG bytes (decoder-identical outputs only; cross-decoder IDCT varies).
 - The encoder's per-tile cost proxy is local, not globally optimal: the
   atlas can lose to deflate on some content (measured, kept honest).
-- No learned manifolds here — the name is a research direction.
+- No learned manifolds here — the name is a research direction. The
+  research program's measured denials are part of the record:
+  scan-order/metric traversals, ternary residual alphabets, and a
+  Rust-implemented D8+shears format candidate were all gated and
+  non-retained (docs/riemannian-traversal-probe.md,
+  docs/ternary-residuals-probe.md, docs/shear-refs-format-probe.md;
+  verdicts in CHANGELOG).
 
 ## License
 

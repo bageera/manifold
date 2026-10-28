@@ -1,5 +1,34 @@
 # Changelog
 
+## Research — geometry probes, all denied by the retention gate (2026-10-27)
+
+Four measured probes, none retained; the format surface (MNF5–8) is
+unchanged. Each has a standalone record in docs/ with repro numbers:
+
+- Traversal scan orders (docs/riemannian-traversal-probe.md): metric-
+  guided greedy traversal (w(p,q)=√((q−p)ᵀG(p)(q−p))) loses to raster on
+  smooth (3.79×) and plaid (17.5×), ties random, and its single sharp-edge
+  win (0.67×) dies against ~2 bits/px of explicit path metadata under the
+  derivability contract. Hilbert/morton verified bijective then measured —
+  never better than raster+MED on this corpus.
+- Metric-warp predictor context (same doc postscript): measured per-tile,
+  plaid-only −9.2%, +2–4% metadata tax elsewhere → not retained.
+- Ternary residuals (docs/ternary-residuals-probe.md): independent-digit
+  split sits below raw byte entropy on every class (0.61/0.73/1.03
+  ideal-ratios); ternary Golomb ideal 1,822 B > shipping byte+LOCO+z9 at
+  1,212 B.
+- D8+shears format candidate (docs/shear-refs-format-probe.md): the last
+  surviving candidate was implemented end-to-end in Rust (MNF8 flag bit3,
+  10 cyclic shears, MNF6/7 frozen, regression-tested) and reverted after
+  the retention gate measured 30/30 byte-identical corpus sizes — MED + D8
+  already cover the classes where the atlas-only python arm won.
+- Synthetics-only structural rules (slice-repeat 0.48×, torus-phase 0.26×)
+  remain non-format: measured on synthetic classes, no real-corpus benefit
+  (docs/dimensional-fold-probe.md).
+
+Announcement draft approved and left in-repo to soak
+(docs/announcement-draft.md).
+
 ## v1.4.0 — adoption readiness: packaging + API convenience (2026-10-26)
 
 From docs/audit-crate-131.md (published-crate audit):
