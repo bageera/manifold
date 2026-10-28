@@ -15,6 +15,8 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   field + profiles decision record.
 - [mnf8-adr-003-tokens.md](mnf8-adr-003-tokens.md) — MNF8 FLAG_TOKENS
   (LZ77-2D token payload over the MED plane) decision record.
+- [mnf8-adr-004-branch-pred.md](mnf8-adr-004-branch-pred.md) — MNF8
+  PRED_PLANE / PRED_LEFT branch-predictor flags decision record.
 
 ## Measurements (canonical numbers)
 

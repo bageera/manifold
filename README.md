@@ -4,7 +4,7 @@ A lossless RGB8 image codec suite in Rust, built as compression research:
 shared-patch atlas prediction, geometric transforms, rate-aware coding.
 
 Status: MNF5/MNF6/MNF7 frozen formats + MNF8 backend-field format with the
-ADR-003 FLAG_TOKENS token arm (v1.6.0, both ADRs) · hardened decoders
+ADR-003 token arm + ADR-004 branch predictors (v1.7.0) · hardened decoders
 (bounded, checksummed, canonical, fuzzed) · independently validated ·
 normative format spec at
 [docs/format.md](docs/format.md)
@@ -19,7 +19,7 @@ the in-repo crate and lib name stay `manifold`) and **`manifold-codec-capi`**
 | --- | ------ | ----- |
 | `manifold-codec` / `codec::*` (MNF5 encode/decode, `DecodeLimits`) | stable (v1.x semver) | v1.0 |
 | MNF8 (backend field + FLAG_PRED_MED + FLAG_TOKENS, ADR-002/003) | stable (v1.x semver; TOKENS since v1.6) | v1.2.1 |
-| `mnf8::*` MNF8 encode/decode, profiles, `FLAG_PRED_MED`, `FLAG_TOKENS` | stable | v1.2.0 |
+| `mnf8::*` MNF8 encode/decode, profiles, predictor flags (ADR-002/003/004) | stable | v1.2.0 |
 | `error::Error` / `error::Result` (matchable categories) | stable | v1.2.1 |
 | `refdecode::ref_decode` (independent MNF5 decoder) | stable | v1.2.1 |
 | `img` I/O shims (JPEG/PNG) | stable under the default `image-io` feature | v1.0 |

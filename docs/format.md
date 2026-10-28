@@ -295,7 +295,7 @@ the token path's own worst case (§3.1). Total file length MUST be exactly
 ## 3. Records and flags
 
 Flags bitmask (MNF8 superset — MNF6/7 keep bits 2..31 frozen, MNF8 owns
-bits 2-3 by ADR-002/ADR-003):
+bits 2-5 by ADR-002/ADR-003/ADR-004):
 
     bit 0  FLAG_PLANAR    channel-planar record bodies (MNF6/7 semantics)
     bit 1  FLAG_ZSTD      zstd container (MNF7 semantics; MNF8 decodes by
@@ -305,13 +305,17 @@ bits 2-3 by ADR-002/ADR-003):
     bit 2  FLAG_PRED_MED  mode-0 literal bodies carry image-wide MED
                           residuals (decode inverts causally)
     bit 3  FLAG_TOKENS    payload is NOT a record stream — §3.1
-    bits 4..31             RESERVED — decoders MUST reject
+    bit 4  FLAG_PRED_PLANE mode-0 literal bodies carry image-wide
+                          LOCO-I-plane residuals (a+b−cc, clamped) — §3.2
+    bit 5  FLAG_PRED_LEFT  mode-0 literal bodies carry image-wide LEFT
+                          residuals — §3.2
+    bits 6..31             RESERVED — decoders MUST reject
 
-Without FLAG_TOKENS, records are EXACTLY MNF7's (docs/format.md §3/§MNF7):
-modes 0-5, FLAG_PLANAR layout semantics. The record walker is shared with
-the MNF7 decoder (src/mnf6.rs::decode_record_walk). PLANAR and TOKENS are
-mutually exclusive — decoders MUST reject the combination (the token
-plane is interleaved by definition; no encoder emits it).
+At most ONE predictor bit {PRED_MED, PRED_PLANE, PRED_LEFT} may be set;
+multiple are rejected. TOKENS implies MED (its payload IS the MED
+residual wire): TOKENS+{PLANE,LEFT} rejected. Without FLAG_TOKENS,
+records are EXACTLY MNF7's; the record walker is shared with the MNF7
+decoder. PLANAR and TOKENS are mutually exclusive.
 
 ### 3.1 FLAG_TOKENS payload (ADR-003, 2026-10-28)
 
@@ -347,12 +351,39 @@ Conformance: tests/conformance/mnf8_tokens_gradient_64x64.mnf8 (golden,
 byte-exact) + rejections rej_mnf8_tokens_planar.mnf8 (PLANAR|TOKENS) and
 rej_mnf8_tokens_flag.mnf8 (reserved bit 4).
 
+### 3.2 FLAG_PRED_PLANE / FLAG_PRED_LEFT payloads (ADR-004, 2026-10-28)
+
+Record layout is MNF7's; mode-0 literal bodies carry the image-wide
+residual of the SELECTED predictor instead of MED's:
+
+    PRED_PLANE: pred(x,y) = clamp(a + b − cc, 0, 255)
+    PRED_LEFT:  pred(x,y) = a        (the left neighbor)
+
+with (a, b, cc) = (left, above, above-left) causal neighbors, edges
+identical to the PRED_MED walk: pixel (0,0) predicts 127; the top row
+predicts from the left; the left column predicts from above. These
+files are PURE prediction streams — every record is mode 0 (the
+measured winning form; the ADR-004 decoder rejects any other mode byte
+under these flags). Inversion is the same causal walk as PRED_MED's,
+exact by the mod-256 identity.
+
+Encode-side neighbor reads are from TRUE pixels; decode-side from
+reconstructed pixels — the mod-256 induction makes them identical
+(reconstructed-earlier == true). Reading the PREDICTION stream on the
+encode side would chain predictions and break exactness (the bug the
+gradient gate caught; the rule is normative here).
+
+Conformance: tests/conformance/mnf8_branch_left_poster.mnf8 (golden) +
+rejections rej_mnf8_two_predictors.mnf8 (MED|PLANE) and
+rej_mnf8_tokens_left.mnf8 (TOKENS|LEFT).
+
 ## 4. Encoder profiles (informative; not a wire property)
 
 - balanced (default): zstd-19 pinned; flags measured as MNF7 measures
   (planar vs interleaved under zstd) PLUS the ADR-003 token arm
-  (PRED_MED|TOKENS), all competing by final file size. The winner's
-  flags id is recorded in the stats (`chosen_flags`).
+  (PRED_MED|TOKENS) and ADR-004's Plane/Left pure predictor arms, all
+  competing by final file size. The winner's flags id is recorded in
+  the stats (`chosen_flags`).
 - Arm controls for ablations: `use_atlas` (references at all) and
   `use_geom` (D8 transforms; false = exact references only, t=0,
   codec.rs v0.5 semantics). Shared YCoCg mode 3 and the planar layout
@@ -368,9 +399,12 @@ rej_mnf8_tokens_flag.mnf8 (reserved bit 4).
 ## 5. Versioning
 
 MNF8 = MNF7 semantics + 4-byte backend field (new magic per the freeze
-rule), extended by FLAG_TOKENS (§3.1; ADR-003) without a magic change —
-the token payload needs no new record grammar, only the flag bit.
-Conformance vectors under tests/conformance/ are extended with MNF8
-golden + rejection vectors (unknown backend, reserved backend, reserved
-flag bit, bad magic) plus the token set (golden mnf8_tokens_gradient,
-PLANAR|TOKENS and reserved-bit rejections).
+rule), extended by FLAG_TOKENS (§3.1; ADR-003) and the branch-predictor
+flags (§3.2; ADR-004) without a magic change — the token payload needs
+no new record grammar, and the plane/left predictors need only flag
+bits on unchanged records. Conformance vectors under tests/conformance/
+are extended with MNF8 golden + rejection vectors (unknown backend,
+reserved backend, reserved flag bit, bad magic) plus the token set
+(golden mnf8_tokens_gradient, PLANAR|TOKENS and reserved-bit
+rejections) and the branch set (golden mnf8_branch_left_poster,
+two-predictors and tokens+left rejections).
