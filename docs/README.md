@@ -68,6 +68,11 @@ metadata counted and exact reconstruction asserted:
   worse everywhere); (m,dir) address coding DENIED (u8 coordinate pair
   beats any structured address); blob far-offset signal recorded, not
   retained.
+- [mnf9-lattice-probe.md](mnf9-lattice-probe.md) — grid-topology
+  ablation: hex/tri causal lattices DENIED (+8.1%/+13.3%); algebraic
+  coordinates = analytic no-op tie; the measured discovery is the
+  branch-choice family (LOCO-I-plane −4.6%, left-only per-file arm),
+  MNF8-compatible and cheap.
 
 Earlier research notes: [v07-charts-replication.md](v07-charts-replication.md),
 [cy01-torus.md](cy01-torus.md), [dimensional-fold-probe.md](dimensional-fold-probe.md),
