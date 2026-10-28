@@ -1,6 +1,6 @@
 [package]
 name = "manifold-codec-capi"
-version = "1.5.0"
+version = "1.5.1"
 edition = "2021"
 rust-version = "1.91"
 description = "C FFI for the Manifold lossless RGB8 codecs"
@@ -13,7 +13,7 @@ name = "manifold_capi"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-manifold-codec = { path = "../..", version = "1.5.0" }
+manifold-codec = { path = "../..", version = "1.5.1" }
 
 [package.metadata.notes]
 stability = "C ABI v1: never panics on caller data; all fallibility through status codes"
