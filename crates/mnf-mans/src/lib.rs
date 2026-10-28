@@ -315,3 +315,5 @@ mod tests {
         assert!(mixed > 0 && zlib > 0);
     }
 }
+
+pub mod mnf10;

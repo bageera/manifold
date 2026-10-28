@@ -120,11 +120,11 @@ def piecewise_plane(w, h, segs):
     out = np.zeros((w, 3), dtype=np.int64)
     wx = 0
     for i, (a, b, frac) in enumerate(segs):
-        n = w if i == len(segs) - 1 else int(round(w * frac))
-        seg_x = np.clip(x - wx, 0, None)
+        n = (w - wx) if i == len(segs) - 1 else int(round(w * frac))
         seg_w = max(n - 1, 1)
+        seg_x = np.clip(x[wx:wx + n] - wx, 0, seg_w)
         for c in range(3):
-            out[wx:wx + n, c] = a[c] + (np.clip(seg_x[wx:wx + n], 0, seg_w) * (b[c] - a[c])) // seg_w
+            out[wx:wx + n, c] = a[c] + (seg_x * (b[c] - a[c])) // seg_w
         wx += n
         if wx >= w:
             break
@@ -162,14 +162,14 @@ def build_corpus():
                   + np.random.RandomState(11).randint(-1, 2, (120, 160, 3))) .clip(0, 255).astype(np.uint8), "noisy")
     add("solid", solid_plane(160, 120, (7, 7, 7)), "solid")
     # editor-generated: Pillow's own linear gradient (float, its convention)
-    lg = Image.linear_gradient("L")  # 256x256
-    rgblg = np.asarray(lg.convert("RGB"), dtype=np.uint8)
+    lg = Image.linear_gradient("L")  # 256x256, value(y)=y exactly
+    add("pillow_gradient", np.asarray(lg.convert("RGB"), dtype=np.uint8), "editor")
     try:
         RS = Image.Resampling.NEAREST
     except AttributeError:
         RS = Image.NEAREST
     rgblg = np.asarray(lg.convert("RGB").resize((160, 120), RS), dtype=np.uint8)
-    add("pillow_gradient", rgblg, "editor")
+    add("pillow_resized", rgblg, "resize-kernel")
     # held-out: same generator SET, different endpoints/step/dims, never tuned on
     E2 = [(5, 250), (100, 250), (1, 254)]
     add("h_exact_floor", lerp_floor_plane(144, 96, E2), "exact-floor", heldout=True)
@@ -517,6 +517,9 @@ def evaluate(P, w, h):
     rows.append(model_row("bilin_joint", ok, params, plane_u8, pred))
     ok, params, pred = fit_bilinear(plane_u8, joint=False)
     rows.append(model_row("bilin_nested", ok, params, plane_u8, pred))
+    ok, params, pred, nseg = fit_piecewise(plane_u8)
+    if ok:
+        rows.append(model_row(f"piecewise(nseg={nseg})", ok, params, plane_u8, pred))
     return rows
 
 
@@ -534,6 +537,109 @@ def model_row(name, ok, params, P_true, P_pred):
     payload = min(z9(planar), z9(inter), z19(planar), z19(inter))
     resid = 32 + idb + len(params) + payload
     return (name, ok, exact, resid, len(params))
+
+
+
+
+def fit_piecewise(P, max_segments=4):
+    """Per-segment div-1D ramps along x, rows constant. Greedy left-to-right:
+    extend a segment while a (D-table) per-channel solve succeeds; cut where
+    it fails. Segment boundaries ARE transmitted parameters (charged)."""
+    h, w, _ = P.shape
+    plane = P.astype(np.int64)
+    if not np.array_equal(plane, np.repeat(plane[:1], h, axis=0)):
+        return False, None, None, None
+    row = plane[0]                       # (w,3)
+    # Greedy segmentation: segments must hold for ALL channels with one
+    # boundary set; grow [a, b) over channels while a per-segment D-table
+    # solve succeeds for every channel, cut where it fails.
+    bounds = []
+    seg_params = []
+    a = 0
+    x = np.arange(w, dtype=np.int64)
+    while a < w:
+        best_b = None
+        best_entry = None
+        fails_run = 0
+        last_ok_len = 2
+        for b in range(a + 2, w + 1):
+            entry = []
+            okall = True
+            segD = sorted({1, 2, 4, max(b - a - 1, 1), max(b - a, 1)})
+            for c in range(3):
+                col = row[a:b, c]
+                seg_x = x[a:b] - a
+                sol = None
+                for D in segD:
+                    sol = solve_div_1d_shifted(col, seg_x, b - a, D)
+                    if sol is not None:
+                        entry.append((D, sol[0], sol[1]))
+                        break
+                if sol is None:
+                    okall = False
+                    break
+            if okall:
+                best_b = b
+                best_entry = entry
+                fails_run = 0
+                last_ok_len = b - a
+            else:
+                fails_run += 1
+                # segment can't extend past 3x its last-good length without
+                # a success (bounded scan; generous vs rounding-jitter gaps)
+                if best_b is not None and b - a > 3 * last_ok_len:
+                    break
+        if best_b is None:                     # cannot even fit 2 px: give up
+            return False, None, None, None
+        bounds.append(a)
+        seg_params.append(best_entry)
+        a = best_b
+        if len(bounds) > max_segments:
+            return False, None, None, None
+    # wire: nseg, boundaries, per-segment per-channel params + D
+    wire = varint(len(bounds))
+    for b in bounds:
+        wire += varint(b)
+    for entry in seg_params:
+        for (D, N, T) in entry:
+            wire += svarint(N) + svarint(T) + varint(D)
+    preds = np.zeros((w, 3), dtype=np.int64)
+    for si, a in enumerate(bounds):
+        b = bounds[si + 1] if si + 1 < len(bounds) else w
+        seg_x = x[a:b] - a
+        for c in range(3):
+            (D, N, T) = seg_params[si][c]
+            preds[a:b, c] = (N * seg_x + T) // D
+    ok = np.array_equal(preds, row)
+    assert ok, "piecewise reconstruction must equal row"
+    return True, wire, np.repeat(preds[None], h, 0), len(bounds)
+
+
+def solve_div_1d_shifted(col, seg_x, n, D):
+    """(N*x+T)//D == col for x in seg_x (segment-local shift), via interval
+    intersection (same bounded solver as solve_div_1d)."""
+    if n < 2:
+        return None
+    v0 = int(col[0])
+    slope = (int(col[-1]) - v0) * D / max(int(seg_x[-1]), 1)
+    xlast = int(seg_x[-1])
+    out = None
+    for N in range(round(slope) - 2, round(slope) + 3):
+        lo, hi = v0 * D, v0 * D + D - 1
+        for k, xi in enumerate(seg_x[1:], start=1):
+            tl = int(col[k]) * D - N * int(xi)
+            lo = max(lo, tl)
+            hi = min(hi, tl + D - 1)
+            if lo > hi:
+                break
+        if lo <= hi:
+            for T in range(lo, hi + 1):
+                if np.array_equal((N * seg_x + T) // D, col):
+                    out = (N, T)
+                    break
+        if out:
+            break
+    return out
 
 
 # ------------------------------------------------------------------ baseline
