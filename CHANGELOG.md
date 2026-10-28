@@ -1,5 +1,21 @@
 # Changelog
 
+## Research — MNF10 generative-function discovery (2026-10-28, probe track opens)
+
+Exact generative models (integer div-form polynomials, constant, joint/
+nested bilinear, finite-difference recurrences) measured as candidate
+arms against the v1.9.0 shipping pick on Jon's adversarial exact-integer
+corpus (15 files incl. held-out): 12/15 beat the shipping selector,
+aggregate −13,545 (−42%) — e.g. floor-lerp gradient 115 → 50 B, editor-
+style nested-round bilinear 5,230 → 52 B — with verified exactness
+(independent recompute) and zero regressions (no exact rule → pick wins).
+Rounding convention, not fit quality, decides family membership. The
+exact/residual distinction maps one-to-one onto the measured
+quantization-floor boundary. Retention/promotion is now a format
+decision (new record grammar); this probe closes discovery only.
+Probe: crates/mnf-mans/scripts/generative_probe.py; record:
+docs/mnf10-genfunc-discovery-probe.md.
+
 ## v1.9.0 — MNF8 ADR-005 + ADR-006: TAG_NEAR + matcher candidate depth (2026-10-28)
 
 Two encoder-side rungs shipped together (release of record v1.8.0's

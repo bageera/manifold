@@ -21,6 +21,8 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   TAG_NEAR narrow-coordinate matches decision record.
 - [mnf8-adr-006-matcher-depth.md](mnf8-adr-006-matcher-depth.md) — token
   matcher candidate depth (two-arm pick) decision record.
+- [mnf10-genfunc-discovery-probe.md](mnf10-genfunc-discovery-probe.md) —
+  exact generative-function discovery probe (MNDF10 track opener).
 
 ## Measurements (canonical numbers)
 
