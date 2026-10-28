@@ -1,0 +1,10 @@
+== SYNTH (constructed classes, exactness structural) ==
+sin-0.25cycle-x                    med+z9=     229 left=     801 windowed=     991 torus-tied=     975 
+sin-0.5cycle-x                     med+z9=     263 left=     835 windowed=    1124 torus-tied=    1025 
+sin-1.7cycle-y                     med+z9=     476 left=     962 windowed=     623 torus-tied=     542 
+sin-2d                             med+z9=    4064 left=    4139 windowed=   51143 torus-tied=   44925 
+== REAL CORPUS (no-false-win invariant) ==
+gradient_320x240.png               med+z9=    1696 left=    1635 windowed=  148032 torus-tied=  209576 
+screenshot_640x400.png             med+z9=    1354 left=    2352 windowed=    5044 torus-tied=   35698 
+stone_160x120_s900006.png          med+z9=   17078 left=   17552 windowed=   28309 torus-tied=   27799 
+slate_192x144_s900004.png          med+z9=   49343 left=   46153 windowed=   58546 torus-tied=   54615 
