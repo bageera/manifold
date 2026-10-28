@@ -1,5 +1,33 @@
 # Changelog
 
+## Research — MMF9 engine ladder + conformal probe (2026-10-27)
+
+Two more measured records; MNF5–8 bitstream unchanged.
+
+- **MNF9 engine ladder** ([mnf9-engine-ladder-probe.md](docs/mnf9-engine-ladder-probe.md)):
+  four arms, one token cost model, in-sim decode asserted. Arm B
+  (LZ77-2D tokens over MED residuals) is the first measured strict
+  win of the geometry program: gradient −74% (1,639→419 B), solid
+  −34% (62→41, beating WebP's 44), blocks −6% — and loses +8…18% on
+  photos when forced everywhere (TOTAL 1.151× MNF8), so the retained
+  form is a rate-aware per-file pick. Arms C/D (matrix-composed
+  chart matches in the token stream, shared transform dictionary,
+  factorization T = T₃T₂T₁): measured dead — zero chart-match firing
+  on photos, ≤1% on two synthetics, dictionary saves nothing at this
+  alphabet size. The matrix-representation idea reduces to the
+  shipping MNF8 chart grammar at this corpus scale.
+- **MNF8-Riemann conformal probe** ([mnf8-riemann-conformal-probe.md](docs/mnf8-riemann-conformal-probe.md)):
+  square→disk conformal guidance (Riemann 1851, Schwarz–Christoffel
+  verified) is an analytic no-op for causal prediction — angle
+  preservation makes the neighbor ranking position-invariant — and
+  the atlas window spans ≤0.2% of the conformal scale variation, so
+  `d_f` degenerates to a monotone warp of the Euclidean distance
+  (measured: control differs by weight-tuning noise on every file).
+  The anisotropic orientation tiebreak shows a real but single-class
+  effect (document −5.5%, everything else ≤0.1%): recorded, not
+  retained; the one live MNF8-compatible candidate for text-heavy
+  corpora.
+
 ## v1.5.0 — research soak: benches + measured denials, format surface unchanged (2026-10-27)
 
 Library release pairing the research block with the developer benching

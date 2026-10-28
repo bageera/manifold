@@ -133,11 +133,17 @@ MNF7 (latest format; the flag predates the MNF7 rename).
   atlas can lose to deflate on some content (measured, kept honest).
 - No learned manifolds here — the name is a research direction. The
   research program's measured denials are part of the record:
-  scan-order/metric traversals, ternary residual alphabets, and a
-  Rust-implemented D8+shears format candidate were all gated and
+  scan-order/metric traversals, ternary residual alphabets, a
+  Rust-implemented D8+shears format candidate, conformal square→disk
+  guidance, and matrix-composed chart matching were all gated and
   non-retained (docs/riemannian-traversal-probe.md,
-  docs/ternary-residuals-probe.md, docs/shear-refs-format-probe.md;
-  verdicts in CHANGELOG).
+  docs/ternary-residuals-probe.md, docs/shear-refs-format-probe.md,
+  docs/mnf8-riemann-conformal-probe.md,
+  docs/mnf9-engine-ladder-probe.md; verdicts in CHANGELOG).
+- The one open format candidate: a rate-aware LZ77-token arm over MED
+  residuals (MNF9 engine; measured gradient −74%, solid −34%, blocks
+  −6% with the per-file pick refusing it where it loses — the
+  ladder record above).
 
 ## License
 
