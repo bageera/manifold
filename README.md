@@ -96,7 +96,7 @@ make fuzz        # bounded mutation fuzzer (must exit 0)
 
 ## Build and run
 
-Requires Rust stable (crate pins MSRV 1.73+) and crates.io access.
+Requires Rust stable (crate pins MSRV 1.91) and crates.io access.
 
     cargo build --release
     cargo test                    # debug; release runs the exhaustive proofs
@@ -117,7 +117,11 @@ MNF7 (latest format; the flag predates the MNF7 rename).
 
 ## Repository map
 
+- [docs/README.md](docs/README.md) — docs index (specs, measurements, research
+  records, audits)
 - [docs/format.md](docs/format.md) — normative specs (MNF5/MNF6/MNF7) + freeze stamp
+- [docs/science.md](docs/science.md) — the principles behind the mechanisms
+  (information theory, coding theory, MDL, measured research principles §11)
 - [docs/adr-001-color-transform.md](docs/adr-001-color-transform.md) — color-transform ADR
 - [docs/benchmarks.md](docs/benchmarks.md) — measured tables + held-out corpus
 - [CHANGELOG.md](CHANGELOG.md) — every milestone
