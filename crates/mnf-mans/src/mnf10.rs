@@ -192,13 +192,13 @@ pub fn decode_payload(payload: &[u8], w: u32, h: u32) -> Result<Vec<u8>, Error> 
                 let mut botrow = vec![0i64; wu];
                 for x in 0..wu {
                     let xi = x as i64;
-                    toprow[x] = v00 + (xi * (v10 - v00) + hx) / dx;
-                    botrow[x] = v01 + (xi * (v11 - v01) + hx) / dx;
+                    toprow[x] = v00 + (xi * (v10 - v00) + hx).div_euclid(dx);
+                    botrow[x] = v01 + (xi * (v11 - v01) + hx).div_euclid(dx);
                 }
                 for y in 0..hu {
                     let yi = y as i64;
                     for x in 0..wu {
-                        let val = toprow[x] + (yi * (botrow[x] - toprow[x]) + hy) / dy;
+                        let val = toprow[x] + (yi * (botrow[x] - toprow[x]) + hy).div_euclid(dy);
                         if !(0..=255).contains(&val) {
                             return Err(Error::fmt_msg("mnf10: nested value out of range"));
                         }
