@@ -838,7 +838,7 @@ pub fn med_predict(rgb: &[u8], w: usize, h: usize) -> Vec<u8> {
 }
 
 #[inline]
-fn med_predict_pixel(a: u32, b: u32, cc: u32) -> u32 {
+pub(crate) fn med_predict_pixel(a: u32, b: u32, cc: u32) -> u32 {
     let plane = a as i64 + b as i64 - cc as i64;
     let flat = (a >= b && a >= cc && b >= cc) || (a <= b && a <= cc && b <= cc);
     if flat {

@@ -38,3 +38,5 @@ pub mod mnf6;
 pub mod mnf8;
 /// Independent MNF5 decoder (differential-testing instrument).
 pub mod refdecode;
+/// LZ77-2D token engine (MNF8 `FLAG_TOKENS`; the retained ladder arm).
+pub mod tokens;

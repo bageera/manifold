@@ -33,7 +33,7 @@ def main() -> int:
     panics = accepted = rejected = 0
     total = 0
     for img in images:
-        for extra in ([], ["--geom"], ["--mnf6"], ["--mnf8"]):
+        for extra in ([], ["--geom"], ["--mnf6"], ["--mnf8"], ["--mnf8=maximum"]):
             subprocess.run(
                 [BIN, "encode", str(img), "-o", "/tmp/fz_base.mnf5", *extra],
                 check=True, capture_output=True,
@@ -59,7 +59,7 @@ def main() -> int:
                     accepted += 1
                 elif r.returncode == 101:
                     panics += 1
-                    print(f"PANIC {img.name} {'geom' if '--geom' in extra else 'mnf6' if '--mnf6' in extra else ''} trial {trial}: {r.stderr[-200:]}", file=sys.stderr)
+                    print(f"PANIC {img.name} {'geom' if '--geom' in extra else 'mnf6' if '--mnf6' in extra else 'mnf8max' if '--mnf8=maximum' in extra else ''} trial {trial}: {r.stderr[-200:]}", file=sys.stderr)
                 else:
                     rejected += 1
 

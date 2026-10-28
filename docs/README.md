@@ -13,6 +13,8 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   residuals decision record.
 - [adr-002-entropy-backends.md](adr-002-entropy-backends.md) — MNF8 backend
   field + profiles decision record.
+- [mnf8-adr-003-tokens.md](mnf8-adr-003-tokens.md) — MNF8 FLAG_TOKENS
+  (LZ77-2D token payload over the MED plane) decision record.
 
 ## Measurements (canonical numbers)
 

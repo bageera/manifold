@@ -257,7 +257,8 @@ at most 4 extra mode bytes vs MNF6 on streams that never choose it.
 
 Status: implemented (`--mnf8[=balanced|maximum]` emits MNF8; superset of
 MNF7). MNF5/MNF6/MNF7 files remain readable by their own decoders; the
-MNF8 decoder accepts only the `MNF8` magic. ADR: docs/adr-002-entropy-backends.md.
+MNF8 decoder accepts only the `MNF8` magic. ADRs: docs/adr-002-entropy-backends.md
+(backend field), docs/mnf8-adr-003-tokens.md (FLAG_TOKENS).
 
 ## 1. Container
 
@@ -269,11 +270,12 @@ MNF8 decoder accepts only the `MNF8` magic. ADR: docs/adr-002-entropy-backends.m
     12  4   tile_size        u32 LE, MUST be 16
     16  4   tile_count       u32 LE, MUST equal ceil(width/16)*ceil(height/16)
     20  4   payload_len      u32 LE, MUST be <= 2^31 - 1
-    24  4   flags            u32 LE bitmask — MNF7 semantics (§2)
+    24  4   flags            u32 LE bitmask — §3
     28  4   backend          u32 LE identifier (§2)
 
 Validation order and bounds are those of MNF5/MNF6 (docs/format.md §1), plus
-the mode-3-aware decompression bound. Total file length MUST be exactly
+the mode-3-aware decompression bound; when FLAG_TOKENS is set the bound is
+the token path's own worst case (§3.1). Total file length MUST be exactly
 `32 + payload_len`.
 
 ## 2. Backend identifier
@@ -292,15 +294,65 @@ the mode-3-aware decompression bound. Total file length MUST be exactly
 
 ## 3. Records and flags
 
-Records and the flags bitmask are EXACTLY MNF7's (docs/format.md §3/§MNF7):
-modes 0-5, FLAG_PLANAR layout semantics, reserved-bit rejection. The record
-walker is shared with the MNF7 decoder (src/mnf6.rs::decode_record_walk).
+Flags bitmask (MNF8 superset — MNF6/7 keep bits 2..31 frozen, MNF8 owns
+bits 2-3 by ADR-002/ADR-003):
+
+    bit 0  FLAG_PLANAR    channel-planar record bodies (MNF6/7 semantics)
+    bit 1  FLAG_ZSTD      zstd container (MNF7 semantics; MNF8 decodes by
+                          the backend field instead — bit 1 is accepted
+                          for MNF7-record parity and MUST be 0 in MNF8
+                          files written by this encoder)
+    bit 2  FLAG_PRED_MED  mode-0 literal bodies carry image-wide MED
+                          residuals (decode inverts causally)
+    bit 3  FLAG_TOKENS    payload is NOT a record stream — §3.1
+    bits 4..31             RESERVED — decoders MUST reject
+
+Without FLAG_TOKENS, records are EXACTLY MNF7's (docs/format.md §3/§MNF7):
+modes 0-5, FLAG_PLANAR layout semantics. The record walker is shared with
+the MNF7 decoder (src/mnf6.rs::decode_record_walk). PLANAR and TOKENS are
+mutually exclusive — decoders MUST reject the combination (the token
+plane is interleaved by definition; no encoder emits it).
+
+### 3.1 FLAG_TOKENS payload (ADR-003, 2026-10-28)
+
+Payload := container-codec(token_wire). The wire encodes the image-wide
+MED residual plane, `R[i] = (pixels[i] - MED[i]) mod 256`, interleaved
+RGB8 row-major, MED per docs/format.md §MNF7 predictor definition
+(first pixel 127, top row = left, left col = above, interior =
+edge-sense a+b−cc branch).
+
+    tag 0 literal:  0x00, b, g, r          (1 + 3 B; one residual pixel)
+    tag 1 match:    0x01, dx:u16, dy:u16, len:u8
+                                          (1 + 5 B; len >= 7 pixels)
+    dist = dy*width + dx pixels; the match source starts dist pixels
+    earlier in the plane; copies are byte-forward (overlapping copies
+    are exact LZ77 self-referential runs). len counts PIXELS.
+
+Decoders MUST verify: unknown tags → reject; truncation → reject;
+len < 7 → reject; dist == 0 or source beyond the decode cursor → reject;
+any overrun of the w*h*3 plane or a final size mismatch → reject; the
+wire MUST consume exactly the decompressed payload (trailing bytes are
+structurally impossible — a literal overruns the plane — and therefore
+reject). Reconstruction: rebuild R, then invert causally in raster
+order: pixels[i] = (R[i] + MED(causal reconstructed neighbors)) mod 256 —
+exact by the mod-256 induction (reconstructed earlier pixels are the
+true ones), identical to the FLAG_PRED_MED in-walker inversion.
+
+Decompression bound for token payloads: 4 * width * height bytes (worst
+case = an all-literal wire at 4 B/px; this EXCEEDS the record bound on
+large images, so token files do not inherit the record bound — the
+mode-3 lesson).
+
+Conformance: tests/conformance/mnf8_tokens_gradient_64x64.mnf8 (golden,
+byte-exact) + rejections rej_mnf8_tokens_planar.mnf8 (PLANAR|TOKENS) and
+rej_mnf8_tokens_flag.mnf8 (reserved bit 4).
 
 ## 4. Encoder profiles (informative; not a wire property)
 
 - balanced (default): zstd-19 pinned; flags measured as MNF7 measures
-  (planar vs interleaved under zstd). The winner's flags id is recorded
-  in the stats (`chosen_flags`).
+  (planar vs interleaved under zstd) PLUS the ADR-003 token arm
+  (PRED_MED|TOKENS), all competing by final file size. The winner's
+  flags id is recorded in the stats (`chosen_flags`).
 - Arm controls for ablations: `use_atlas` (references at all) and
   `use_geom` (D8 transforms; false = exact references only, t=0,
   codec.rs v0.5 semantics). Shared YCoCg mode 3 and the planar layout
@@ -316,6 +368,9 @@ walker is shared with the MNF7 decoder (src/mnf6.rs::decode_record_walk).
 ## 5. Versioning
 
 MNF8 = MNF7 semantics + 4-byte backend field (new magic per the freeze
-rule). Conformance vectors under tests/conformance/ are extended with MNF8
+rule), extended by FLAG_TOKENS (§3.1; ADR-003) without a magic change —
+the token payload needs no new record grammar, only the flag bit.
+Conformance vectors under tests/conformance/ are extended with MNF8
 golden + rejection vectors (unknown backend, reserved backend, reserved
-flag bit, bad magic).
+flag bit, bad magic) plus the token set (golden mnf8_tokens_gradient,
+PLANAR|TOKENS and reserved-bit rejections).
