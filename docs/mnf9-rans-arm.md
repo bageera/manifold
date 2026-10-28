@@ -83,3 +83,28 @@ The pick rule absorbs everything measured here:
   per-file in the log (flate2-vs-python-zlib ±1.5% as known).
 - Full log: /tmp/mnf9_rans_gate.log; committed harness:
   crates/mnf-mans/scripts/rans_gate.py + bridge9.
+
+## Honest re-measure (2026-10-28, full model transport — SHIPPED-WIRE accounting)
+
+The Results/Verdict numbers above undercounted the model transport: the
+prototype's `compressed_len` charged `used.len()/8` bitmap bytes + 4 B
+framing but did NOT charge (a) the fixed-point probability words per
+sub-stream, (b) the used-SYMBOL VALUES themselves (a bitmap over the
+used list is not decodable without them), or (c) real stream framing.
+A shipped wire MUST carry all three (decodability discipline). The
+shipped-form re-measure (src instrument test, since removed; constriction
+0.5, same models, distinct-value list transport + prob words counted):
+
+    document_200x280 MED residual: zlib-9 = 955 B, rans wire = 3,132 B (3.28×)
+    screenshot_640x400 MED residual: zlib-9 = 1,269 B, rans wire = 2,332 B (1.84×)
+
+The gate-record classes (−34%/−23%) were artifacts of transport
+undercounting, exactly the record-framing-overhead lesson from the
+branch gate: measured claims must use the ACTUAL wire shape.
+
+## Verdict: backend-3 rANS arm — DENIED (honest transport)
+
+Backend 3 stays reject-on-decode. rANS remains a research instrument
+(crates/mnf-mans); the promotion rung is closed. If a future coder
+beats the container WITH model transport counted, reopen with a wire-
+exact instrument first.

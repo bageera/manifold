@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.9.0 — MNF8 ADR-005 + ADR-006: TAG_NEAR + matcher candidate depth (2026-10-28)
+
+Two encoder-side rungs shipped together (release of record v1.8.0's
+TAG_NEAR with the rung-2 result folded in):
+
+ADR-005 TAG_NEAR: the Erdős address study's measurement (dy fits u8 on
+every corpus match) as a self-describing tag-2 token form (dx u8, dy u8,
+len — 4 B vs 6 B), emitted when both coordinates fit a byte, with the
+matcher preferring nearer candidates on equal length. No per-file flag;
+1.6/1.7.0 decoders reject tag 2 as unknown. Real-wire 30-file sweep:
+−56,390 (−5.6%), fires 28/30 (repeat −44%, gradient −39%, blob −31%,
+plaid −25%, screenshot −13%).
+
+ADR-006 matcher depth: the far-offset rung measured and CLOSED. The
+tokens arm is measured at caps 16 AND 1024 (deep content-keyed chains,
+still no geometry); the pick absorbs the choice. Decode unchanged, wire
+unchanged, no new flags. Two-arm sweep −46 (document −24, screenshot
+−22; blocks regression absorbed). The blob −12.4% far-offset signal does
+not survive the file-level pick (record arm 5,986 B wins at every cap);
+the Erdős far-offset revisit trigger is consumed.
+
+rANS backend-3: honest-transport re-measure (full model words + symbol
+list + framing) DENIED the promotion — backend 3 stays reject-on-decode;
+docs/mnf9-rans-arm.md carries the corrected accounting. Constric­tion
+stays a research-crate dep only (mnf-mans); the published lib's dep set
+is unchanged.
+
 ## v1.8.0 — MNF8 ADR-005: token-wire TAG_NEAR narrow-coordinate matches (2026-10-28)
 
 The Erdős probe's address study measured `dy` fits u8 on every corpus

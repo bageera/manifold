@@ -29,7 +29,7 @@ use crate::error::Error;
 /// Match minimum length in pixels.
 pub const MIN_MATCH_PX: usize = 7;
 /// Match search window in pixels (the measured arm-B window).
-pub const WINDOW_PX: usize = 1 << 16;
+pub const WINDOW_PX: usize = 1 << 24;
 /// Wire tag: one residual pixel follows (3 bytes).
 pub const TAG_LITERAL: u8 = 0;
 /// Wire tag: dx(2) dy(2) len(1) follow; copies len pixels from dist back.
@@ -41,7 +41,9 @@ pub const TAG_NEAR: u8 = 2;
 /// simply emits consecutive tokens).
 const MAX_MATCH_BYTES: usize = 255;
 /// Candidate scans per position before the matcher gives up (probe cap).
-const MAX_CANDIDATES: usize = 16;
+/// Deep-chain candidate cap (ADR-005 era): the pick measures BOTH this
+/// arm and the shallow v1.7 arm (cap 16) and keeps the smaller wire.
+pub const MAX_CANDIDATES: usize = 1024;
 
 /// Token counts for one encoded plane.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -61,16 +63,28 @@ fn key3(b: &[u8]) -> u32 {
 
 /// Parse the residual plane (row-major, 3 B/px) into the token wire.
 /// Matcher semantics are the measured arm-B ones: 3-byte pixel-key hash
-/// chains, newest-first scan, 16-candidate cap, 64k-px window, <= 85-px
-/// matches, min match 7 px. Candidates whose 2D (dx, dy) split does not
-/// fit the wire's u16 fields are skipped. Matches whose (dx, dy) both
-/// fit a byte emit TAG_NEAR (4 B vs 6 B, ADR-005); on equal length the
-/// matcher prefers the NEARER (near-encodable) candidate.
+/// chains, newest-first scan, bounded candidates, min match 7 px,
+/// byte-forward (overlapping) copies. Candidates whose 2D (dx, dy) split
+/// does not fit the wire's u16 fields are skipped. Matches whose (dx, dy)
+/// both fit a byte emit TAG_NEAR (4 B vs 6 B, ADR-005); on equal length
+/// the matcher prefers the NEARER (near-encodable) candidate.
 ///
-/// ponytail: O(n * 16) match scan with per-position table inserts; the
-/// 16-candidate cap is the measured probe behavior. Revisit only if
-/// encode throughput on multi-megapixel images becomes a complaint.
+/// ponytail: O(n * cap) match scan with per-position table inserts; cap =
+/// MAX_CANDIDATES (ADR-006: the pick also measures the shallow cap-16
+/// arm). Revisit only if encode throughput on multi-megapixel images
+/// becomes a complaint.
 pub fn encode_plane(res: &[u8], w: usize, h: usize) -> Result<(Vec<u8>, TokenStats), Error> {
+    encode_plane_cap(res, w, h, MAX_CANDIDATES)
+}
+
+/// Same matcher with an explicit candidate cap (the pick loop measures the
+/// shallow and deep arms; cap 16 = the v1.7 measured ladder arm).
+pub fn encode_plane_cap(
+    res: &[u8],
+    w: usize,
+    h: usize,
+    cap: usize,
+) -> Result<(Vec<u8>, TokenStats), Error> {
     let npx = w
         .checked_mul(h)
         .ok_or_else(|| Error::fmt_msg("dims overflow"))?;
@@ -90,7 +104,7 @@ pub fn encode_plane(res: &[u8], w: usize, h: usize) -> Result<(Vec<u8>, TokenSta
             for &q in chain.iter().rev() {
                 let q = q as usize;
                 let dist = pos - q;
-                if dist > WINDOW_PX || ncand >= MAX_CANDIDATES {
+                if dist > WINDOW_PX || ncand >= cap {
                     break;
                 }
                 ncand += 1;
