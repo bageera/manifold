@@ -47,6 +47,9 @@ metadata counted and exact reconstruction asserted:
   MNF8 coder (DENIED) + the fair corpora comparison table.
 - [mnf9-engine-ladder-probe.md](mnf9-engine-ladder-probe.md) — the ladder:
   LZ77-2D token engine RETAINED rate-aware; matrix-matching arms DENIED.
+- [mnf9-token-arm.md](mnf9-token-arm.md) — the retained arm ported to Rust
+  (`crates/mnf-mans`): real decoder, 30-file corpus gate, 5/30 token wins
+  reproducing the ladder numbers.
 
 Earlier research notes: [v07-charts-replication.md](v07-charts-replication.md),
 [cy01-torus.md](cy01-torus.md), [dimensional-fold-probe.md](dimensional-fold-probe.md),

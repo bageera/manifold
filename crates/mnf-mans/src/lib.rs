@@ -16,6 +16,9 @@
 // numbers: crates/mnf-mans tests (mixed_beats_zlib_gate_report) compare
 // against zlib-9 on identical streams.
 
+pub mod lz77_2d;
+pub use lz77_2d::{decode_plane, encode_plane, pick_plane, zlib9_len, Stats};
+
 use constriction::stream::{
     model::ContiguousCategoricalEntropyModel, queue::DefaultRangeDecoder,
     queue::DefaultRangeEncoder, Decode, Encode,
@@ -114,8 +117,8 @@ pub fn class_of(t: &Tok) -> u8 {
         Tok::Lit(_) => 0,
         Tok::Run(_) => 1,
         Tok::Copy { len, dist } => {
-            let long = *len > 16 as u16;
-            let far = *dist > 64 as u16;
+            let long = *len > 16u16;
+            let far = *dist > 64u16;
             match (long, far) {
                 (false, false) => 2,
                 (false, true) => 3,
@@ -188,7 +191,7 @@ pub fn mixed_bytes(data: &[u8]) -> u64 {
             bits += empirical_bits_u8(l, 2);
         }
     }
-    (bits + 7) / 8
+    bits.div_ceil(8)
 }
 
 fn empirical_bits_u8(vals: &[u8], bytes_per_used_symbol: u64) -> u64 {
@@ -223,7 +226,7 @@ fn empirical_bits_u16(vals: &[u16], bytes_per_used_symbol: u64) -> u64 {
 /// range coder (queue): encode then decode, assert agreement, report bytes.
 /// constriction symbols are `usize`; models are passed alongside symbols.
 pub fn rans_roundtrip(classes: &[u8]) -> (Vec<u8>, usize) {
-    let mut freq = vec![0u32; 6];
+    let mut freq = [0u32; 6];
     for &c in classes {
         freq[c as usize] += 1;
     }
@@ -254,7 +257,7 @@ pub fn rans_roundtrip(classes: &[u8]) -> (Vec<u8>, usize) {
     let bytes_out = compressed.len() * std::mem::size_of::<u32>();
     let mut dec = DefaultRangeDecoder::from_compressed(compressed).expect("decoder");
     let back: Vec<u8> = dec
-        .decode_symbols(std::iter::repeat(&model).take(classes.len()))
+        .decode_symbols(std::iter::repeat_n(&model, classes.len()))
         .map(|r| r.expect("decode symbol") as u8)
         .collect();
     (back, bytes_out)
