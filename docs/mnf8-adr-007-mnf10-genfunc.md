@@ -21,7 +21,8 @@ EXACT decoder-reproducible integer rules qualify.
 
 MNF10 = a new record grammar, not an MNF8 flag bit:
 
-    File  := 32-B header (identical field layout to MNF8; magic "MNF10")
+    File  := 32-B header (identical field layout to MNF8; magic "MNF9" —
+             the ADR-003 reservation; "MNF10" is the research-track name)
              payload
     Body  := u8 model_id + model parameters (LE, canonical bounded forms)
              — whole-frame parametric records; no residual payload
