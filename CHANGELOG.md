@@ -1,5 +1,32 @@
 # Changelog
 
+## Research — MNF10 two-track landing (2026-10-28): conventions extension, ADR-007, Autopsy (all probe-track, no wire change)
+
+1. Discovery conventions extended (committed script + probe record
+   updated): Pillow's linear_gradient identified as value(y)=y exactly —
+   a resize-kernel class split out honestly (nearest-resample = a step
+   convention, still a recorded MISS); piecewise moved from candidate-
+   boundary heuristics to greedy per-segment div-ramp discovery
+   (2-segment ramps now fit exactly: 137 → 81 B) after two
+   instrumentation bugs were caught (a stale fixture from the broken
+   generator, and a fail-run heuristic smaller than real rounding-gap
+   runs). Corpus now 16 files; 14/16 GEN-WIN, −13,644 (−42.5%), held-out
+   clean.
+2. ADR-007 (docs/mnf8-adr-007-mnf10-genfunc.md): MNF10 exact generative
+   records PROPOSED — new record grammar (parametric whole-frame
+   functions; normative integer equations; bounded denominator table
+   with segment-relative indices for piecewise; reserved ids reject →
+   not panic). Prototype: crates/mnf-mans/src/mnf10.rs (real decoder,
+   5/5 tests incl. the home-turf exactness pins + malformed classes).
+3. Autopsy (docs/mnf10-autopsy.md + scripts/autopsy.py +
+   docs/mnf10-autopsy-gate.csv): independent byte-accounting walk of the
+   shipped v1.9.0 pick — consumed == decompressed stream on all 30
+   files; 24 streams are mode-0 record bodies (photos own the byte
+   bulk), 4 are token wires with the near form dominant (screenshot
+   3,044 near + 36 match + 19 lit). A near-token walker desync
+   (off-by-one) was caught by the consumed-check before any number was
+   quoted.
+
 ## Research — MNF10 generative-function discovery (2026-10-28, probe track opens)
 
 Exact generative models (integer div-form polynomials, constant, joint/
