@@ -10,14 +10,18 @@ mod vis;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-const USAGE: &str = "manifold v1.4.0 (MNF5/6/7/8)
+const USAGE: &str = concat!(
+    "manifold v",
+    env!("CARGO_PKG_VERSION"),
+    " (MNF5/6/7/8)
 usage:
   manifold benchmark <image>
   manifold encode <image> -o out.mnf5 [--no-atlas] [--geom] [--mnf6]
                                     [--mnf8[=balanced|maximum]]
   manifold decode <file.mnf5> -o out.png
   manifold verify <image> <file.mnf5>
-  manifold vis <image> [prefix]     atlas mode/savings maps";
+  manifold vis <image> [prefix]     atlas mode/savings maps"
+);
 
 fn die(m: &str) -> ! {
     eprintln!("{m}");
