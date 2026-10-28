@@ -47,11 +47,11 @@ def med_pred(rgb):
 
 
 def run_bridge(plane_u8, w, h):
-    """stdin: w h le, then plane. stdout: tok_len lit_len stats."""
+    """stdin: w h mode le, then plane. stdout: tok wire sizes + stats."""
     src = plane_u8.reshape(-1).tobytes()
     r = sp.run(
-        ["cargo", "run", "--quiet", "--release", "--example", "bridge9", "--features", ""],
-        input=w.to_bytes(4, "little") + h.to_bytes(4, "little") + src,
+        ["cargo", "run", "--quiet", "--release", "--example", "bridge9"],
+        input=w.to_bytes(4, "little") + h.to_bytes(4, "little") + b"\x01" + src,
         capture_output=True,
         cwd=CRATE,
         timeout=600,
@@ -59,8 +59,8 @@ def run_bridge(plane_u8, w, h):
     if r.returncode != 0:
         print(r.stderr.decode()[-2000:], file=sys.stderr)
         raise SystemExit(f"bridge failed")
-    tok, lit, lits, matches = map(int, r.stdout.split())
-    return tok, lit, lits, matches
+    wire_z9, rans, lits, matches, plane_z9 = map(int, r.stdout.split())
+    return plane_z9, wire_z9, lits, matches
 
 
 def main():
@@ -80,11 +80,11 @@ def main():
         pred = med_pred(rgb)
         res = ((rgb - pred.astype(np.int32)) % 256).astype(np.uint8)
         # exactness contract asserted by the bridge itself (rebuild==plane)
-        tok, lit, lits, matches = run_bridge(res, W, H)
-        lit_py = len(zlib.compress(res.reshape(-1).tobytes(), 9))
-        picked = tok if tok < lit else lit
-        delta = tok - lit
-        if tok < lit:
+        plane_z9, tok, lits, matches = run_bridge(res, W, H)
+        lit_py = plane_z9
+        picked = tok if tok < lit_py else lit_py
+        delta = tok - lit_py
+        if tok < lit_py:
             wins += 1
             marker = "TOK"
         else:
@@ -92,11 +92,11 @@ def main():
         # python zlib-9 must agree with the bridge's own zlib9 (same coder
         # both sides; flate2 miniz may differ slightly, so report both)
         print(
-            f"{str(p.relative_to(ROOT / 'testdata')):40s} {lit:>9d} {tok:>9d} {marker:>5s} {delta:>+8d}"
+            f"{str(p.relative_to(ROOT / 'testdata')):40s} {lit_py:>9d} {tok:>9d} {marker:>5s} {delta:>+8d}"
             f"   [py-z9 lit={lit_py} lits={lits} matches={matches}]",
             file=log,
         )
-        tot_l += lit
+        tot_l += lit_py
         tot_t += picked
     n = len(files)
     print(f"\nfiles={n}  token-arm wins={wins}", file=log)

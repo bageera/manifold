@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.8.0 — MNF8 ADR-005: token-wire TAG_NEAR narrow-coordinate matches (2026-10-28)
+
+The Erdős probe's address study measured `dy` fits u8 on every corpus
+match; TAG_NEAR implements that finding directly. The token grammar
+gains a self-describing tag-2 form (dx u8, dy u8, len — 4 B vs 6 B),
+emitted whenever both coordinates fit a byte, with the matcher
+preferring nearer candidates on equal length. No per-file flag — the
+decoder dispatches by tag; 1.6/1.7.0 decoders reject tag 2 as unknown
+(self-identifying files).
+
+Real-wire 30-file sweep (all decode-verified): TOTAL 1,007,891 →
+951,501 (−56,390, −5.6%), fires 28/30 — repeat −44%, gradient −39%,
+blob −31%, plaid −25%, screenshot −13%. Larger than ADR-004's −49,341
+at a fraction of the surface. Conformance: near fires/roundtrips/
+equal-length-preference/malformed-rejection pins. MNF5–7 and the MNF8
+record path untouched. ADR-005
+(docs/mnf8-adr-005-token-near.md) records the decision.
+
 ## v1.7.0 — MNF8 ADR-004: branch-prediction flags (PRED_PLANE / PRED_LEFT) (2026-10-28)
 
 The branch-choice retention gate (docs/mnf9-branch-gate.md) PASSED on

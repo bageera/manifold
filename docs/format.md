@@ -328,9 +328,16 @@ edge-sense a+b−cc branch).
     tag 0 literal:  0x00, b, g, r          (1 + 3 B; one residual pixel)
     tag 1 match:    0x01, dx:u16, dy:u16, len:u8
                                           (1 + 5 B; len >= 7 pixels)
+    tag 2 near:     0x02, dx:u8, dy:u8, len:u8
+                                          (1 + 3 B; len >= 7 pixels;
+                                          legal iff dx < 256 AND dy < 256)
     dist = dy*width + dx pixels; the match source starts dist pixels
     earlier in the plane; copies are byte-forward (overlapping copies
-    are exact LZ77 self-referential runs). len counts PIXELS.
+    are exact LZ77 self-referential runs). len counts PIXELS. Tag 2 is
+    the narrow-coordinate form of tag 1 (ADR-005) — the encoder emits
+    it for any match whose dx and dy both fit a byte, preferring nearer
+    candidates on equal length; the decoder dispatches by tag and
+    applies the same range/bounds checks as tag 1.
 
 Decoders MUST verify: unknown tags → reject; truncation → reject;
 len < 7 → reject; dist == 0 or source beyond the decode cursor → reject;
