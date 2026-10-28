@@ -1,6 +1,6 @@
 # Manifold: a lossless RGB8 codec research program — announcement draft (2026-10-27)
 
-STATUS: DRAFT for review. Every number below is measured and reproducible
+STATUS: APPROVED (Jon, 2026-10-27). Frozen content; numbers reproducible per claim. Every number below is measured and reproducible
 from the repo (see "Reproduce" per claim). Losses are stated beside wins —
 the honest-results contract applies to the announcement itself.
 
