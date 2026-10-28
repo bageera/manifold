@@ -73,6 +73,10 @@ metadata counted and exact reconstruction asserted:
   coordinates = analytic no-op tie; the measured discovery is the
   branch-choice family (LOCO-I-plane −4.6%, left-only per-file arm),
   MNF8-compatible and cheap.
+- [mnf9-branch-gate.md](mnf9-branch-gate.md) — the branch-choice arms'
+  RETENTION GATE: PASSED (−71,767/−7.0% vs the v1.6.0 pick, never-worse
+  per file, 25/30 files on the new arms). Format step cleared:
+  MNF8 bits 4-5 + ADR-003 pick extension, no new magic.
 
 Earlier research notes: [v07-charts-replication.md](v07-charts-replication.md),
 [cy01-torus.md](cy01-torus.md), [dimensional-fold-probe.md](dimensional-fold-probe.md),

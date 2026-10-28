@@ -1,0 +1,35 @@
+file                            v16pick  newpick   delta         winner
+gradient_320x240.png                256      256      +0        med-z19
+noise_256x256.png                196623   196623      +0       left-z19
+repeat_256x256.png                  379      322     -57      plane-z19
+screenshot_640x400.png              403      403      +0     rans-plane
+solid_256x256.png                    18       18      +0     rans-plane
+heldout/blob_224x160.png           8036     5743   -2293       left-z19
+heldout/blocks_192x128.png         1250     1250      +0     tokens-z19
+heldout/document_200x280.png        688      565    -123       left-z19
+heldout/plaid_192.png             35992    25641  -10351      plane-z19
+heldout/poster_208x144.png         2221      563   -1658       left-z19
+heldout-photos/autumn_160x120_    28942    28014    -928      plane-z19
+heldout-photos/dusk_160x120_s3    16581    15462   -1119      plane-z19
+heldout-photos/dusk_224x160_s3    64272    57657   -6615      plane-z19
+heldout-photos/forest_192x144_    46368    42946   -3422       left-z19
+heldout-photos/forest_224x160_    56651    50699   -5952       left-z19
+heldout-photos/forest_224x160_    29087    26823   -2264      plane-z19
+heldout-photos/ocean_192x144_s    43821    40016   -3805       left-z19
+heldout-photos/sand_192x144_s3    48178    44932   -3246      plane-z19
+heldout-photos/slate_160x120_s    28980    27129   -1851       left-z19
+heldout-photos/terrain_160x120    16359    15434    -925      plane-z19
+photos/autumn_192x144_s900001.    22943    22092    -851      plane-z19
+photos/dusk_160x120_s900003.pn    28381    26410   -1971      plane-z19
+photos/forest_224x160_s900002.    60034    55817   -4217      plane-z19
+photos/ocean_192x144_s900007.p    45271    42395   -2876       left-z19
+photos/sand_160x120_s900000.pn    33298    30861   -2437       left-z19
+photos/slate_192x144_s900004.p    47329    44259   -3070      plane-z19
+photos/slate_224x160_s900008.p    66221    61826   -4395       left-z19
+photos/stone_160x120_s900006.p    16062    14522   -1540      plane-z19
+photos/terrain_160x120_s900009    31943    29970   -1973      plane-z19
+photos/terrain_224x160_s900005    53127    49299   -3828       left-z19
+
+TOTAL old(v1.6.0 pick)=1029714  new=957947  delta=-71767
+  reference baseline (measured gate): 1,029,925; delta vs ref: -71978
+  strict-improvement: PASS; never-worse: PASS
