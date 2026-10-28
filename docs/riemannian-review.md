@@ -54,3 +54,14 @@ WITHOUT losing flat-UI/smooth classes beyond noise.
 
 Everything else (geodesic path encoding, curvature charting, chart-atlas)
 inherits the measured dead verdicts and needs neither code nor time.
+
+## Post-script: v0.7 charts measured (2026-10-27)
+
+The v0.7 experiment (parametric charts, D8+integer-shears per tile) was
+replicated independently: pattern confirmed (charts beat atlas-ONLY arms
+by 6–19% on curved/repeating classes; no forced loss on random), and the
+Riemannian-review prediction held precisely: charts in the LITERAL path
+LOSE +50–66% vs MED on every class (shearing breaks raster continuity of
+prediction context). The surviving mechanism = transformed atlas
+references = D8-family extension with 10 shears, measured per tile,
+rate-aware. See docs/v07-charts-replication.md for the matrix.
