@@ -1,6 +1,12 @@
 # Changelog
 
-## Research — MMF9 engine ladder + conformal probe (2026-10-27)
+## v1.5.1 — research records: engine ladder + conformal probe (2026-10-27)
+
+Docs-only release; code identical to v1.5.0 (MNF5–8 streams
+byte-identical). Adds the two measured research records and their
+CHANGELOG/README treatment (see the Research section below).
+
+## Research — MNF9 engine ladder + conformal probe (2026-10-27)
 
 Two more measured records; MNF5–8 bitstream unchanged.
 
