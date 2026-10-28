@@ -1,0 +1,66 @@
+# docs/ — study and specification index
+
+Normative and study documents for the MNF formats. Every measured claim
+points at its producing record; `docs/science.md` maps the underlying
+principles (information theory, coding theory, MDL) to the mechanisms.
+
+## Specifications (normative)
+
+- [format.md](format.md) — MNF5/MNF6/MNF7 bitstream specs + freeze stamp;
+  MNF8 extension described in the crate docs (`src/mnf8.rs`) and
+  [ADR-002](adr-002-entropy-backends.md).
+- [adr-001-color-transform.md](adr-001-color-transform.md) — MNF7 color-domain
+  residuals decision record.
+- [adr-002-entropy-backends.md](adr-002-entropy-backends.md) — MNF8 backend
+  field + profiles decision record.
+
+## Measurements (canonical numbers)
+
+- [benchmarks.md](benchmarks.md) — lossless comparison tables (PNG/JXL/WebP
+  columns), held-out corpus.
+- [atlas-eval-v12.md](atlas-eval-v12.md) — encoder arm ablation (MED, atlas,
+  D8, planar at coder parity).
+- [entropy-backends-v13.md](entropy-backends-v13.md) — backend matrix at
+  frozen-stream parity (zlib/zstd/brotli/xz).
+- [subspace-v01.md](subspace-v01.md) — PCA/MDL subspace study (FAIL gate).
+- [photo-gate-v122.md](photo-gate-v122.md) — photographic corpus gate.
+
+## Research records (2026-10-27 probe program)
+
+Six geometry-family denials + one engine retention, all measured with
+metadata counted and exact reconstruction asserted:
+
+- [riemannian-traversal-probe.md](riemannian-traversal-probe.md) — metric-guided
+  scan order (DENIED; also the metric-warp predictor postscript).
+- [shear-refs-format-probe.md](shear-refs-format-probe.md) — D8+10-shear MNF8
+  flag candidate implemented and reverted at the 30/30 gate.
+- [ternary-residuals-probe.md](ternary-residuals-probe.md) — balanced-ternary
+  digit splits on prediction residuals (first-cost analysis).
+- [research-paper-validation.md](research-paper-validation.md) — published
+  compression claims vs manifold measurements (per-claim verdicts).
+- [mnf8-riemann-conformal-probe.md](mnf8-riemann-conformal-probe.md) — conformal
+  square→disk guidance (analytic no-op) + anisotropic orientation tiebreak
+  (single-class candidate).
+- [riemann-array-v05-probe.md](riemann-array-v05-probe.md) — shear-wrap torus
+  prediction (1/W lever; 0/30 corpus wins).
+- [webp-hybrid-probe.md](webp-hybrid-probe.md) — WebP-style predictors on the
+  MNF8 coder (DENIED) + the fair corpora comparison table.
+- [mnf9-engine-ladder-probe.md](mnf9-engine-ladder-probe.md) — the ladder:
+  LZ77-2D token engine RETAINED rate-aware; matrix-matching arms DENIED.
+
+Earlier research notes: [v07-charts-replication.md](v07-charts-replication.md),
+[cy01-torus.md](cy01-torus.md), [dimensional-fold-probe.md](dimensional-fold-probe.md),
+[cryoem-plan.md](cryoem-plan.md), [eer-probe-10061-10943.md](eer-probe-10061-10943.md),
+[riemannian-review.md](riemannian-review.md).
+
+## Communication
+
+- [science.md](science.md) — the principles document: information theory,
+  coding theory, MDL, and the measured research principles (§11).
+- [announcement-draft.md](announcement-draft.md) — approved announcement
+  numbers draft (in-repo, soaking).
+
+## Audits
+
+- [audit-crate-131.md](audit-crate-131.md) — published-crate audit (v1.3.1).
+- [audit-2026-10-25.md](audit-2026-10-25.md) — full-repo technical audit.

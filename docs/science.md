@@ -219,6 +219,59 @@ consumes model state (§5) — the chain rule guarantees the gain is there;
 the studies measure whether it survives metadata, decoder bounds, and the
 retention gate. Formats change only after it does.
 
+## 11. The measured research principles (2026-10-27 probe batch)
+
+The 2026-10-27 probe program (six geometry-family denials + one engine
+retention) sharpened §1–§3 into operational rules. Each is cited to its
+measured record; the bracketed docs are canonical.
+
+1. **Reordering is not compression.** A reversible permutation preserves
+   the byte multiset; a scan that only *reorders* cannot beat a coder that
+   already sees the same multiset. Measured: metric-guided traversal loses
+   3.8×/17.5× on smooth/plaid, ties noise; Hilbert/Morton never beat
+   raster+MED [riemannian-traversal-probe]. Any traversal claim must hence
+   be a *prediction-context* claim, not an ordering claim.
+2. **Geometry that preserves local angles or warps scale by less than the
+   coder's noise floor is a no-op.** Conformal maps scale all neighbor
+   distances by the same pointwise factor ⇒ causal-neighbor *rankings* are
+   position-invariant; the atlas window spans ≤0.2% of the conformal scale
+   variation, so d_f is a monotone warp of the Euclidean distance and a
+   monotone warp cannot change which candidate ranks first except among
+   cost-ties [mnf8-riemann-conformal-probe]. Measured: conformal vs plain
+   Euclidean tiebreak differ by weight-tuning noise on every file.
+3. **Topology is a 1/W-sized lever.** Reassigning prediction context only
+   at the boundary (shear-wrap torus: x=0 takes the previous row's tail)
+   touches 1/W of the plane; the mechanism's ceiling is ~±1% on any image,
+   and its *direction* depends on whether row-heads continue row-tails
+   (photos: no — +0.0…+0.11% measured loss; constructed diagonal textures:
+   −0.6…−1.5%, the best case) [riemann-array-v05-probe]. 0/30 corpus wins.
+4. **A transform earns its description or it does not exist.** MDL [15]
+   applied per mechanism: a geometric reference pays (idx, transform-id)
+   bytes and wins only where the transformed prediction beats the residual
+   cost. Matrix composition (T = T₃T₂T₁) can only pay when the composed
+   description is shorter than one transform id — measured: composed and
+   dictionary-compressed chart references never fire on photos, ≤1% on two
+   synthetics, and the shipping D8 chart grammar already provides the wins
+   [mnf9-engine-ladder-probe]. The matrix algebra is a compact *notation*
+   for transforms the codec already charges honestly.
+5. **The one measured engine win: repetition machinery at coder parity.**
+   LZ77-2D tokens over the MED residual plane (tag+payload, window 64k px)
+   is Ziv–Lempel [5],[6] applied to the *token* plane: gradient −74%
+   (1,639→419 B), solid −34% (beats WebP-lossless), blocks −6% — while
+   forced-everywhere it costs 1.151× MNF8 overall because noise-dominated
+   residual planes pay for accidental matches. The retained form is the
+   rate-aware per-file pick (never worse than the picked literal arm,
+   +1 flag bit) — the same gate the D8 atlas lived behind [v12].
+6. **The honest-results contract extends to geometry claims.** Six of
+   seven proposed geometric mechanisms measured dead under this gate
+   (traversal, metric-guided order, metric-warp predictor, D8+shear refs,
+   conformal guidance, shear-wrap torus); the retained list is exactly one
+   item (the token engine) plus one recorded single-class candidate
+   (gradient-orientation tiebreak, document-class −5.5%
+   [mnf8-riemann-conformal-probe]). The denials are part of the science
+   record, not footnotes: each one is where a plausible-sounding theorem
+   met the counting argument.
+
 ## References
 
 [1] C. E. Shannon, "A Mathematical Theory of Communication," *Bell System
