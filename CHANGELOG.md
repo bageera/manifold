@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.5.0 — research soak: benches + measured denials, format surface unchanged (2026-10-27)
+
+Library release pairing the research block with the developer benching
+surface. No encoder/decoder behavior change; MNF5–8 streams byte-identical
+to v1.4.0 output.
+
+- `benches/decode.rs` (criterion): decode-throughput benches for MNF7/MNF8
+  over corpus samples — `cargo bench -p manifold-codec` replaces the
+  `/usr/bin/time` scripts. `[[bench]]` requires the `image-io` feature;
+  benches are a dev surface only.
+- `make bench` / `make sizes` / `make corpus` / `make fuzz` targets wired;
+  CI builds benches (`cargo bench --no-run`) and runs sizes.
+- Research program records (all denials measured and reproducible, none
+  retained): metric/scan-order traversals
+  ([riemannian-traversal-probe.md](docs/riemannian-traversal-probe.md)),
+  ternary residual alphabets
+  ([ternary-residuals-probe.md](docs/ternary-residuals-probe.md)), the
+  D8+shears format candidate implemented end-to-end and reverted after the
+  30/30 corpus gate ([shear-refs-format-probe.md](docs/shear-refs-format-probe.md)),
+  cryo-EM technique probes ([cryoem-plan.md](docs/cryoem-plan.md),
+  [dimensional-fold-probe.md](docs/dimensional-fold-probe.md)).
+- Announcement draft approved, in-repo
+  ([announcement-draft.md](docs/announcement-draft.md)).
+- README refreshed: integrity note links the denial records; release
+  history current.
+
 ## Research — geometry probes, all denied by the retention gate (2026-10-27)
 
 Four measured probes, none retained; the format surface (MNF5–8) is
