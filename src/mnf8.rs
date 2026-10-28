@@ -75,8 +75,9 @@ pub const BACKEND_ZLIB: u32 = 0;
 pub const BACKEND_ZSTD19: u32 = 1;
 /// Reserved (brotli prototype; decode rejects).
 pub const BACKEND_RESERVED2: u32 = 2; // brotli prototype — unshipped, reject
-/// Reserved (run/rANS prototype; decode rejects).
-pub const BACKEND_RESERVED3: u32 = 3; // custom run/rANS — unshipped, reject
+/// Reserved (rANS prototype measured DENIED with honest transport; decode
+/// rejects — docs/mnf9-rans-arm.md §honest-re-measure).
+pub const BACKEND_RESERVED3: u32 = 3;
 
 // zstd-19's default window is 8 MiB = 2^23; hard-pin the decoder cap to it
 // (review fix 4: a hostile frame can't claim a 128 MiB window).
@@ -216,11 +217,13 @@ pub fn encode_mnf8(
         // token grammar's predictor is fixed = MED; ADR-004 composes with
         // the record arms only). Rate-aware by construction.
         let flags = FLAG_PRED_MED | FLAG_TOKENS;
-        let (file, st) = encode_tokens_coder(pixels, dims, backend, flags)
-            .expect("encoding an in-memory image cannot fail");
-        let size = file.len();
-        if best.as_ref().is_none_or(|b| size < b.0.len()) {
-            best = Some((file, flags, st, backend));
+        for cap in [16, tokens::MAX_CANDIDATES] {
+            let (file, st) = encode_tokens_coder_cap(pixels, dims, backend, flags, cap)
+                .expect("encoding an in-memory image cannot fail");
+            let size = file.len();
+            if best.as_ref().is_none_or(|b| size < b.0.len()) {
+                best = Some((file, flags, st, backend));
+            }
         }
     }
     let (file, flags, mut st, backend) = best.expect("at least one candidate");
@@ -313,11 +316,14 @@ fn image_predict(pixels: &[u8], w: usize, h: usize, kind: PredKind) -> Vec<u8> {
 /// Token-arm stream builder (ADR-003): MED residual plane → token wire →
 /// container coder. Reuses every mnf6/mnf8 primitive; stats report the
 /// token counts in the literal fields (per-arm accounting preserved).
-fn encode_tokens_coder(
+/// Token arm with explicit matcher depth (ADR-005: the pick measures the
+/// v1.7 shallow arm AND the deep-chain arm; the pick absorbs the choice).
+fn encode_tokens_coder_cap(
     pixels: &[u8],
     dims: Dims,
     backend: u32,
     flags: u32,
+    cap: usize,
 ) -> Result<(Vec<u8>, MnF6Stats)> {
     let med_pred = med_predict(pixels, dims.width as usize, dims.height as usize);
     let res: Vec<u8> = pixels
@@ -325,7 +331,8 @@ fn encode_tokens_coder(
         .zip(&med_pred)
         .map(|(x, m)| x.wrapping_sub(*m))
         .collect();
-    let (wire, ts) = tokens::encode_plane(&res, dims.width as usize, dims.height as usize)?;
+    let (wire, ts) =
+        tokens::encode_plane_cap(&res, dims.width as usize, dims.height as usize, cap)?;
     let payload = backend_compress(backend, &wire)?;
     let payload_len =
         u32::try_from(payload.len()).map_err(|_| Error::fmt_msg("payload exceeds u32"))?;
@@ -655,6 +662,9 @@ pub fn decode_mnf8_with_limits(
     ) {
         return Err(Error::fmt_msg(format!("unknown backend {backend}")));
     }
+    // ADR-006 measured DENIED: rANS arm lost to zstd-19 on every corpus
+    // file with honest model transport (docs/mnf9-rans-arm.md §verdict).
+    // Keep backend 3 reject-on-decode until an arm wins honestly.
     if matches!(backend, BACKEND_RESERVED2 | BACKEND_RESERVED3) {
         return Err(Error::fmt_msg(format!(
             "reserved backend {backend} (not shipped)"
@@ -962,7 +972,8 @@ mod gate30 {
                 (BACKEND_ZLIB, Coder::Zlib),
             ] {
                 let (tw, _) =
-                    encode_tokens_coder(&px, d, backend, FLAG_PRED_MED | FLAG_TOKENS).unwrap();
+                    encode_tokens_coder_cap(&px, d, backend, FLAG_PRED_MED | FLAG_TOKENS, 16)
+                        .unwrap();
                 old = old.min(tw.len());
             }
             // NEW pick: + plane/left pure arms
@@ -1075,7 +1086,8 @@ mod gate30 {
                     }
                 }
                 let (t, _) =
-                    encode_tokens_coder(&px, d, backend, FLAG_PRED_MED | FLAG_TOKENS).unwrap();
+                    encode_tokens_coder_cap(&px, d, backend, FLAG_PRED_MED | FLAG_TOKENS, 16)
+                        .unwrap();
                 if best.as_ref().is_none_or(|b| t.len() < b.0.len()) {
                     best = Some((t, FLAG_TOKENS));
                 }

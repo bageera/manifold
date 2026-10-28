@@ -4,7 +4,7 @@ A lossless RGB8 image codec suite in Rust, built as compression research:
 shared-patch atlas prediction, geometric transforms, rate-aware coding.
 
 Status: MNF5/MNF6/MNF7 frozen formats + MNF8 backend-field format with the
-ADR-003 token arm + ADR-004 branch predictors + ADR-005 near matches (v1.8.0) · hardened decoders
+ADR-003 tokens + ADR-004 branch predictors + ADR-005 near matches + ADR-006 matcher depth (v1.9.0) · hardened decoders
 (bounded, checksummed, canonical, fuzzed) · independently validated ·
 normative format spec at
 [docs/format.md](docs/format.md)

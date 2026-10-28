@@ -19,6 +19,8 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   PRED_PLANE / PRED_LEFT branch-predictor flags decision record.
 - [mnf8-adr-005-token-near.md](mnf8-adr-005-token-near.md) — token-wire
   TAG_NEAR narrow-coordinate matches decision record.
+- [mnf8-adr-006-matcher-depth.md](mnf8-adr-006-matcher-depth.md) — token
+  matcher candidate depth (two-arm pick) decision record.
 
 ## Measurements (canonical numbers)
 
