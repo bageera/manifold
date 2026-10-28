@@ -1,0 +1,13 @@
+file                                  A        B     mA     mB
+gradient_320x240.png                446     2614   1366   1212
+solid_256x256.png                    41      183    771    768
+screenshot_640x400.png              795      986   3144   3151
+repeat_256x256.png                  792     4515   1554   3368
+noise_256x256.png                224845   224845      0      0
+heldout/blocks_192x128.png         1672     2256    639    469
+heldout/document_200x280.png       1304     2148    955    985
+heldout/plaid_192.png             41878    41879      1      0
+heldout/poster_208x144.png         3562     6504   1147    473
+heldout/blob_224x160.png          12742    11160   1938    445
+photos/stone_160x120_s900006.p    18917    18917      0      0
+TOTALS: A=306994 B=316007 (B-A=+9013)
