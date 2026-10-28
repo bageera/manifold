@@ -77,6 +77,13 @@ metadata counted and exact reconstruction asserted:
   RETENTION GATE: PASSED (−71,767/−7.0% vs the v1.6.0 pick, never-worse
   per file, 25/30 files on the new arms). Format step cleared:
   MNF8 bits 4-5 + ADR-003 pick extension, no new magic.
+- [mnf9-windowed-geometry-probe.md](mnf9-windowed-geometry-probe.md) —
+  unbounded shape / bounded observation (frequencies freed from the
+  window): DENIED at quantized-parameter cost; loses even on constructed
+  sinusoids (the model's quantization floor exceeds the residual-coder
+  floor); the tied-period negative result STANDS with its binding
+  constraint corrected. Discrete/integer geometric structure (CY01
+  phases) remains the family's measured-win territory.
 
 Earlier research notes: [v07-charts-replication.md](v07-charts-replication.md),
 [cy01-torus.md](cy01-torus.md), [dimensional-fold-probe.md](dimensional-fold-probe.md),
