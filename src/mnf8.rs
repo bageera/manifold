@@ -6,7 +6,8 @@
 //
 // Header (32 bytes):
 //   "MNF8", u32 LE width, height, tile=16, tile_count, payload_len,
-//   u32 flags (MNF7 semantics: bit0 PLANAR, bit1 ZSTD, bits 2..31 reserved),
+//   u32 flags (MNF7 semantics + MNF8-owned bits:
+//     bit0 PLANAR, bit1 ZSTD, bit2 PRED_MED, bit3 TOKENS, bits 4..31 reserved),
 //   u32 backend:
 //     0 = zlib-9  (MNF7 control; payload is a zlib stream)
 //     1 = zstd-19 (xxh64-checksummed frame; decoder window capped at 23)
@@ -16,6 +17,13 @@
 //         Reject until its gate re-passes (audit review 2026-10-25).
 //     3 = reserved (custom mixed run/rANS coder; reject until it passes the gate)
 //   other values: reject like reserved flag bits.
+//
+// FLAG_TOKENS (ADR-003, docs/mnf8-adr-003-tokens.md): the payload is NOT a
+// record stream — it is the LZ77-2D token wire over the image-wide MED
+// residual plane (crate::tokens), container-compressed by the backend.
+// Mutually exclusive with everything per-tile: TOKENS forces plain
+// interleaved literal records in the pick arms it competes against and is
+// rejected at decode with PLANAR (the token plane is always interleaved).
 //
 // Profiles (encoder policy, not wire format):
 //   balanced  -> always zstd-19 (flags measured: planar vs interleaved).
@@ -35,15 +43,18 @@ use crate::mnf6::{
     compress_stream, decode_record_walk, med_predict, modcolor_forward_iter, pack9, planar_pack,
     proxy_cost, ycocg_forward, Coder, MnF6Stats, FLAG_PLANAR,
 };
+use crate::tokens;
 
 /// Header size: `MNF8` + 7×`u32` LE (adds backend id) — 4 B over MNF7.
 pub const HEADER8: usize = 32;
 
-// MNF8-only flags (MNF6/7 keep !0b11 frozen; MNF8 owns bit2):
+// MNF8-only flags (MNF6/7 keep !0b11 frozen; MNF8 owns bits 2-3):
 /// Literal bodies carry image-wide MED residuals (decode inverts causally).
 pub const FLAG_PRED_MED: u32 = 4; // mode-0 literal bodies carry image-wide MED residuals
-/// Bits above bit2 reserved (MNF8 owns bit2).
-pub const FLAGS_RESERVED8: u32 = !0b111;
+/// Payload = LZ77-2D token wire over the MED residual plane (ADR-003).
+pub const FLAG_TOKENS: u32 = 8;
+/// Bits above bit3 reserved (MNF8 owns bits 2-3).
+pub const FLAGS_RESERVED8: u32 = !0b1111;
 
 /// zlib-9 backend.
 pub const BACKEND_ZLIB: u32 = 0;
@@ -181,10 +192,63 @@ pub fn encode_mnf8(
                 best = Some((file, flags, st, backend));
             }
         }
+        // ADR-003 token arm: tokens over the MED plane, same backend. Rate-
+        // aware by construction — this arm only wins when it measured
+        // smaller than every record arm above. PLANAR is incompatible with
+        // the token wire (interleaved plane), so the arm has no planar twin.
+        let flags = FLAG_PRED_MED | FLAG_TOKENS;
+        let (file, st) = encode_tokens_coder(pixels, dims, backend, flags)
+            .expect("encoding an in-memory image cannot fail");
+        let size = file.len();
+        if best.as_ref().is_none_or(|b| size < b.0.len()) {
+            best = Some((file, flags, st, backend));
+        }
     }
     let (file, flags, mut st, backend) = best.expect("at least one candidate");
     st.chosen_flags = flags;
     (file, st, backend)
+}
+
+/// Token-arm stream builder (ADR-003): MED residual plane → token wire →
+/// container coder. Reuses every mnf6/mnf8 primitive; stats report the
+/// token counts in the literal fields (per-arm accounting preserved).
+fn encode_tokens_coder(
+    pixels: &[u8],
+    dims: Dims,
+    backend: u32,
+    flags: u32,
+) -> Result<(Vec<u8>, MnF6Stats)> {
+    let med_pred = med_predict(pixels, dims.width as usize, dims.height as usize);
+    let res: Vec<u8> = pixels
+        .iter()
+        .zip(&med_pred)
+        .map(|(x, m)| x.wrapping_sub(*m))
+        .collect();
+    let (wire, ts) = tokens::encode_plane(&res, dims.width as usize, dims.height as usize)?;
+    let payload = backend_compress(backend, &wire)?;
+    let payload_len =
+        u32::try_from(payload.len()).map_err(|_| Error::fmt_msg("payload exceeds u32"))?;
+    let mut file = Vec::with_capacity(HEADER8 + payload.len());
+    file.extend_from_slice(b"MNF8");
+    file.extend_from_slice(&dims.width.to_le_bytes());
+    file.extend_from_slice(&dims.height.to_le_bytes());
+    file.extend_from_slice(&TILE_SIZE.to_le_bytes());
+    let cols = div_ceil(dims.width, TILE_SIZE);
+    let rows = div_ceil(dims.height, TILE_SIZE);
+    let tile_count: u32 = cols
+        .checked_mul(rows)
+        .ok_or_else(|| Error::fmt_msg("too many tiles"))?;
+    file.extend_from_slice(&tile_count.to_le_bytes());
+    file.extend_from_slice(&payload_len.to_le_bytes());
+    file.extend_from_slice(&flags.to_le_bytes());
+    file.extend_from_slice(&backend.to_le_bytes());
+    file.extend_from_slice(&payload);
+    let st = MnF6Stats {
+        literal: u32::try_from(ts.literals).unwrap_or(u32::MAX),
+        ref_exact: u32::try_from(ts.matches).unwrap_or(u32::MAX),
+        ..MnF6Stats::default()
+    };
+    Ok((file, st))
 }
 
 /// One tile-stream encoder, parameterized by coder + backend — THE selection
@@ -443,9 +507,15 @@ pub fn decode_mnf8_with_limits(
         return Err(Error::fmt_msg("filelen"));
     }
     let flags = u32le(24);
-    // MNF8 owns bit2 (FLAG_PRED_MED); MNF6/7 do not — wider mask here
+    // MNF8 owns bits 2-3 (PRED_MED, TOKENS); MNF6/7 do not — wider mask here
     if flags & FLAGS_RESERVED8 != 0 {
         return Err(Error::fmt_msg("reserved-flags"));
+    }
+    let token_wire = flags & FLAG_TOKENS != 0;
+    // ADR-003: the token plane is interleaved RGB8 by definition — PLANAR
+    // carries no meaning there and no encoder emits the combination.
+    if token_wire && flags & FLAG_PLANAR != 0 {
+        return Err(Error::fmt_msg("tokens+planar are exclusive"));
     }
     let backend = u32le(28);
     if !matches!(
@@ -469,13 +539,27 @@ pub fn decode_mnf8_with_limits(
     //   Mode-3 records: 1 + tw*th + 2 * ceil(9*(tw*th)/8) ≤ 1 + tw*th + 2 * (tw*th*9+7)/8
     //   ≤ 1 + 7/4 * tw*th + small; bound it as 1 + (7/4)*np + 2 with np <=
     //   TILE_SIZE^2 — the same conservative per-tile add-on as before.
-    let mode3_max: u64 =
-        1 + (TILE_SIZE * TILE_SIZE) as u64 + 2 * ((TILE_SIZE * TILE_SIZE) as u64 * 9 + 7) / 8 + 2;
+    //   Token wire (ADR-003; bound from the token path's own worst case, the
+    //   same lesson as mode 3): every token covers >= 1 px at <= 4 B
+    //   (tag + 3), so the wire is <= 4*npx — which EXCEEDS the record bound
+    //   on large all-literal planes (4npx > 3npx + 6N + small once npx is
+    //   big), so the token flag gets its own limit rather than inheriting
+    //   the record one.
     let px_bytes_total: u64 = width as u64 * height as u64 * 3;
-    let limit = px_bytes_total
-        .checked_add(6 * tile_count as u64)
-        .and_then(|l| l.checked_add(2 * mode3_max + 2))
-        .ok_or_else(|| Error::fmt_msg("decompressed size overflow"))?;
+    let limit = if token_wire {
+        (4 * width as u64)
+            .checked_mul(height as u64)
+            .ok_or_else(|| Error::fmt_msg("decompressed size overflow"))?
+    } else {
+        let mode3_max: u64 = 1
+            + (TILE_SIZE * TILE_SIZE) as u64
+            + 2 * ((TILE_SIZE * TILE_SIZE) as u64 * 9 + 7) / 8
+            + 2;
+        px_bytes_total
+            .checked_add(6 * tile_count as u64)
+            .and_then(|l| l.checked_add(2 * mode3_max + 2))
+            .ok_or_else(|| Error::fmt_msg("decompressed size overflow"))?
+    };
 
     let payload = &buf[HEADER8..];
     let raw = match backend {
@@ -483,15 +567,54 @@ pub fn decode_mnf8_with_limits(
         other => return Err(Error::fmt_msg(format!("unsupported backend {other}"))),
     };
 
-    let pixels = decode_record_walk(
-        &raw,
-        width,
-        height,
-        tile_count,
-        planar,
-        flags & FLAG_PRED_MED != 0,
-    )?;
+    let pixels = if token_wire {
+        // ADR-003 token payload: wire → residual plane → causal MED invert.
+        // decode_plane validates the wire structurally (tags, ranges, exact
+        // plane size) and rejects trailing bytes by construction.
+        let res = tokens::decode_plane(&raw, width as usize, height as usize)?;
+        med_residual_invert(&res, width as usize, height as usize)
+    } else {
+        decode_record_walk(
+            &raw,
+            width,
+            height,
+            tile_count,
+            planar,
+            flags & FLAG_PRED_MED != 0,
+        )?
+    };
     Ok((Dims { width, height }, pixels, backend))
+}
+
+/// Invert the MED residual plane causally in raster order: out[i] =
+/// (res[i] + MED(causal reconstructed neighbors)) mod 256. Identical
+/// predictor progression to encode-side `med_predict` (first pixel 127,
+/// top row = left, left col = above, interior = med_predict_pixel) —
+/// exactness holds because reconstructed earlier pixels are the true ones
+/// (mod-256 wrapping arithmetic), the same induction as FLAG_PRED_MED.
+fn med_residual_invert(res: &[u8], w: usize, h: usize) -> Vec<u8> {
+    let mut out = vec![0u8; w * h * 3];
+    for y in 0..h {
+        for x in 0..w {
+            for c in 0..3usize {
+                let i = (y * w + x) * 3 + c;
+                let pred: u32 = if x == 0 && y == 0 {
+                    127
+                } else if y == 0 {
+                    u32::from(out[i - 3])
+                } else if x == 0 {
+                    u32::from(out[i - w * 3])
+                } else {
+                    let a = u32::from(out[i - 3]);
+                    let b = u32::from(out[i - w * 3]);
+                    let cc = u32::from(out[i - w * 3 - 3]);
+                    crate::mnf6::med_predict_pixel(a, b, cc)
+                };
+                out[i] = (pred + u32::from(res[i])).wrapping_rem_euclid(256) as u8;
+            }
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -626,7 +749,7 @@ mod tests {
         // and pin the med-bearing pick on the no-repeat smooth body (next
         // test), not here.
         assert!(
-            st.chosen_flags & !0b111 == 0,
+            st.chosen_flags & !0b1111 == 0,
             "balanced wrote a legal flags id, got {:#x}",
             st.chosen_flags
         );
@@ -742,7 +865,7 @@ mod tests {
         // the MED variant was MEASURED (no panic), the pick is a legal flags
         // id, and decode is exact.
         assert!(
-            st.chosen_flags & !0b111 == 0,
+            st.chosen_flags & !0b1111 == 0,
             "chosen flags must be a legal MNF8 id, got {:#x}",
             st.chosen_flags
         );
@@ -860,5 +983,162 @@ mod tests {
         );
         let (_, out3, _) = decode_mnf8(&buf3).expect("decode");
         assert_eq!(out3, three);
+    }
+
+    // ---- ADR-003 token arm ------------------------------------------------
+
+    fn roundtrip_tokens(px: &[u8], dims: Dims, profile: Profile) -> (u32, u32) {
+        let (buf, st, backend) = encode_mnf8(px, dims, true, profile);
+        let (d, out, _) = decode_mnf8(&buf).expect("decode");
+        assert_eq!(d, dims);
+        assert_eq!(
+            out, px,
+            "profile {profile:?} backend {backend} flags {:#x} literal {} matches {}",
+            st.chosen_flags, st.literal, st.ref_exact
+        );
+        (st.literal, st.ref_exact)
+    }
+
+    #[test]
+    fn token_wire_unit_roundtrip_and_errors() {
+        use crate::tokens::*;
+        // small plane with a planted repeat + a run: tokens fire and rebuild
+        let (w, h) = (24usize, 16usize);
+        let mut plane = vec![0u8; w * h * 3];
+        for i in 0..w * h {
+            plane[i * 3] = (i % 251) as u8;
+            plane[i * 3 + 1] = ((i * 7) % 251) as u8;
+        }
+        for k in 300..384 {
+            plane[k * 3..k * 3 + 3].copy_from_slice(&[9, 9, 9]);
+        }
+        let (wire, st) = encode_plane(&plane, w, h).expect("encode");
+        assert!(st.matches >= 1, "planted structures must fire: {st:?}");
+        let back = decode_plane(&wire, w, h).expect("decode");
+        assert_eq!(back, plane);
+        // malformed wires are errors, never panics
+        let mut bad = wire.clone();
+        bad.push(2); // unknown tag
+        assert!(decode_plane(&bad, w, h).is_err());
+        assert!(decode_plane(&wire[..wire.len() - 1], w, h).is_err());
+        let mut bad = wire.clone();
+        bad.push(TAG_LITERAL);
+        bad.extend_from_slice(&[1, 2, 3]);
+        assert!(decode_plane(&bad, w, h).is_err()); // overruns the plane
+    }
+
+    #[test]
+    fn mnf8_token_flag_picked_on_repeating_residual() {
+        // ADR-003 measured pick: a large smooth ramp (long constant MED
+        // residual runs = the measured token-winning class). The pick MUST
+        // be FLAG_TOKENS and decode must reconstruct exactly through the
+        // token walk + causal MED inversion.
+        let (w, h) = (256u32, 256u32);
+        let mut px = vec![0u8; (w * h * 3) as usize];
+        for y in 0..h {
+            for x in 0..w {
+                let i = ((y * w + x) * 3) as usize;
+                // vertical ramp: every MED residual = same constant per row
+                px[i] = (y * 3) as u8;
+                px[i + 1] = (y / 4) as u8;
+                px[i + 2] = 200;
+            }
+        }
+        let d = Dims {
+            width: w,
+            height: h,
+        };
+        let (buf, st, _) = encode_mnf8(&px, d, false, Profile::Balanced);
+        assert_eq!(
+            st.chosen_flags & FLAG_TOKENS,
+            FLAG_TOKENS,
+            "repeating-residual class must pick the token arm (picked {:#x})",
+            st.chosen_flags
+        );
+        let (_, out, _) = decode_mnf8(&buf).expect("decode");
+        assert_eq!(out, px, "token wire reconstructs exactly");
+    }
+
+    #[test]
+    fn mnf8_token_flag_not_picked_on_noise() {
+        // noise planes: all-literal token wire is pure overhead — the pick
+        // must stay on the record arms (this is the rate-aware contract's
+        // other half).
+        let (w, h) = (64u32, 64u32);
+        let mut s: u64 = 0x5EED;
+        let mut rnd = move || {
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
+            s
+        };
+        let px: Vec<u8> = (0..w as usize * h as usize * 3)
+            .map(|_| (rnd() & 0xFF) as u8)
+            .collect();
+        let d = Dims {
+            width: w,
+            height: h,
+        };
+        let (_, st, _) = encode_mnf8(&px, d, false, Profile::Balanced);
+        assert_eq!(
+            st.chosen_flags & FLAG_TOKENS,
+            0,
+            "noise class must NOT pick tokens (picked {:#x})",
+            st.chosen_flags
+        );
+        roundtrip_tokens(&px, d, Profile::Balanced);
+    }
+
+    #[test]
+    fn mnf8_tokens_decode_rejects_malformed_wire() {
+        // craft a token-flag file whose payload decodes to a corrupt wire:
+        // unknown tag inside. Must Err, never panic (validation whitelist
+        // rule: every admitted construct has a handler or an explicit Err).
+        let f = vec![0u8; HEADER8 + 7];
+        let mut f = f;
+        f[0..4].copy_from_slice(b"MNF8");
+        f[4..8].copy_from_slice(&16u32.to_le_bytes());
+        f[8..12].copy_from_slice(&16u32.to_le_bytes());
+        f[12..16].copy_from_slice(&16u32.to_le_bytes());
+        f[16..20].copy_from_slice(&1u32.to_le_bytes());
+        f[20..24].copy_from_slice(&7u32.to_le_bytes());
+        f[24..28].copy_from_slice(&(FLAG_PRED_MED | FLAG_TOKENS).to_le_bytes());
+        f[28..32].copy_from_slice(&BACKEND_ZSTD19.to_le_bytes());
+        // zlib backend so we can hand-craft canonical payload bytes:
+        f[28..32].copy_from_slice(&BACKEND_ZLIB.to_le_bytes());
+        let res: Vec<u8> = vec![0u8; 16 * 16 * 3];
+        let (wire, _) = crate::tokens::encode_plane(&res, 16, 16).expect("wire");
+        // flip first tag byte to an unknown tag
+        let mut wire_bad = wire.clone();
+        wire_bad[0] = 7;
+        let comp: Vec<u8>;
+        {
+            let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
+            std::io::Write::write_all(&mut e, &wire_bad).unwrap();
+            comp = e.finish().unwrap();
+        }
+        let mut file = Vec::with_capacity(HEADER8 + comp.len());
+        file.extend_from_slice(&f[..HEADER8]);
+        let pl = comp.len() as u32;
+        file[20..24].copy_from_slice(&pl.to_le_bytes());
+        file.extend_from_slice(&comp);
+        let r = std::panic::catch_unwind(|| decode_mnf8(&file));
+        assert!(
+            r.is_ok() && r.unwrap().is_err(),
+            "corrupt wire: Err not panic"
+        );
+        // exact wire still decodes
+        let comp2: Vec<u8>;
+        {
+            let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
+            std::io::Write::write_all(&mut e, &wire).unwrap();
+            comp2 = e.finish().unwrap();
+        }
+        let mut file2 = Vec::with_capacity(HEADER8 + comp2.len());
+        file2.extend_from_slice(&f[..HEADER8]);
+        file2[20..24].copy_from_slice(&(comp2.len() as u32).to_le_bytes());
+        file2.extend_from_slice(&comp2);
+        let (_, out, _) = decode_mnf8(&file2).expect("valid token wire decodes");
+        assert_eq!(out, med_residual_invert(&res, 16, 16));
     }
 }

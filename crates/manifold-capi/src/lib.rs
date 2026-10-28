@@ -258,6 +258,47 @@ mod tests {
         }
     }
     #[test]
+    fn roundtrip_mnf8_token_file_via_ffi() {
+        // ADR-003: an MNF8 file carrying the token payload decodes through
+        // manifold_decode (magic routing, no new entry point). The encoder
+        // picks tokens on this ramp body; the decode must be exact.
+        let (w, h) = (64u32, 64u32);
+        let mut px: Vec<u8> = vec![0; (w * h * 3) as usize];
+        for y in 0..h {
+            for x in 0..w {
+                let i = ((y * w + x) * 3) as usize;
+                px[i] = (y * 3) as u8;
+                px[i + 1] = (y / 4) as u8;
+                px[i + 2] = 200;
+            }
+        }
+        unsafe {
+            let mut n = 0usize;
+            let st = manifold_encode_mnf8(px.as_ptr(), w, h, 0, std::ptr::null_mut(), &mut n);
+            assert_eq!(st, STATUS_BUF_TOO_SMALL);
+            let mut enc = vec![0u8; n];
+            let st = manifold_encode_mnf8(px.as_ptr(), w, h, 0, enc.as_mut_ptr(), &mut n);
+            assert_eq!(st, STATUS_OK);
+            let mut wn = 0usize;
+            let (mut ow, mut oh) = (0u32, 0u32);
+            let st = manifold_decode(
+                enc.as_ptr(),
+                n,
+                std::ptr::null_mut(),
+                &mut wn,
+                &mut ow,
+                &mut oh,
+            );
+            assert_eq!(st, STATUS_BUF_TOO_SMALL);
+            assert_eq!(wn, px.len());
+            let mut out = vec![0u8; wn];
+            let st = manifold_decode(enc.as_ptr(), n, out.as_mut_ptr(), &mut wn, &mut ow, &mut oh);
+            assert_eq!(st, STATUS_OK);
+            assert_eq!(out[..wn], px[..], "token-file roundtrip through the C ABI");
+            assert_eq!((ow, oh), (w, h));
+        }
+    }
+    #[test]
     fn roundtrip_mnf5_via_ffi() {
         let (w, h) = (32u32, 32u32);
         let px: Vec<u8> = (0..w as usize * h as usize * 3)

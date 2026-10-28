@@ -3,9 +3,10 @@
 A lossless RGB8 image codec suite in Rust, built as compression research:
 shared-patch atlas prediction, geometric transforms, rate-aware coding.
 
-Status: MNF5/MNF6/MNF7 frozen formats + MNF8 backend-field format
-(v1.2.1, ADR-002) · hardened decoders (bounded, checksummed, canonical,
-fuzzed) · independently validated · normative format spec at
+Status: MNF5/MNF6/MNF7 frozen formats + MNF8 backend-field format with the
+ADR-003 FLAG_TOKENS token arm (v1.6.0, both ADRs) · hardened decoders
+(bounded, checksummed, canonical, fuzzed) · independently validated ·
+normative format spec at
 [docs/format.md](docs/format.md)
 
 ## Library surface (v1.2+)
@@ -17,8 +18,8 @@ the in-repo crate and lib name stay `manifold`) and **`manifold-codec-capi`**
 | API | Status | Since |
 | --- | ------ | ----- |
 | `manifold-codec` / `codec::*` (MNF5 encode/decode, `DecodeLimits`) | stable (v1.x semver) | v1.0 |
-| `mnf6::*` MNF6/7 encode/decode + `decode_mnf7_with_limits` (`mnf6::DecodeLimits` = the codec type) | stable | v1.2.1 |
-| `mnf8::*` MNF8 encode/decode, profiles, `FLAG_PRED_MED` | stable | v1.2.0 |
+| MNF8 (backend field + FLAG_PRED_MED + FLAG_TOKENS, ADR-002/003) | stable (v1.x semver; TOKENS since v1.6) | v1.2.1 |
+| `mnf8::*` MNF8 encode/decode, profiles, `FLAG_PRED_MED`, `FLAG_TOKENS` | stable | v1.2.0 |
 | `error::Error` / `error::Result` (matchable categories) | stable | v1.2.1 |
 | `refdecode::ref_decode` (independent MNF5 decoder) | stable | v1.2.1 |
 | `img` I/O shims (JPEG/PNG) | stable under the default `image-io` feature | v1.0 |
@@ -107,13 +108,17 @@ Requires Rust stable (crate pins MSRV 1.91) and crates.io access.
 CLI:
 
     manifold encode <image> -o out.mnf5 [--no-atlas] [--geom] [--mnf6]
-    manifold decode <file> -o out.png        # routes MNF5/6/7 by magic
+    manifold decode <file> -o out.png        # routes MNF5/6/7/8 by magic
     manifold verify <image> <file>           # exactness check, exit 0/1/2
     manifold benchmark <image>               # 3 arms + PNG, bpp/ratio/ms
     manifold vis <image> [prefix]            # atlas mode/savings/origins maps
 
 `--geom` enables D8 geometric references (MNF5 mode 2). `--mnf6` emits
-MNF7 (latest format; the flag predates the MNF7 rename).
+MNF7 (latest format; the flag predates the MNF7 rename). `--mnf8` emits
+MNF8 with ADR-002 backend profiles and ADR-003's rate-aware token arm
+(FLAG_TOKENS: LZ77-2D tokens over the MED residual plane, picked per
+file only when it measures smaller; decode routes token payloads
+transparently by magic).
 
 ## Repository map
 

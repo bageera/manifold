@@ -4,6 +4,10 @@
  * Contract: never panics on caller data; all fallibility via status codes.
  * Buffers are caller-owned; lengths are caller-supplied. Query pattern:
  * call once with out=NULL to learn the required buffer size.
+ *
+ * MNF8 files may carry the FLAG_TOKENS payload (ADR-003): manifold_decode
+ * handles both record and token payloads transparently by magic; the MNF8
+ * encoders measure the token arm and emit it only when it is smaller.
  */
 #ifndef MANIFOLD_H
 #define MANIFOLD_H

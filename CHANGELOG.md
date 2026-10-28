@@ -1,5 +1,37 @@
 # Changelog
 
+## v1.6.0 — MNF8 FLAG_TOKENS: the LZ77-2D token arm ships on the wire (2026-10-28)
+
+ADR-003 ([mnf8-adr-003-tokens.md](docs/mnf8-adr-003-tokens.md)): MNF8 gains
+`FLAG_TOKENS` (bit 3, MNF8-only mask widened to !0b1111). The payload is
+the LZ77-2D token wire over the image-wide MED residual plane — the one
+RETAINED engine candidate from the ladder probe
+([mnf9-engine-ladder-probe.md](docs/mnf9-engine-ladder-probe.md), Rust-port
+measurements [mnf9-token-arm.md](docs/mnf9-token-arm.md)).
+
+- Encoder: every backend candidate measures the token arm
+  (PRED_MED|TOKENS) against the record arms by final file size — the
+  rate-aware pick is never worse than the record pick by construction.
+  CLI-gated: gradient 1639→417 B (−74.6%, flags 0x0c); solid/screenshot/
+  noise keep record arms (62/782/196912 — the ladder's class split).
+- Decoder: token payloads validate structurally (`src/tokens.rs`
+  decode_plane — unknown tags / truncation / below-minimum / out-of-range
+  sources / plane-size mismatch are Error, never panic), invert through
+  an exact causal MED walk, and use the token path's OWN decompression
+  bound (4·w·h, the mode-3 lesson: the token worst case exceeds the
+  record bound on large images). PLANAR|TOKENS rejected.
+- MAGICS UNCHANGED: MNF9 stays reserved for new-record-grammar work
+  (charts). No MNF5–7 stream changes; MNF6/7 flag masks stay frozen.
+- Conformance: mnf8_tokens golden vector (byte-exact) + PLANAR|TOKENS and
+  reserved-bit rejections; differential suite gained an MNF8 token-arm
+  roundtrip test; fuzz added the --mnf8=maximum arm (525 trials, 0 panics,
+  0 wrongful acceptances); capi gained a token-file roundtrip through the
+  C ABI (4/4). Normative spec: format.md §3/§3.1.
+- Research note measured alongside: Riemann Array v0.6 periodic
+  prediction (below) stayed OUT of the wire — its mechanism loses to the
+  token arm on the same corpus at every measured point, and its win class
+  (vertical periodicity) is a subset of what FLAG_TOKENS already covers.
+
 ## Research — Riemann Array v0.6: periodic structure prediction (2026-10-27)
 
 Measured record; MNF5–8 bitstream unchanged ([periodic-prediction-v06-probe.md](docs/periodic-prediction-v06-probe.md),
