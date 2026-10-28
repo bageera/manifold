@@ -1,0 +1,40 @@
+file                                     res-z9    tokz9    2dtok med-std med-orient med-delta
+gradient_320x240.png                       1696      446      605    1696       1696        +0
+noise_256x256.png                        196674   224845   224818  196674     196674        +0
+repeat_256x256.png                         1632      792      953    1632       1632        +0
+screenshot_640x400.png                     1354      795      706    1354       1354        +0
+solid_256x256.png                           218       41       42     218        218        +0
+heldout/blob_224x160.png                   9137    12742    12815    9137       9137        +0
+heldout/blocks_192x128.png                 1972     1672     1684    1972       1972        +0
+heldout/document_200x280.png               1129     1304      920    1129       1129        +0
+heldout/plaid_192.png                     38098    41878    42478   38098      38098        +0
+heldout/poster_208x144.png                 3293     3562     3015    3293       3293        +0
+heldout-photos/autumn_160x120_s3100006.png    30308    33281    33344   30308      30308        +0
+heldout-photos/dusk_160x120_s3100003.png    18819    21008    21076   18819      18819        +0
+heldout-photos/dusk_224x160_s3100002.png    65515    70790    70942   65515      65515        +0
+heldout-photos/forest_192x144_s3100001.png    48247    51809    51889   48247      48247        +0
+heldout-photos/forest_224x160_s3100005.png    59424    63800    63777   59424      59424        +0
+heldout-photos/forest_224x160_s3100008.png    30885    34392    34508   30885      30885        +0
+heldout-photos/ocean_192x144_s3100007.png    45566    49173    49293   45566      45566        +0
+heldout-photos/sand_192x144_s3100004.png    50718    54483    54583   50718      50718        +0
+heldout-photos/slate_160x120_s3100009.png    29982    32486    32604   29982      29982        +0
+heldout-photos/terrain_160x120_s3100000.png    18311    20503    20547   18311      18311        +0
+photos/autumn_192x144_s900001.png         25491    28358    28472   25491      25491        +0
+photos/dusk_160x120_s900003.png           29448    31999    32075   29448      29448        +0
+photos/forest_224x160_s900002.png         62356    67557    67614   62356      62356        +0
+photos/ocean_192x144_s900007.png          46453    50475    50647   46453      46453        +0
+photos/sand_160x120_s900000.png           35064    37892    37958   35064      35064        +0
+photos/slate_192x144_s900004.png          49343    53249    53383   49343      49343        +0
+photos/slate_224x160_s900008.png          69800    74798    74926   69800      69800        +0
+photos/stone_160x120_s900006.png          17078    18917    18948   17078      17078        +0
+photos/terrain_160x120_s900009.png        33779    36247    36285   33779      33779        +0
+photos/terrain_224x160_s900005.png        54949    59582    59587   54949      54949        +0
+
+TOTALS:
+  raster      1076739
+  tok         1178876
+  tok2d       1180494
+  std         1076739
+  orient      1076739
+  orient-vs-std delta: +0
+  tok2d-vs-tok delta:  +1618

@@ -17,6 +17,7 @@
 // against zlib-9 on identical streams.
 
 pub mod lz77_2d;
+pub mod rans_mixed;
 pub use lz77_2d::{decode_plane, encode_plane, pick_plane, zlib9_len, Stats};
 
 use constriction::stream::{

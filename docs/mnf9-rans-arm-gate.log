@@ -1,0 +1,39 @@
+file                                plane:z9       z19      rans    wire:z9 wire:rans       pick
+gradient_320x240.png                    1696       256       998        446       414  z19-plane
+noise_256x256.png                     196674    196623    197584     225099    245466  z19-plane
+repeat_256x256.png                      1632       379       895        793       799  z19-plane
+screenshot_640x400.png                  1354       670       444        795       797 rans-plane
+solid_256x256.png                        218        28        27         41        57 rans-plane
+heldout/blob_224x160.png                9137      8036      8927      13054     13602  z19-plane
+heldout/blocks_192x128.png              1972      1413      1561       1669      1607  z19-plane
+heldout/document_200x280.png            1129       886       685       1305      1304 rans-plane
+heldout/plaid_192.png                  38098     35992     40510      42216     43207  z19-plane
+heldout/poster_208x144.png              3293      2221      2516       3537      3428  z19-plane
+heldout-photos/autumn_160x120_s3100006.png     30308     28942     31802      33305     33399  z19-plane
+heldout-photos/dusk_160x120_s3100003.png     18819     16581     19659      21195     21348  z19-plane
+heldout-photos/dusk_224x160_s3100002.png     65515     64273     70094      70859     72297  z19-plane
+heldout-photos/forest_192x144_s3100001.png     48247     46368     51503      51929     52502  z19-plane
+heldout-photos/forest_224x160_s3100005.png     59424     56651     63214      63899     63889  z19-plane
+heldout-photos/forest_224x160_s3100008.png     30885     29087     32595      35124     35072  z19-plane
+heldout-photos/ocean_192x144_s3100007.png     45566     43821     48340      49276     49470  z19-plane
+heldout-photos/sand_192x144_s3100004.png     50718     48178     54178      54584     55517  z19-plane
+heldout-photos/slate_160x120_s3100009.png     29982     28980     31398      32507     32477  z19-plane
+heldout-photos/terrain_160x120_s3100000.png     18311     16359     19161      20777     20900  z19-plane
+photos/autumn_192x144_s900001.png      25491     22943     26780      28839     28990  z19-plane
+photos/dusk_160x120_s900003.png        29448     28381     30794      32003     31890  z19-plane
+photos/forest_224x160_s900002.png      62356     60034     66487      67633     68371  z19-plane
+photos/ocean_192x144_s900007.png       46453     45271     49349      50578     51048  z19-plane
+photos/sand_160x120_s900000.png        35064     33298     37285      37956     38679  z19-plane
+photos/slate_192x144_s900004.png       49343     47329     52546      53315     54298  z19-plane
+photos/slate_224x160_s900008.png       69800     66221     74633      74879     77275  z19-plane
+photos/stone_160x120_s900006.png       17078     16062     17654      19216     19101  z19-plane
+photos/terrain_160x120_s900009.png     33779     31943     35915      36282     36888  z19-plane
+photos/terrain_224x160_s900005.png     54949     53127     58057      59646     59383  z19-plane
+
+TOTALS:
+  pick            1029925
+  z19-plane       1030353
+  z9-plane        1076739
+  rans-plane      1125591
+  wire-z9         1182757
+  wire-rans       1213475

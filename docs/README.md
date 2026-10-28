@@ -55,6 +55,14 @@ metadata counted and exact reconstruction asserted:
 - [mnf9-token-arm.md](mnf9-token-arm.md) — the retained arm ported to Rust
   (`crates/mnf-mans`): real decoder, 30-file corpus gate, 5/30 token wins
   reproducing the ladder numbers.
+- [mnf9-rans-arm.md](mnf9-rans-arm.md) — mixed run/LZ + contextual rANS
+  (backend-3 candidate): DENIED as universal, RETAINED behind the
+  rate-aware pick (screenshot −34%, document −23%); wire-through-rANS DEAD.
+- [mnf9-charts-probe.md](mnf9-charts-probe.md) — step-5 candidates:
+  gradient-orientation tiebreak DENIED (the tie surface does not exist
+  post-residual); 2D-token column-layout RETAINED as a pick candidate
+  (−576 B/30-file, text/screen classes); arm F recorded as the pick's
+  own per-file readout.
 
 Earlier research notes: [v07-charts-replication.md](v07-charts-replication.md),
 [cy01-torus.md](cy01-torus.md), [dimensional-fold-probe.md](dimensional-fold-probe.md),
