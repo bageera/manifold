@@ -387,3 +387,55 @@ portfolio-wide on the photographic class (the autopsy's
 byte-bulk). The candidate = MNF11: a per-file flag (channel-diff
 organization) with a pick that measures both organizations at
 complete-file size (the never-worse rule).
+
+## MNF11-X1: Mathematical Program Discovery (moonshot lab, experiment 1)
+
+The hypothesis (Jon): a bounded deterministic integer expression
+language (lin / rec / sin-LUT / lat / mod / rep / sc / add composites;
+constants excluded — the shipped MNF9 const arm owns 36 B) discovered
+by search could beat the shipped 1.10.0 pick somewhere real.
+
+Instrument: per-channel entropy screen over an exhaustive family grid,
+bounded top-24 heap, finalists container-measured; complete serialized
+L = prog bytes + residual container + 32-B framing; baseline = the
+RELEASED CLI's own pick.
+
+Results — the honest score:
+
+- Gen corpus (16 known-generative fixtures): 16/16 LOSE. Where
+  programs certainly exist, X1's framing (per-channel prog + 32-B
+  framing + planar residual plane) is structurally more expensive than
+  the shipped MNF9 record (one whole-frame record, 36-58 B files).
+  MNF9's framing economy owns simple generators.
+- Real corpus half 1 (10 files): 2 apparent wins — noise −218, blob
+  −485 — but the decomposition check (the "impossible number" rule)
+  showed NEITHER is program discovery: the rec(k)=(7+7k)%32 candidate
+  on noise had a container cost IDENTICAL bit-for-bit to the raw
+  channel (65,550 = 65,550; the program contributed nothing), and both
+  deltas came from the whole-plane-planar arm SHAPE beating the
+  shipped per-tile arm shape on framing (~285 B of tile overhead on
+  noise). The remainder: gradient +877/MNF9-owned, plaid +25,325 (the
+  language cannot express its 2-D periodicity at wire cost),
+  document/poster/screenshot/blocks/repeat/solid
+  all shipped-owned.
+
+**Verdict (v1, closed): program discovery in this language loses
+everywhere it counts** — the shipped grammar's framing economy plus
+its token/template machinery covers every real fixture; composition
+adds no reachable class that the six MNF9 families + the record/token
+arms miss, at least not at v1's wire cost.
+
+Instrument lessons carried to the next moonshots (X2+):
+1. Any candidate arm must compose INSIDE the shipped per-tile/token
+   grammar (a per-tile residual-source swap), not replace the
+   record framing — else it wins on framing artifacts, not ideas.
+2. The decomposition check (does the claimed contribution survive
+   its component's container cost measured alone?) is mandatory;
+   the noise rec "win" was caught exactly this way.
+3. MNF9's framing economy sets a brutal bar for whole-frame
+   descriptions: new whole-frame languages must include MNF9's own
+   framing rules (single record, shared channels) or they lose by
+   construction.
+
+The moonshot lab continues (X2 dynamics next) under those
+instrument rules.
