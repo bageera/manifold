@@ -384,6 +384,41 @@ Conformance: tests/conformance/mnf8_branch_left_poster.mnf8 (golden) +
 rejections rej_mnf8_two_predictors.mnf8 (MED|PLANE) and
 rej_mnf8_tokens_left.mnf8 (TOKENS|LEFT).
 
+### 3.3 REF field — channel-diff reference (ADR-008, v1.11 bit 6 generalized v1.12)
+
+Bits 6-7 form a field REF = (flags >> 6) & 0b11:
+
+    0 = none     no channel-diff organization (bodies are plain)
+    1 = G        per-pixel [G, R−G, B−G]  (v1.11's FLAG_CHANNEL_DIFF
+                 bit-6 semantic; every old CD file is this shape)
+    2 = R        per-pixel [R, G−R, B−R]
+    3 = B        per-pixel [B, R−B, G−B]
+
+All differences are mod 256. REF != 0 relabels mode-0 record bodies and
+token tag-0 literals (planar bodies relabel per-plane in wire emission
+order: [ref plane][first-diff plane][second-diff plane]); every other
+record mode is absent from CD files. Decode applies the per-pixel
+inverse BEFORE the predictor/token walk; exactness is the mod-256
+induction. REF-composed arms compete inside the encoder pick at complete
+file size (never-worse by construction; the wire adds no metadata).
+
+Compatibility contract (verified against both released binaries):
+
+    REF      v1.11 decoder      v1.12 decoder
+    00       decode             decode
+    01       decode             decode
+    10       reject (reserved)  decode
+    11       reject (reserved)  decode
+
+(v1.11's reserved-mask rule rejected any bit-7 set; v1.12 owns bit 7 and
+reserves bits 8..31 — rej_mnf8_reserved_bit8.mnf8 is the new boundary
+vector; the old bit-7 reject file was REF=11's exact shape and would
+decode wrongly under v1.11's replacement.)
+
+Conformance: mnf8_cdiff_slate64.mnf8 (REF=1, v1.11 golden, unchanged) +
+mnf8_ref2_screenshot.mnf8 (REF=2, token wire) +
+mnf8_ref3_terrain160.mnf8 (REF=3, planar records) + the rejects above.
+
 ## 4. Encoder profiles (informative; not a wire property)
 
 - balanced (default): zstd-19 pinned; flags measured as MNF7 measures

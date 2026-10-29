@@ -105,11 +105,52 @@ fn mnf8_cdiff_golden_vector_exact() {
 }
 
 #[test]
+fn mnf8_ref2_golden_vector_exact() {
+    // v1.12 REF field = 2 (R-centered): token wire, tag-0 literals carry
+    // [R, G−R, B−R] per pixel.
+    use manifold::mnf8::FLAG_REF_R;
+    let buf = load("mnf8_ref2_screenshot.mnf8");
+    let expect = load("mnf8_ref2_screenshot.expected.pixels");
+    let (dims, px, backend) = decode_mnf8(&buf).expect("ref2 golden decode");
+    assert_eq!((dims.width, dims.height), (640, 400));
+    assert_eq!(px, expect, "MNF8 ref2 golden pixels");
+    assert_eq!(backend, 1);
+    let flags = u32::from_le_bytes([buf[24], buf[25], buf[26], buf[27]]);
+    assert!(
+        flags & FLAG_REF_R != 0 && (flags >> 6) & 3 == 2,
+        "golden vector is a REF=2 pick file: 0x{flags:x}"
+    );
+    // The old 1.11.0 reserved mask (!0b1111111) must reject this file —
+    // decode with the v1.11 rule:
+    assert!(
+        flags & !0b1111_1111u32 != 0 || flags & 0b1000_0000u32 != 0,
+        "sanity: ref2 file trips the 1.11.0 reserved rule"
+    );
+}
+
+#[test]
+fn mnf8_ref3_golden_vector_exact() {
+    // v1.12 REF field = 3 (B-centered): the wire's [B, R−B, G−B].
+    let buf = load("mnf8_ref3_terrain160.mnf8");
+    let expect = load("mnf8_ref3_terrain160.expected.pixels");
+    let (dims, px, backend) = decode_mnf8(&buf).expect("ref3 golden decode");
+    assert_eq!((dims.width, dims.height), (160, 120));
+    assert_eq!(px, expect, "MNF8 ref3 golden pixels");
+    assert_eq!(backend, 1);
+    let flags = u32::from_le_bytes([buf[24], buf[25], buf[26], buf[27]]);
+    assert_eq!(
+        (flags >> 6) & 3,
+        3,
+        "golden vector is a REF=3 pick file: 0x{flags:x}"
+    );
+}
+
+#[test]
 fn mnf8_cdiff_rejections() {
     // ADR-008 validation vectors: reserved bit 7 / truncated CD payload —
     // each Err without panic.
     for name in [
-        "rej_mnf8_reserved_bit7.mnf8",
+        "rej_mnf8_reserved_bit8.mnf8",
         "rej_mnf8_cdiff_truncated.mnf8",
     ] {
         let buf = load(name);
