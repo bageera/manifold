@@ -439,3 +439,32 @@ Instrument lessons carried to the next moonshots (X2+):
 
 The moonshot lab continues (X2 dynamics next) under those
 instrument rules.
+
+## MNF11-X369: vortex-mathematics coefficient grid on the committed corpus
+
+Jon's pilot (decoded-JPEG patches) found no 3-6-9 advantage; the
+rigorous comparison he specified ran the exact grid C0=G,
+C1=(R−aG)%256, C2=(B−bG)%256, a,b ∈ {−2,−1,0,1,2,3,6,9} (64 combos)
+through the committed-stream walker (per-pixel relabel inside mode-0
+bodies + token tag-0 literals, each file's own backend, complete-file
+totals, consumption asserted):
+
+- Shipped total: 951,429; **(a,b)=(1,1) = 888,754 (−62,675) = the GRID
+  OPTIMUM** — the ADR-008 anchor is already argmax.
+- Next best is (0,1) at +16080 WORSE than (1,1); every
+  3/6/9-coefficient combination loses far worse (grid spread 140,366 B
+  from best to worst).
+- The instrument-level agreement with the pilot is total: channel
+  differences win, vortex coefficients don't, and (his wording) a small
+  sequence of reversible modular operations remains speculative until
+  one such sequence beats (1,1) — measured, not assumed.
+
+Instrument note: the walker's token relabeler caught a
+bytearray-+=-ndarray rebinding trap (strict append/extend now); the
+screenshot token wire reproduces 670 vs 678 at (1,1) exactly as the
+MNF11 diagnostic recorded.
+
+X369 verdict recorded: 3-6-9 residue cycles do not earn a compressor
+role; the modular-algebra framing (reversible relationships between
+channels, decided by compressed byte count) is the keeper — and its
+first proven member is ADR-008's (1,1).
