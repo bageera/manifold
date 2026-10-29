@@ -17,7 +17,11 @@
 //!   [`mnf6::encode_mnf7`]/[`mnf6::decode_mnf7`] + configurable ceilings
 //!   ([`mnf6::decode_mnf7_with_limits`]).
 //! - [`mnf8`]: MNF8 (backend byte: zlib/zstd-19, planar, FLAG_PRED_MED,
-//!   balanced|maximum profiles) — [`mnf8::encode_mnf8`]/[`mnf8::decode_mnf8`].
+//!   FLAG_TOKENS, branch predictors, balanced|maximum profiles) —
+//!   [`mnf8::encode_mnf8`]/[`mnf8::decode_mnf8`].
+//! - [`mnf9`]: MNF9 exact-generative whole-frame format (ADR-007) —
+//!   [`mnf9::encode_exact`] (None when no rule fits; the CLI pick emits an
+//!   MNF9-magic file only when it wins) / [`mnf9::decode_mnf9`].
 //! - [`refdecode`]: independent MNF5 decoder used by the differential tests.
 //! - [`error`]: the shared error/`Result` type for every fallible op.
 //!

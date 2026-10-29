@@ -399,7 +399,7 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "manifold-codec"
-version = "1.9.0"
+version = "1.10.0"
 dependencies = [
  "criterion",
  "flate2",
@@ -410,7 +410,7 @@ dependencies = [
 
 [[package]]
 name = "manifold-codec-capi"
-version = "1.9.0"
+version = "1.10.0"
 dependencies = [
  "manifold-codec",
 ]

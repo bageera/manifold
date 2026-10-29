@@ -415,3 +415,66 @@ reserved backend, reserved flag bit, bad magic) plus the token set
 (golden mnf8_tokens_gradient, PLANAR|TOKENS and reserved-bit
 rejections) and the branch set (golden mnf8_branch_left_poster,
 two-predictors and tokens+left rejections).
+
+---
+
+# MNF9 — exact generative whole-frame format (ADR-007, v1.10.0)
+
+## 1. Header (32 B; field offsets mirror MNF8)
+
+    0   4   magic           ASCII "MNF9" exactly
+    4   4   width           u32 LE
+    8   4   height          u32 LE
+    12  4   reserved        MUST be 0 on write, rejected on read
+    16  4   reserved        MUST be 0 on write, rejected on read
+    20  4   payload_len     u32 LE; file total = 32 + payload_len
+    24  4   flags           MUST be 0 (no flag grammar in v1.10.0)
+    28  4   backend         MUST be 0 (no container in this format)
+
+## 2. Payload: one parametric whole-frame record
+
+    u8 model_id; then the model's parameters (LE):
+
+    1 constant        r,g,b                                             (4 B total)
+    2 div-1D          per channel: i32 N, i32 T; u8 D-index last        (26 B)
+    3 rec-1           per channel: u8 a0, i16 d; u8 orientation          (11 B)
+    4 bilinear joint  per channel: corners c00,c10,c01,c11 (u8 x4)      (13 B)
+    5 bilinear nested corners as id 5 (nested round-lerp, half-up)      (13 B)
+    6 piecewise       u8 nseg (1..=32), (nseg-1) x u16 boundary,        (var)
+                      then per segmentxchannel: i32 N, i32 T, u8 D-idx
+    0 and 7..=255     reserved - reject (Error, never panic)
+
+## 3. Normative arithmetic (the decoder IS the equation)
+
+- div form: N*x + T evaluated in i64 per channel x = pixel column
+  (piecewise: segment-local x restarting at each boundary); divided by
+  D (from the convention table, or the segment-relative form: index 3 =
+  segment length - 1, index 4 = segment length) using FLOOR division
+  (div_euclid with D > 0 strictly - the negative-direction lerp rule).
+  Any computed component outside 0..=255 -> file invalid.
+- rec-1: value_k = (a0 + d*k) mod 256 along the scan direction
+  (orientation 0 = rows, 1 = columns); all scan lines are identical by
+  construction.
+- bilinear joint: (c00*(W-1-x)*(H-1-y) + c10*x*(H-1-y) + c01*(W-1-x)*y
+  + c11*x*y) / ((W-1)*(H-1)) floored; W=1 or H=1 rejected.
+- bilinear nested: per channel, top/bottom round-lerps
+  (c00->c10, c01->c11 with the +floor((W-1)/2) half-up offset), then the
+  y-round-lerp between those two rows (+floor((H-1)/2)); W=1 or H=1
+  rejected.
+
+## 4. Denominator convention table
+
+    idx 0 = 1, 1 = 2, 2 = 4, 3 = W-1, 4 = W, 5 = 2(W-1), 6 = 256, 7 = 65536
+
+(Inside piecewise records, indices 3/4 are segment-relative.)
+
+## 5. Encoder contract
+
+`mnf9::encode_exact` emits a record ONLY when the rule reproduces every
+pixel exactly (zero residual, verified by real decode inside the
+encoder). The CLI --mnf8 flow measures the MNF9 file at final size
+against every MNF8 arm and writes whichever candidate won - the output's
+magic names the format (never assume). Malformed MNF9 input: Error,
+never panic (reserved ids, truncated params, out-of-table D index,
+piecewise boundary >= W, degenerate dims, bad magic, reserved words set,
+payload-length mismatch).

@@ -3,11 +3,18 @@
 A lossless RGB8 image codec suite in Rust, built as compression research:
 shared-patch atlas prediction, geometric transforms, rate-aware coding.
 
-Status: MNF5/MNF6/MNF7 frozen formats + MNF8 backend-field format with the
-ADR-003 tokens + ADR-004 branch predictors + ADR-005 near matches + ADR-006 matcher depth (v1.9.0) · hardened decoders
+Status: MNF5/MNF6/MNF7 frozen formats + MNF8 backend-field format (tokens,
+branch predictors, near matches, matcher depth; ADR-003..006) + the MNF9
+exact-generative whole-frame format (ADR-007: six decoder-defined integer
+families; the `--mnf8` flow emits an MNF9 file when the generative arm wins
+the pick) — release v1.10.0 · hardened decoders
 (bounded, checksummed, canonical, fuzzed) · independently validated ·
 normative format spec at
 [docs/format.md](docs/format.md)
+
+Identifier map: **Manifold v1.10.0** = the library release; **MNF9** = the
+generative file format's magic; **MNF10** = the research program's milestone
+name (never a wire magic).
 
 ## Library surface (v1.2+)
 
@@ -149,10 +156,9 @@ transparently by magic).
   docs/ternary-residuals-probe.md, docs/shear-refs-format-probe.md,
   docs/mnf8-riemann-conformal-probe.md,
   docs/mnf9-engine-ladder-probe.md; verdicts in CHANGELOG).
-- The one open format candidate: a rate-aware LZ77-token arm over MED
-  residuals (MNF9 engine; measured gradient −74%, solid −34%, blocks
-  −6% with the per-file pick refusing it where it loses — the
-  ladder record above).
+- The ladder's token arm shipped as MNF8's FLAG_TOKENS (ADR-003); the
+  `MNF9` name now denotes the exact-generative whole-frame format
+  (ADR-007, v1.10.0), not the token engine's research name.
 
 ## License
 
@@ -171,3 +177,11 @@ MIT — see [LICENSE](LICENSE).
 | v1.1.0 | MNF7: modular color-domain modes 4/5 (ADR-001) |
 | v1.1.1 | SECURITY.md, doc sync, truly-exhaustive proof |
 | v1.1.2 | decoder hardening (checked bounds, limits, alloc gates), D8 conformance |
+| v1.3.1 | CI green on the published surface |
+| v1.4.0 | packaging + API convenience (consumer pipeline) |
+| v1.5.1 | research records: engine ladder + conformal probe |
+| v1.6.0 | MNF8 FLAG_TOKENS: LZ77-2D token arm on the wire (ADR-003) |
+| v1.7.0 | MNF8 branch-prediction flags PRED_PLANE/PRED_LEFT (ADR-004) |
+| v1.8.0 | MNF8 token-wire TAG_NEAR narrow-coordinate matches (ADR-005) |
+| v1.9.0 | MNF8 TAG_NEAR + matcher candidate depth two-arm pick (ADR-006) |
+| v1.10.0 | MNF9 exact-generative whole-frame format ships (ADR-007 Track A) |
