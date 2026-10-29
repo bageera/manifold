@@ -34,6 +34,8 @@ principles (information theory, coding theory, MDL) to the mechanisms.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).
+- [ADR-008](mnf8-adr-008-channel-diff.md) — MNF11 channel-diff residual organization (PROPOSED: flag bit 6, [r,g,b]→[g,r−g,b−g] symbol relabel, −62,675 B corpus diagnostic, pick-measured both organizations)
+
 
 ## Measurements (canonical numbers)
 
