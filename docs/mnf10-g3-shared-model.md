@@ -275,3 +275,48 @@ consumption-check rule the Autopsy walker follows).
   deltas are 44-391 B on 5 of 7 fixtures — real but small, and the
   shipped pick must gain the arm behind its never-worse rule before
   any of it reaches a release.
+
+## G5: the sparse-representation economics (2026-10-28, Jon's directive)
+
+The question: can approximate template reuse with compactly-coded
+sparse corrections earn its own production representation? The three
+competing representations (same frozen budget: one identity template
+per file, same profitability boundary, z19+z9 containers, complete
+serialized cost) measured per file against the RELEASED 1.10.0
+portfolio, plus the mandatory 30-file corpus control:
+
+| fixture | A = 1.10.0 | S1 pos+delta | S2 mask+packed | S3 channel-aware | best |
+|---|---|---|---|---|---|
+| document | 923 | **711** (n=3) | 755 | 780 | −212 |
+| poster | 1142 | **751** (n=5) | 758 | 758 | −391 |
+| hero-pair | 220 | **176** (n=1) | 195 | 202 | −44 |
+| guard-strip | 315 | 352 | 362 | 369 | +37 |
+| screenshot | 678 | 817 | **713** | 892 | +35 |
+| solid | 36 | 284 | 169 | 184 | +133 |
+| gradient/blob/plaid | — | no-fire | no-fire | no-fire | — |
+
+Corpus control (all 30 files, all arms both T): fires 5/30, wins 2/30
+(document −212 S1, poster −391 S1), 0 regressions (the pick = min over
+arms keeps 1.10.0's candidates by construction).
+
+Verdicts:
+
+1. **S1 (explicit position + full RGB-delta payload) wins EVERYWHERE it
+   matters** — S2's compressed masks and S3's channel-splitting cost
+   more framing than they save on every fixture measured (the
+   containers already compress the residual planes' run structure; the
+   mask/pack framing is fixed overhead). The mask/channel hypotheses
+   are DENIED on this corpus.
+2. **The G4-class wins sharpened**: document −212 (G4's 793 came from a
+   less-favorable sweep resolution; the T=32 sweep = fewer, bigger refs).
+3. **The branch closes per the pre-registered rule**: the winning total
+   is 603 B on 2/30 files. A new wire representation does not clear
+   "earns its maintenance cost" on 2/30 files × a few hundred bytes —
+   the identity+sparse arm rides G4's measured capability; its PATH to
+   production is as a pick-arm inside a future release that bundles
+   larger shared-structure work (or on a corpus where such classes
+   dominate), not as a standalone grammar now.
+
+The Acoustics-branch analogy (sparse corrections over shared frames)
+should expect the same economics: the amplitude distribution decides,
+the position-coding form barely matters (the container eats runs).
