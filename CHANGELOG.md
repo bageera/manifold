@@ -1,5 +1,21 @@
 # Changelog
 
+## Research — Track A promoted: MNF9 exact-generative arm in the shipped encoder (2026-10-28, in-tree; release decision open)
+
+ADR-007's plan executed: the six decoder-defined exact-generative model
+families are ported into the shipped library (src/mnf9.rs — magic MNF9,
+32-B header at MNF8's field offsets, reserved words reject) with
+interval-bounded discovery solvers, and the CLI's --mnf8 flow now runs
+the generative arm at final file size: a zero-residual rule shipping an
+MNF9-magic file (solid 62 → 36 B; the div-1D golden-class fixture 97 →
+58 B), decode/verify dispatching by magic, never worse by construction
+(no-rule files keep MNF8 unchanged — photos included). Library pins
+3/3 (fire/no-fire/malformed with 0 panics), conformance suite 3/3
+against the committed fixture set, fuzz 525 trials 0 panics with the
+one accepted mutation diffed (valid-different-file class, recorded).
+Publication/tag decision deliberately deferred. Promotion record:
+docs/mnf10-track-a-promotion.md; ADR status header updated.
+
 ## Research — MNF10 two-track landing (2026-10-28): conventions extension, ADR-007, Autopsy (all probe-track, no wire change)
 
 1. Discovery conventions extended (committed script + probe record

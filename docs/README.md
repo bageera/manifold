@@ -24,8 +24,10 @@ principles (information theory, coding theory, MDL) to the mechanisms.
 - [mnf10-genfunc-discovery-probe.md](mnf10-genfunc-discovery-probe.md) —
   exact generative-function discovery probe (MNDF10 track opener).
 - [mnf8-adr-007-mnf10-genfunc.md](mnf8-adr-007-mnf10-genfunc.md) — MNF10
-  exact generative records decision record (PROPOSED; prototype shipped
-  in the research crate).
+  exact generative records decision record (PROMOTED Track A: shipped
+  decoder + pick arm; status header in the ADR).
+- [mnf10-track-a-promotion.md](mnf10-track-a-promotion.md) — the Track A
+  promotion record: CLI pick arm, dispatch, verify chain, fuzz diff.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).
