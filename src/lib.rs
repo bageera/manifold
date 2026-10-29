@@ -40,3 +40,6 @@ pub mod mnf8;
 pub mod refdecode;
 /// LZ77-2D token engine (MNF8 `FLAG_TOKENS`; the retained ladder arm).
 pub mod tokens;
+
+/// MNF9 exact generative whole-frame records (ADR-007; Track A).
+pub mod mnf9;

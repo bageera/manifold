@@ -1,6 +1,8 @@
 # ADR-007 — MNF10 exact generative records (2026-10-28)
 
-Status: PROPOSED (probe-measured; grammar prototype in research crate).
+Status: PROMOTED (Track A — shipped decoder src/mnf9.rs + CLI pick arm;
+prototype remains in the research crate; promotion record:
+docs/mnf10-track-a-promotion.md).
 
 ## Context
 

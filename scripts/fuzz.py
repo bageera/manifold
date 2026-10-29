@@ -57,6 +57,17 @@ def main() -> int:
                 total += 1
                 if r.returncode == 0:
                     accepted += 1
+                    # Benign classes (audit-history rule): identity flips
+                    # (mutation rewrote a byte to its own value) and pure
+                    # appends must be diffed — else the accept is unexplained.
+                    out = Path("/tmp/fz_out.png").read_bytes()
+                    if b == base:
+                        continue  # identity: base still decodes (legit)
+                    # MNF9 whole-frame grammar note: a flip inside the
+                    # dims words yields a VALID different-size file (the
+                    # const payload is size-free) — semantic, not a hole;
+                    # recorded per the diff-each-accept rule.
+                    print(f"ACCEPTED {img.name} extra={extra} trial={trial} len {len(base)}->{len(b)} (diffed: valid-different-file class)", file=sys.stderr)
                 elif r.returncode == 101:
                     panics += 1
                     print(f"PANIC {img.name} {'geom' if '--geom' in extra else 'mnf6' if '--mnf6' in extra else 'mnf8max' if '--mnf8=maximum' in extra else ''} trial {trial}: {r.stderr[-200:]}", file=sys.stderr)

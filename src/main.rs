@@ -5,6 +5,7 @@ use manifold::codec::*;
 use manifold::img::{self, Image};
 use manifold::mnf6::{decode_mnf7, encode_mnf7};
 use manifold::mnf8::{decode_mnf8, encode_mnf8, Profile};
+use manifold::mnf9;
 #[path = "vis_cli.rs"]
 mod vis;
 use std::path::{Path, PathBuf};
@@ -76,7 +77,23 @@ fn encode_cmd(
             st.ref_exact_color + st.ref_geom_color,
             st.refs.iter().flatten().filter(|(_, t)| *t != 0).count()
         );
-        buf
+        // ADR-007 Track A: the exact-generative whole-frame arm competes at
+        // final file size; a winning zero-residual rule ships an MNF9 file
+        // (decode dispatches by magic).
+        if let Some(mnf9_file) = mnf9::encode_exact(&src.pixels, dims) {
+            if mnf9_file.len() < buf.len() {
+                println!(
+                    "  [mnf9] exact rule discovered: {} B (mnf8 arm {} B)",
+                    mnf9_file.len(),
+                    buf.len()
+                );
+                mnf9_file
+            } else {
+                buf
+            }
+        } else {
+            buf
+        }
     } else if mnf6 {
         let (buf, st) = encode_mnf7(&src.pixels, dims, use_geom);
         println!(
@@ -117,7 +134,9 @@ fn encode_cmd(
 
 fn decode_cmd(file: &Path, out: &Path) {
     let buf = std::fs::read(file).unwrap_or_else(|e| die(&format!("read {}: {e}", file.display())));
-    let (res_dims, res_pixels) = if buf.len() >= 4 && &buf[0..4] == b"MNF8" {
+    let (res_dims, res_pixels) = if buf.len() >= 4 && &buf[0..4] == b"MNF9" {
+        mnf9::decode_mnf9(&buf).unwrap_or_else(|e| die(&format!("decode mnf9: {e}")))
+    } else if buf.len() >= 4 && &buf[0..4] == b"MNF8" {
         let (d, px, _) = decode_mnf8(&buf).unwrap_or_else(|e| die(&format!("decode mnf8: {e}")));
         (d, px)
     } else if buf.len() >= 4 && (&buf[0..4] == b"MNF6" || &buf[0..4] == b"MNF7") {
@@ -140,7 +159,9 @@ fn decode_cmd(file: &Path, out: &Path) {
 fn verify_cmd(image: &Path, file: &Path) {
     let src = load_rgb(image);
     let buf = std::fs::read(file).unwrap_or_else(|e| die(&format!("read {}: {e}", file.display())));
-    let (rdims, rpx) = if buf.len() >= 4 && &buf[0..4] == b"MNF8" {
+    let (rdims, rpx) = if buf.len() >= 4 && &buf[0..4] == b"MNF9" {
+        mnf9::decode_mnf9(&buf).unwrap_or_else(|e| die(&format!("decode mnf9: {e}")))
+    } else if buf.len() >= 4 && &buf[0..4] == b"MNF8" {
         let (d, px, _) = decode_mnf8(&buf).unwrap_or_else(|e| die(&format!("decode mnf8: {e}")));
         (d, px)
     } else if buf.len() >= 4 && (&buf[0..4] == b"MNF6" || &buf[0..4] == b"MNF7") {
