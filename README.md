@@ -12,6 +12,16 @@ the pick) — release v1.10.0 · hardened decoders
 normative format spec at
 [docs/format.md](docs/format.md)
 
+Research frontier (2026-10-28): MNF11 residual-structure discovery — a
+per-pixel channel-difference relabel [r,g,b] → [g, r−g, b−g] of the
+shipped streams measured −62,675 B (−6.6%) corpus-wide, 17/30 files
+(ADR-008 PROPOSED, flag bit 6); the (1,1) anchor verified as the optimum
+of Jon's 64-combo modular grid; moonshot lab open with X1 (program
+discovery) closed honest-negative and the G4/G5 shared-template verdicts
+recorded (sparse+template is the mechanism; D8 is a specialist; sprite
+redraws a measured negative). v1.10.0 remains the shipping baseline
+throughout.
+
 Identifier map: **Manifold v1.10.0** = the library release; **MNF9** = the
 generative file format's magic; **MNF10** = the research program's milestone
 name (never a wire magic).
@@ -185,3 +195,4 @@ MIT — see [LICENSE](LICENSE).
 | v1.8.0 | MNF8 token-wire TAG_NEAR narrow-coordinate matches (ADR-005) |
 | v1.9.0 | MNF8 TAG_NEAR + matcher candidate depth two-arm pick (ADR-006) |
 | v1.10.0 | MNF9 exact-generative whole-frame format ships (ADR-007 Track A) |
+| — (research) | MNF11: channeldiff relabel −62,675 B/17-of-30 on shipped streams (ADR-008 PROPOSED); X369 grid: (1,1) = optimum; X1 program discovery honest-negative; G4/G5 shared-template + mask verdicts (docs/mnf10-g3-shared-model.md) |
