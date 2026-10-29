@@ -320,3 +320,70 @@ Verdicts:
 The Acoustics-branch analogy (sparse corrections over shared frames)
 should expect the same economics: the amplitude distribution decides,
 the position-coding form barely matters (the container eats runs).
+
+## MNF11 (opened 2026-10-28): Residual Structure Discovery — diagnostic 1
+
+Per Jon's Priority-1 directive (measurement before any new coder): the
+top photographic record-stream contributors were analyzed (slate,
+dusk, forest, ocean, sand, slate-2, terrain) with four
+pre-registered questions.
+
+**Q1 entropy**: photographic residual planes carry H ≈ 4.2-5.5
+bits/byte per channel; conditioning on the left neighbor recovers
+only ~0.3-0.35 bits (the predictor's context already owns most of it).
+
+**Q2 cross-channel dependence**: MI(R,G) ≈ MI(G,B) ≈ MI(R,B) ≈
+1.6-2.5 bits — the residual channels share roughly half their entropy.
+This is the largest measured unused structure.
+
+**Q3 short-repeats census**: 4-byte grams repeat 3.5k-10k times in the
+plane; 6-byte ~0.2-1.7k; ≥8-byte ≈ 0 — the container's string layer
+already sees the repeats that exist; residual-level LZ content is
+exhausted beyond 6 bytes.
+
+**Q4 alternative symbol organizations**: measured complete streams
+through the SAME containers (z19 + z9): [G, R−G, B−G] symbol
+organization beats interleaved RGB planar on every photographic file
+(−6%..−20%); YCoCg-on-residual in-between; left-diff-of-residual
+LOSES.
+
+**The relabeled-shipped-stream experiment** (the decisive one): the
+shipped 1.10.0 CLI's own files, record-stream walked + per-pixel
+relabel [r,g,b] → [g, r−g, b−g] (reversible, zero added bytes), token
+tag-0 literals included, recompressed with the file's own backend
+(zstd for all 27 MNF8 files), consumption==stream asserted:
+
+| fixture | shipped | CD-relabel | delta |
+|---|---|---|---|
+| slate_224x160 | 62,052 | 54,356 | **−7,696** |
+| forest_224x160 (s9) | 55,804 | 47,534 | **−8,270** |
+| dusk_224x160 | 57,717 | 51,488 | −6,229 |
+| terrain_224x160 | 48,599 | 41,966 | −6,633 |
+| ocean_192x144 | 41,885 | 35,672 | −6,213 |
+| sand_160x120 | 31,345 | 27,378 | −3,967 |
+| stone_160x120 | 14,406 | 13,611 | −795 |
+| gradient | 254 | 284 | +30 |
+| repeat | 301 | 449 | +148 |
+| blob | 5,986 | 7,718 | +1,732 |
+| plaid | 20,677 | 25,523 | +4,846 |
+| screenshot (token) | 678 | 670 | −8 |
+| solid | MNF9 | — | skipped |
+
+**TOTAL: 951,393 → 888,718 (−62,675, −6.6%), wins 17/30, losses
+confined to synthetic + already-won arms.** The corpus's 24
+record-body photographic files all win except terrain/autumn-s3
+(+2.4k/+3.6k, the warm-grain outliers).
+
+Mechanism: photos carry cross-channel residual coupling (Q2); the
+[G, R−G, B−G] organization turns the coupled channels into
+small-valued residual symbols the container's order-0/short-match
+machinery codes cheaper. It rides the EXISTING container (no new
+entropy coder — the rANS lesson honored), adds ZERO per-tile bytes
+(no G5 metadata trap), and is reversible per pixel (decode inverse =
+per-pixel cumdiff on the tag-0/mode-0 bodies).
+
+This is the first measured arm since ADR-004 whose win is
+portfolio-wide on the photographic class (the autopsy's
+byte-bulk). The candidate = MNF11: a per-file flag (channel-diff
+organization) with a pick that measures both organizations at
+complete-file size (the never-worse rule).
