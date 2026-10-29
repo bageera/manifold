@@ -1,5 +1,43 @@
 # Changelog
 
+## v1.10.0 - MNF9: the exact-generative whole-frame format ships on the wire (ADR-007 Track A) (2026-10-28)
+
+Track A promoted from the discovery probe to the shipping library:
+src/mnf9.rs carries the six decoder-defined integer model families
+(constant, div-1D ramps, rec-1 recurrences, joint/nested bilinear corner
+forms, piecewise div-ramps) with normative arithmetic (explicit floor
+division via div_euclid - a negative-direction bilinear bug the fixture
+discipline caught and fixed; a strictly positive divisor), 32-B headers
+at MNF8's field offsets with reserved words reject-on-read, and
+interval-intersection discovery solvers with the probe's bounded-growth
+rule.
+
+The encoder's --mnf8 flow now measures the exact-generative arm at
+FINAL FILE SIZE alongside every MNF8 arm and writes whichever candidate
+won - solid fills 62 -> 36 B, the div-1D golden-class fixture 97 -> 58 B,
+photos and everything else without a zero-residual rule keep MNF8
+unchanged (never-worse by construction; decode/verify dispatch by
+magic, C ABI manifold_decode routes MNF9 files the same way).
+
+Naming: Manifold 1.10.0 = the library release; MNF9 = the generative
+file format's magic; MNF10 = the research milestone name (never a wire
+magic).
+
+Gates: fmt + clippy --all-targets --all-features -D warnings clean; lib
+48/48 (incl. 3 MNF9 fire/no-fire/malformed pins), MNF9 conformance 3/3
+against the committed six-model golden set (fixtures from
+scripts/gen_mnf10_fixtures.py; wire-economy bound <128 B asserted);
+MNF6 5/5; MNF8 6/6; differential 4/4; fuzz 525 trials 0 panics (the one
+accepted mutation diffed: the valid-different-file class on the
+size-free MNF9-const payload - annotated); git diff --check clean.
+ADR-007 status -> PROMOTED; promotion record
+docs/mnf10-track-a-promotion.md; Bit-Cost Autopsy
+docs/mnf10-autopsy.md. Track B (G3 Shared-Model) validated separately:
+Arm C DENIED at zstd (the container's LZ wins exact translations),
+Arm D WIN -4.4% (aligned D8 references), Arm E WIN -65% (sparse-corrupt
+refs with coded residuals) - docs/mnf10-g3-shared-model.md; G3-E2
+corpus validation runs next with the frozen budget (D8 + 1 template).
+
 ## Research — Track A promoted: MNF9 exact-generative arm in the shipped encoder (2026-10-28, in-tree; release decision open)
 
 ADR-007's plan executed: the six decoder-defined exact-generative model

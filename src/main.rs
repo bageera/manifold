@@ -345,7 +345,10 @@ fn parse_encode(a: &[String]) -> (PathBuf, PathBuf, bool, bool, bool, Option<Pro
     let mut mnf6 = false;
     let mut mnf8: Option<Profile> = None;
     // MNF6+ modes stay OPT-IN (format-freeze policy); MNF8 likewise:
-    // --mnf8 (balanced) / --mnf8=maximum
+    // --mnf8 (balanced) / --mnf8=maximum. ADR-007 note: the --mnf8 flow
+    // MEASURES the MNF9 exact-generative arm and writes an MNF9-magic file
+    // when that arm wins the pick (decode dispatches by magic) — the output
+    // file's format is whichever candidate won, not always MNF8.
     let mut geom = false;
     let mut i = 0;
     while i < a.len() {

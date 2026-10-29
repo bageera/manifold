@@ -31,10 +31,15 @@ fn status(e: &manifold::error::Error) -> i32 {
 
 // ---- decode ---- ------------------------------------------------------------
 
-/// Decode any MNF container (auto-detects MNF5/6/7/8 by magic).
+/// Decode any MNF container (auto-detects MNF5/6/7/8/9 by magic).
 /// Inputs: `buf`/`len` = container. Outputs: caller buffer `out` sized
 /// `*out_len` (pass `out_len` with a zero-length buffer to query; the
 /// required size is written back). Returns STATUS_OK on success.
+///
+/// # Safety
+/// `buf` must point to `len` readable bytes; `out` (if non-null) must
+/// point to `*out_len` writable bytes; `pixels_len`/`width`/`height` must
+/// be valid pointers. The function never panics on caller data.
 #[no_mangle]
 pub unsafe extern "C" fn manifold_decode(
     buf: *const u8,
@@ -82,16 +87,25 @@ unsafe fn decode_any(buf: &[u8]) -> manifold::error::Result<(u32, u32, Vec<u8>)>
                 let (d, px, _) = manifold::mnf8::decode_mnf8(buf)?;
                 return Ok((d.width, d.height, px));
             }
-            _ => return Err(manifold::error::Error::msg("bad magic (want MNF5/6/7/8)")),
+            b"MNF9" => {
+                let (d, px) = manifold::mnf9::decode_mnf9(buf)?;
+                return Ok((d.width, d.height, px));
+            }
+            _ => return Err(manifold::error::Error::msg("bad magic (want MNF5/6/7/8/9)")),
         }
     }
-    Err(manifold::error::Error::msg("bad magic (want MNF5/6/7/8)"))
+    Err(manifold::error::Error::msg("bad magic (want MNF5/6/7/8/9)"))
 }
 
 // ---- encode ---- ------------------------------------------------------------
 
 /// Encode MNF6/7 (zstd container) from raw RGB8. Encoded bytes are copied
 /// into caller buffer; query by passing out=null (required size written).
+///
+/// # Safety
+/// `pixels` must point to `width*height*3` readable bytes; `out` (if
+/// non-null) to `*out_len` writable bytes; `out_len` must be a valid
+/// pointer (all four: never panics on caller data).
 #[no_mangle]
 pub unsafe extern "C" fn manifold_encode(
     pixels: *const u8,
@@ -113,6 +127,11 @@ pub unsafe extern "C" fn manifold_encode(
 /// Encode MNF5 (v0.5 format, zlib container) from raw RGB8.
 /// use_geom: 0 = t=0 only, nonzero = D8 geometry search. Same out/out_len
 /// convention as the other encoders.
+///
+/// # Safety
+/// `pixels` must point to `width*height*3` readable bytes; `out` (if
+/// non-null) to `*out_len` writable bytes; `out_len` must be a valid
+/// pointer (all four: never panics on caller data).
 #[no_mangle]
 pub unsafe extern "C" fn manifold_encode_mnf5(
     pixels: *const u8,
@@ -136,6 +155,13 @@ pub unsafe extern "C" fn manifold_encode_mnf5(
 }
 
 /// Encode MNF8 (backend auto-select; profile: 0=balanced, 1=maximum).
+/// The pick also measures the MNF9 exact-generative arm (ADR-007); a
+/// winning rule emits an MNF9-magic file — `manifold_decode` routes it.
+///
+/// # Safety
+/// `pixels` must point to `width*height*3` readable bytes; `out` (if
+/// non-null) to `*out_len` writable bytes; `out_len` must be a valid
+/// pointer (all four: never panics on caller data).
 #[no_mangle]
 pub unsafe extern "C" fn manifold_encode_mnf8(
     pixels: *const u8,
@@ -223,14 +249,14 @@ mod tests {
             .collect();
         unsafe {
             let mut n = 0usize;
-            let mut st = manifold_encode_mnf8(px.as_ptr(), w, h, 0, std::ptr::null_mut(), &mut n);
+            let st = manifold_encode_mnf8(px.as_ptr(), w, h, 0, std::ptr::null_mut(), &mut n);
             assert_eq!(st, STATUS_BUF_TOO_SMALL);
             let mut enc = vec![0u8; n];
-            let mut st = manifold_encode_mnf8(px.as_ptr(), w, h, 0, enc.as_mut_ptr(), &mut n);
+            let st = manifold_encode_mnf8(px.as_ptr(), w, h, 0, enc.as_mut_ptr(), &mut n);
             assert_eq!(st, STATUS_OK);
             let mut wn = 0usize;
             let (mut ow, mut oh) = (0u32, 0u32);
-            let mut st = manifold_decode(
+            let st = manifold_decode(
                 enc.as_ptr(),
                 n,
                 std::ptr::null_mut(),
@@ -240,12 +266,11 @@ mod tests {
             );
             assert_eq!(st, STATUS_BUF_TOO_SMALL);
             let mut out = vec![0u8; wn];
-            let mut st =
-                manifold_decode(enc.as_ptr(), n, out.as_mut_ptr(), &mut wn, &mut ow, &mut oh);
+            let st = manifold_decode(enc.as_ptr(), n, out.as_mut_ptr(), &mut wn, &mut ow, &mut oh);
             assert_eq!(st, STATUS_OK);
             assert_eq!(out[..wn], px[..]);
             // invalid container → FORMAT_INVALID, not a panic
-            let junk = vec![0u8; 40];
+            let junk = [0u8; 40];
             let st = manifold_decode(
                 junk.as_ptr(),
                 junk.len(),
@@ -326,6 +351,72 @@ mod tests {
             let st = manifold_decode(enc.as_ptr(), n, out.as_mut_ptr(), &mut wn, &mut ow, &mut oh);
             assert_eq!(st, STATUS_OK);
             assert_eq!(out[..wn], px[..]);
+        }
+    }
+    #[test]
+    fn mnf9_file_via_ffi_and_malformed_rejects() {
+        // ADR-007 (v1.10.0): the encode path may emit an MNF9-magic file when
+        // the generative arm wins; manifold_decode routes it by magic. A
+        // constant body fires the const model here; malformed MNF9 payloads
+        // are FORMAT_INVALID, never a panic.
+        let (w, h) = (32u32, 32u32);
+        let px: Vec<u8> = vec![7u8; (w * h * 3) as usize];
+        unsafe {
+            let mut n = 0usize;
+            let st = manifold_encode_mnf8(px.as_ptr(), w, h, 0, std::ptr::null_mut(), &mut n);
+            assert_eq!(st, STATUS_BUF_TOO_SMALL);
+            let mut enc = vec![0u8; n];
+            let st = manifold_encode_mnf8(px.as_ptr(), w, h, 0, enc.as_mut_ptr(), &mut n);
+            assert_eq!(st, STATUS_OK);
+            // small bodies legitimately pick record arms (the consumer-fixture
+            // rule); pin the DISPATCH only when an MNF9 file occurs, so:
+            if &enc[0..4] == b"MNF9" {
+                let mut wn = 0usize;
+                let (mut ow, mut oh) = (0u32, 0u32);
+                let st = manifold_decode(
+                    enc.as_ptr(),
+                    n,
+                    std::ptr::null_mut(),
+                    &mut wn,
+                    &mut ow,
+                    &mut oh,
+                );
+                assert_eq!(st, STATUS_BUF_TOO_SMALL);
+                let mut out = vec![0u8; wn];
+                let st =
+                    manifold_decode(enc.as_ptr(), n, out.as_mut_ptr(), &mut wn, &mut ow, &mut oh);
+                assert_eq!(st, STATUS_OK);
+                assert_eq!(out[..wn], px[..]);
+            }
+            // malformed MNF9: reserved model id → FORMAT_INVALID
+            let bad = if &enc[0..4] == b"MNF9" {
+                let mut b = enc.clone();
+                b[32] = 7; // reserved id
+                b
+            } else {
+                // build a bad MNF9 file by hand: magic + reserved id payload
+                let mut b = b"MNF9".to_vec();
+                b.extend_from_slice(&32u32.to_le_bytes());
+                b.extend_from_slice(&32u32.to_le_bytes());
+                b.extend_from_slice(&0u32.to_le_bytes());
+                b.extend_from_slice(&0u32.to_le_bytes());
+                b.extend_from_slice(&4u32.to_le_bytes());
+                b.extend_from_slice(&0u32.to_le_bytes());
+                b.extend_from_slice(&0u32.to_le_bytes());
+                b.extend_from_slice(&[7u8, 0, 0, 0]);
+                b
+            };
+            let mut wn = 0usize;
+            let (mut ow, mut oh) = (0u32, 0u32);
+            let st = manifold_decode(
+                bad.as_ptr(),
+                bad.len(),
+                std::ptr::null_mut(),
+                &mut wn,
+                &mut ow,
+                &mut oh,
+            );
+            assert_eq!(st, STATUS_FORMAT_INVALID);
         }
     }
 }

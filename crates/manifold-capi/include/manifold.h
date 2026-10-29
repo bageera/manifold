@@ -8,6 +8,11 @@
  * MNF8 files may carry the FLAG_TOKENS payload (ADR-003): manifold_decode
  * handles both record and token payloads transparently by magic; the MNF8
  * encoders measure the token arm and emit it only when it is smaller.
+ *
+ * MNF9 (ADR-007, v1.10.0): manifold_encode_mnf8's pick also measures the
+ * exact-generative whole-frame arm; when a zero-residual integer rule wins,
+ * the emitted file carries the MNF9 magic and manifold_decode dispatches it
+ * the same way. Malformed MNF9 payloads return FORMAT_INVALID, never panic.
  */
 #ifndef MANIFOLD_H
 #define MANIFOLD_H
