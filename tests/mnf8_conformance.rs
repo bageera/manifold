@@ -85,6 +85,40 @@ fn mnf8_branch_rejections() {
 }
 
 #[test]
+fn mnf8_cdiff_golden_vector_exact() {
+    // ADR-008: channel-diff golden vector (slate photo crop, PLANAR|PLANE|CD
+    // pick). Mode-0 bodies carry [G, R−G, B−G] per pixel; decode = the
+    // inverse relabel + the ADR-004 walk; must reconstruct exactly.
+    use manifold::mnf6::FLAG_PLANAR;
+    use manifold::mnf8::{FLAG_CHANNEL_DIFF, FLAG_PRED_PLANE};
+    let buf = load("mnf8_cdiff_slate64.mnf8");
+    let expect = load("mnf8_cdiff_slate64.expected.pixels");
+    let (dims, px, backend) = decode_mnf8(&buf).expect("cdiff golden decode");
+    assert_eq!((dims.width, dims.height), (64, 64));
+    assert_eq!(px, expect, "MNF8 cdiff golden pixels");
+    assert_eq!(backend, 1);
+    let flags = u32::from_le_bytes([buf[24], buf[25], buf[26], buf[27]]);
+    assert!(
+        flags & FLAG_CHANNEL_DIFF != 0 && flags & FLAG_PLANAR != 0 && flags & FLAG_PRED_PLANE != 0,
+        "golden vector is a CD|PLANAR|PLANE pick file: 0x{flags:x}"
+    );
+}
+
+#[test]
+fn mnf8_cdiff_rejections() {
+    // ADR-008 validation vectors: reserved bit 7 / truncated CD payload —
+    // each Err without panic.
+    for name in [
+        "rej_mnf8_reserved_bit7.mnf8",
+        "rej_mnf8_cdiff_truncated.mnf8",
+    ] {
+        let buf = load(name);
+        let r = std::panic::catch_unwind(|| decode_mnf8(&buf));
+        assert!(r.is_ok() && r.unwrap().is_err(), "{name}: must reject");
+    }
+}
+
+#[test]
 fn mnf8_corpus_roundtrips_both_profiles() {
     let base = env!("CARGO_MANIFEST_DIR");
     for name in [

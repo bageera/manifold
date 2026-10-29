@@ -1,5 +1,50 @@
 # Changelog
 
+# Changelog
+
+## v1.11.0 — ADR-008: MNF8 FLAG_CHANNEL_DIFF, the channel-difference residual organization (2026-10-28)
+
+The MNF11 diagnostic's measured residual-structure win ships: MNF8
+flag bit 6 (0x40; the reserved mask widens to !0b1111111) selects the
+per-pixel channel-difference organization — mode-0 record bodies and
+token tag-0 literals carry [G, R−G, B−G] instead of [R, G, B] (a
+reversible relabel with ZERO added bytes; the decoder's inverse runs
+before the walk; MNF6/7/MNF9 untouched; old decoders reject bit-6
+files via the reserved-mask rule, never panicking).
+
+The ENCODER's pick measures both organizations per file at complete
+serialized size (never-worse by construction): every ADR-004
+predictor × planar arm + the token arm now have CD twins. The
+composition is the gate's headline: the relabel-only diagnostic
+estimated −6.6%; the implemented pick achieves **−12.3% on the
+30-file corpus (951,455 → 834,885; −116,570 B), with CD selected on
+23/30 files** — e.g. slate_224x160 62,052 → 50,918; forest_224x160
+55,804 → 45,522; the interaction comes from CD enabling the EXISTING
+predictor/planar arms, not from replacing them.
+
+Gates: fmt + clippy -D warnings clean; lib 51/51 (three new CD pins:
+roundtrip across all predictor/planar shapes × both backends,
+never-worse vs the pre-CD pick, malformed rejects); conformance 8/8
+(the CD|PLANAR|PLANE golden from the slate crop + reserved-bit-7 /
+truncated-payload rejects committed as vectors); differential 4/4
+(the three pre-ADR-008 goldens — flags 0x1/0xc/0x20, bit 6 unset —
+decode exact, backward compatibility measured directly); fuzz 525
+trials 0 panics (the one accepted mutation = the pre-recorded
+valid-different-file class). Walker discipline recorded: the
+mode-byte advance / MATCH 6-byte form / NEAR length-offset bugs were
+each caught by asserts + the golden decode before any compression
+number was accepted.
+
+ADR-008 → IMPLEMENTED with the three findings preserved (zero-overhead
+relabeling; portfolio interaction; decoder discipline) and the
+backward-compat section recorded. Instruments: the MNF11 diagnostic
++ relabel-walker scripts (crates/mnf-mans); the natural-data/gate
+evidence chain in docs/mnf10-g3-shared-model.md.
+
+Related: GSE-02 (the byte-stream MDL instrument) committed separately;
+its natural-data gate measured 0/5 — it stays a mechanism
+demonstrator, unaffected by this release.
+
 ## Research — MNF11 phase 1: residual-structure discovery + the moonshot lab opens (2026-10-28, docs + instruments; no wire change; v1.10.0 untouched)
 
 Priority-1 measurement (Jon's directive: identify a specific residual
