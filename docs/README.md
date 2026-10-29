@@ -28,6 +28,9 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   decoder + pick arm; status header in the ADR).
 - [mnf10-track-a-promotion.md](mnf10-track-a-promotion.md) — the Track A
   promotion record: CLI pick arm, dispatch, verify chain, fuzz diff.
+- [mnf10-g3-shared-model.md](mnf10-g3-shared-model.md) — Track B G3:
+  shared-model competition verdicts (Arm C denied at zstd; wins under a
+  window-constrained container; fixture generator committed).
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).
