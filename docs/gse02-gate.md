@@ -85,3 +85,40 @@ overhead bound). clippy `-D warnings` clean.
   shared generators) remains a separate future arm per Jon's
   recommendation — gated behind the periodic/recurrence/shared evidence
   that now exists in measured form.
+
+## GSE-02-R1: natural-data gate + dictionary-cost audit (2026-10-28)
+
+The model vocabulary and format frozen per the GSE-02 commit (faf961f);
+the natural rows measured REAL local files (not synthetic), comparator =
+the crate's standard framed zstd-19, complete decoding asserted:
+
+| row | framed zstd-19 | GSE-02 | delta |
+|---|---|---|---|
+| binary (/usr/bin/GetFileInfo, 64 KiB) | 6,077 | 6,115 | +38 |
+| SQLite (kanban.db, 64 KiB) | 1,658 | 1,671 | +13 |
+| encoded PNG (slate photo file bytes) | 65,367 | 65,441 | +74 |
+| decoded RGB (slate, 64 KiB slice) | 49,105 | 49,398 | +293 |
+| text (CHANGELOG, 64 KiB) | 19,226 | 19,300 | +74 |
+
+**0/5 rows win.** Every delta = framing overhead; no model selection
+fired on any real row. The largest loss = decoded RGB (+293: the
+arith/periodic arms fire but their residual+framing exceeds the win —
+photographic structure is NOT the arithmetic/periodic class; the image
+mechanism remains ADR-008's symbol relabeling, consistent with the
+MNF11 line). Audio/video rows: no suitable local fixtures identified;
+recorded as untested classes (not skipped-by-assumption).
+
+**Dictionary-cost audit** (4-KiB fixtures, exhaustive cut-set oracle):
+dp == oracle on near-arith/mixed/acgt (3/3, no missed partitions
+found). Honest scope note: the oracle compares only ALTERNATIVE CUT
+SETS through the same public-surface cost model — it cannot detect the
+shared-parameter bias itself (that would need a dictionary-aware
+re-implementation of the DP; deferred until a fixture class with many
+shared-model segments exists on real data).
+
+Verdict per Jon's pre-registered rule: the existing equations and
+segmentation do NOT discover savings in real data — GSE stays a
+demonstrated-mechanism instrument (generator/partition/shared each
+measured on synthetic classes), not a general-purpose codec. The rugg
+closes without expanding the language; .gitignore's **/target fix
+prevents the nested-target recurrence permanently.
