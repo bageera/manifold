@@ -410,7 +410,7 @@ dependencies = [
 
 [[package]]
 name = "manifold-codec-capi"
-version = "1.11.0"
+version = "1.11.1"
 dependencies = [
  "manifold-codec",
 ]
