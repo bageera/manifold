@@ -540,3 +540,60 @@ mechanism for photographic residuals remains ADR-008's symbol
 relabeling (representation, not prediction). X3 (higher-dimensional
 lattice projection) runs only on a specific measured residual structure,
 per the instrument rules.
+
+## MNF11-C2: Reversible Color Transform Discovery (2026-10-28, Jon's gate)
+
+The v1.11.0 implementation FROZEN; C2 = research-only measurement of
+the transform vocabulary at the SAME wire level as bit 6 (per-pixel
+residual-body relabeling), against the shipped CD-G files as the anchor.
+Instrument: mnf11_c2_grid.py (CLI-encode the 30-file corpus with the
+v1.11.0 pick, unrelabel the CD streams to the plain residual domain,
+the CD-G forward reproduces each shipped stream byte-exactly, apply
+each candidate, recompress with the file's own backend).
+
+Vocabulary (per-pixel, reversible mod 256): CD-G (shipped), CD-R
+([r, g−r, b−r]), CD-B ([b, r−b, g−b]), Chain ([g, r−g, b−r]), Chain2,
+RSign (zigzag magnitude-sign map on the diffs). The pixel-space LIfted
+transform (B − ⌊(R+G)/2⌋) = the PREDICTOR's scope, recorded out of C2's
+level (the residual-space analogue = RSign's component).
+
+### Aggregate (complete-file, corpus):
+
+| candidate | corpus | vs shipped 834,885 |
+|---|---|---|
+| CD-G (shipped) | 834,885 | 0 |
+| CD-R | 854,163 | +19,278 |
+| CD-B | 846,549 | +11,664 |
+| Chain | 986,500 | +151,615 |
+| Chain2 | 985,005 | +150,120 |
+| RSign | 1,124,383 | +289,498 |
+
+**No candidate beats the green-centered CD on the aggregate** —
+consistent with the X369 grid's (1,1) anchor and the MI measurements
+(both other channels couple TO green most tightly).
+
+### Per-file (the selector question):
+
+9/27 MNF8 files prefer a different reference channel: CD-R ×5
+(document −166 = 24% of the file; screenshot −1; dusk_224 −19;
+slate_160 −16; stone −19), CD-B ×4 (ocean_192 −395; slate_192 −791;
+slate_224 −372; terrain_160 −13). The cold blue-gray photos prefer
+B-centered; the warm greens keep G-centered. Total selector value ≈
+−2,100 B with a 2-bit reference-channel field (00 = no CD; 01/10/11 =
+G/R/B) — replaces bit 6's semantics, stays zero added bytes, retains
+old bit-6 files as the '01' shape.
+
+### Verdict per the pre-registered rule:
+
+The AGGREGATE rule says close (CD-G stands). The measured per-file
+table is recorded as the v1.12 candidate rung: a 2-bit reference-field
+selector worth ~2.1k B corpus — pending the encoder-cost check (the
+pick's arm count doubles) and the same hardening/gate chain. No
+selector decision is taken inside C2 (frozen v1.11.0); the numbers
+stand.
+
+The RSign measurement answers approach 4's question from Jon's list
+directly: the zigzag magnitude-sign map LOSES (+289,498) — zstd-19's
+order-0 entropy does not reward numeric adjacency; the backend already
+exploits the residual structure. Approach 4 = measured-and-closed at
+this level.
