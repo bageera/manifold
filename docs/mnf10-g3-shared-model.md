@@ -205,3 +205,73 @@ committed script is now the authoritative source for the number).
 Identity-only on that fixture: 27,839 = LOSES the pick by 1,091 — the
 transform geometry is REQUIRED for the win there, isolating the
 geometry's contribution cleanly from the template/residual axes.
+
+## G4-revised gate (2026-10-28, the review's correction list implemented)
+
+The external review's verdict was accepted: the in-session harness was
+not the shipping portfolio. The revised gate
+(crates/mnf-mans/scripts/g4_gate.py) replaces the internal 4-stream
+baseline with the RELEASED 1.10.0 CLI's complete --mnf8 output
+(verify-checked per file), runs the MISSING comparison pair under one
+budget (identity+sparse vs D8+sparse, the transform axis toggled alone),
+and meters each arm's time. Corpus: real sprite frames (the user's
+named class), document, poster, screenshot (mixed-content control),
+gradient/solid (negative controls).
+
+Results (complete files; CLI baseline includes its own
+portfolio+MNF9 arm):
+
+| fixture | A = CLI 1.10.0 | id+sparse | D8+sparse | geometry's value |
+|---|---|---|---|---|
+| guard-strip (real sprite frames) | 315 | 320 (n=1) | 320 (n=1) | 0 |
+| hero-pair (identical) | 220 | **176** (n=1) | 176 | 0 |
+| document | 923 | **793** (n=5) | 859 (n=10) | **−66 (geometry costs)** |
+| poster | 1142 | **751** (n=5) | 751 | 0 |
+| screenshot (mixed) | 678 | 817 (n=71) | 817 | 0 |
+| gradient | 254 | no-fire | no-fire | — |
+| solid | 36 | 284 | 284 | 0 |
+
+Findings — the review's key question answered:
+
+1. **Sparse residuals + template reuse are the mechanism; the D8 is
+   not.** On every naturally structured fixture the identity-only arm
+   equals or beats the D8 arm: document's five extra transformed
+   references COST 66 B (D8's residual payloads outprice the identity
+   arm's literals). Geometry's measured value remains confined to
+   genuinely TRANSFORMED content (the planted rot90/fliplr fixtures:
+   +2,311/+2,363 where identity cannot express the reference at all).
+2. **The sprite hypothesis is tested on real sprite frames with an
+   honest negative**: guard walk frames (46-164 px delta per frame) do
+   NOT fire the arm — sprite edits are redrawn limbs (few pixels, full
+   AMPLITUDE), so the sparse-residual payload pays full price; the
+   sparse-corrupt win class is ±3-amplitude, not full-amplitude
+   sparsity. hero-pair (pixel-identical frames) wins −44 via a plain
+   shared template. The sprite promise is therefore restricted to
+   exact/near-amplitude-delta frame families.
+3. **Savings-rate (reported, never a promotion score)**: poster ≈
+   283 kB/s of search, document ≈ 1.1 kB/s (the slow one), hero ≈
+   218 kB/s — the arm's value-per-time is high where it wins, and the
+   winning arms need ≤ ms-scale work at these sizes.
+
+Decoder hardening checklist for the (future) format candidate —
+carried here from the review: reject invalid modes, zero or forward
+reference distances, out-of-range transform ids, truncated sections,
+duplicate/out-of-range sparse positions, and unused trailing stream
+bytes (the same discipline shipped in MNF9's decoder and the
+consumption-check rule the Autopsy walker follows).
+
+## G4 acceptance verdict
+
+- Against the ACTUAL 1.10.0 portfolio with equal budgets: the
+  identity+sparse shared-template arm wins three real files (hero −44,
+  document −130, poster −391) and loses everywhere else; the D8 adds
+  NOTHING on natural content and REMAINS REQUIRED on planted
+  transformed fixtures. Geometry-vs-sparse attribution is now
+  measured: sparse-residual template reuse is the mechanism on natural
+  files; the D8 is a specialist tool for transformed content.
+- The negative results are preserved (screenshot mixed-content,
+  gradient/solid, sprite redraws, all 19 photos) as standing boundaries.
+- No format promotion follows from these numbers alone: the winning
+  deltas are 44-391 B on 5 of 7 fixtures — real but small, and the
+  shipped pick must gain the arm behind its never-worse rule before
+  any of it reaches a release.
