@@ -118,6 +118,8 @@ Earlier research notes: [v07-charts-replication.md](v07-charts-replication.md),
 [cryoem-plan.md](cryoem-plan.md), [eer-probe-10061-10943.md](eer-probe-10061-10943.md),
 [riemannian-review.md](riemannian-review.md).
 
+- [vid03-r2-topology-gate.md](vid03-r2-topology-gate.md) — VID03-R2 topology-dependent reconstruction gate (DENIED: multi-sheet topology representable + renderable but not economical; sparse-event control covers the sheet record)
+
 ## Communication
 
 - [science.md](science.md) — the principles document: information theory,
