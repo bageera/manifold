@@ -145,3 +145,63 @@ residual-carrying shared-template records measured on a REAL-texture
 corpus (wallpaper/screenshots-with-chrome), not constructed fixtures;
 then the same pick-arm port discipline as MNF9 (prototype → src →
 conformance → consumer).
+
+## G4 Arm-B/C isolation (2026-10-28, frozen everything-except-the-axis)
+
+The identity-only control isolates the D8's incremental value with the
+template budget, search budget, boundary, coder containers, and
+serialization all held fixed. One per-file template (hint = the planted
+source on the capability fixture — a blind min-cost search on a
+2%-corrupted fixture is noise-dominated, itself the measured finding;
+real files discover by min-cost exactly as shipped would).
+
+| fixture | A pick | B identity-only | C D8 | D8's value | (B-T, C-T) |
+|---|---|---|---|---|---|
+| document | 923 | 783 | 859 | **−76 B** (identity beats D8) | 32, 32 |
+| poster | 1142 | 751 | 751 | 0 (identity covers it) | 16, 16 |
+| corrupt-d8-2pct | 27,641 | 28,742 | 26,379 | **+2,363 B** (D8 pays) | 16, 32 |
+
+Findings (the three sources separated):
+
+1. **Template reuse alone (identity, exact+approx refs) beats the
+   shipping pick on both real winners** — document 783 vs 923, poster
+   751 vs 1142. The approximate-reference mechanism does not need the
+   geometry to win its classes.
+2. **D8's incremental value is signed per class**: on document it COSTS
+   76 B (the extra orientations admit matches whose residual payloads
+   outprice the literal arm); on poster exactly 0; on the transformed
+   corrupted fixture it PAYS +2,363 (the rot90/fliplr-planted blocks are
+   unreachable without the transforms — the geometry unlocks refs the
+   identity cannot express).
+3. **The corrupt fixture's identity arm LOSES to the pick (28,742 vs
+   27,641) while D8 wins (26,379)**: approximate-template value without
+   transforms does not extend past classes where the template matches
+   in place.
+
+Savings-rate readout (reported, not a promotion score):
+document ≈ −0.5 kB/s (A−C negative ⇒ the arm's smaller file costs extra
+encode time for +0 B... the arm LOSES the pick here so the rate is
+n/a), poster ≈ 65 kB/s, corrupt-d8 ≈ 690 kB/s (D8's win per second of
+search — dominated by the one-template discovery, the honest cheap
+case).
+
+## G4 standing
+
+The isolation ladder's first three rows are measured; acceptance stays
+"beat the portfolio per file, complete cost". The D8's value concentrates
+on TRANSFORMED shared content (document/poster UI-graphics classes win
+without it; rotated/mirrored corrupted classes cannot be reached without
+it). The mixed-content generalization (screenshot: gradients + text +
+photo regions in one image) is the next rung — one arm, no new
+vocabulary.
+
+## G4 completion note (the reproduce-rule fix)
+
+The E2-run's Arm-D number for the shared-d8-clean fixture (−1,175)
+re-measured through the COMMITTED instrument: 25,528 vs pick 26,748 =
+−1,220 (the ~45-B delta = ref-record header shape differences between
+the in-session and committed walk — same-coder, same boundary; the
+committed script is now the authoritative source for the number).
+Identity-only on that fixture: 27,839 = LOSES the pick by 1,091 — the
+transform geometry is REQUIRED for the win there, isolating the
+geometry's contribution cleanly from the template/residual axes.
