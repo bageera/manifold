@@ -30,12 +30,19 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   promotion record: CLI pick arm, dispatch, verify chain, fuzz diff.
 - [mnf10-g3-shared-model.md](mnf10-g3-shared-model.md) — Track B G3:
   shared-model competition verdicts (Arm C denied at zstd; wins under a
-  window-constrained container; fixture generator committed).
+  window-constrained container; fixture generator committed) + the G4
+  revised gate (identity+sparse vs D8+sparse vs the ACTUAL 1.10.0
+  portfolio; sparse+template is the mechanism), G5
+  sparse-representation economics (masks/channel-split DENIED), and
+  the MNF11 diagnostic + relabel-shipped-stream experiment
+  (−62,675 B, 17/30) + X369 grid + X1 program-discovery closure.
+- [ADR-008](mnf8-adr-008-channel-diff.md) — MNF11 channel-diff residual
+  organization (PROPOSED: flag bit 6, [r,g,b]→[g,r−g,b−g] relabel,
+  −62,675 B corpus diagnostic, pick-measured both organizations;
+  (1,1) verified as the optimum of Jon's 64-combo modular grid).
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).
-- [ADR-008](mnf8-adr-008-channel-diff.md) — MNF11 channel-diff residual organization (PROPOSED: flag bit 6, [r,g,b]→[g,r−g,b−g] symbol relabel, −62,675 B corpus diagnostic, pick-measured both organizations)
-
 
 ## Measurements (canonical numbers)
 

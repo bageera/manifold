@@ -1,5 +1,68 @@
 # Changelog
 
+## Research — MNF11 phase 1: residual-structure discovery + the moonshot lab opens (2026-10-28, docs + instruments; no wire change; v1.10.0 untouched)
+
+Priority-1 measurement (Jon's directive: identify a specific residual
+distribution the current zlib/zstd path represents inefficiently
+BEFORE designing any experiment):
+
+1. MNF11 diagnostic 1 (crates/mnf-mans/scripts/mnf11_residual_diag.py):
+   the top photographic record-stream contributors analyzed — residual
+   entropy H ≈ 4.2-5.5 bits/byte/channel, left-neighbor conditioning
+   recovers only ~0.3 bits (the predictor owns the spatial structure);
+   residual LZ content exhausted beyond 6-byte grams (4-byte repeats
+   3.5k-10k, ≥8-byte ≈ 0); cross-channel MI(R,G) ≈ MI(G,B) ≈ 1.6-2.5
+   bits = near half each channel's entropy, untapped by the [r,g,b]
+   layout.
+2. The relabeled-shipped-stream experiment (mnf11_cdw.py): the shipped
+   1.10.0 files' own record/token streams walked, per-pixel relabeled
+   [r,g,b] → [g, r−g, b−g] (reversible, zero added bytes), recompressed
+   with each file's own backend, consumption == stream asserted:
+   corpus 951,393 → 888,718 (−62,675, −6.6%), 17/30 files win, losses
+   confined to synthetic classes (gradient +30, repeat +148, blob
+   +1,732, plaid +4,846) and two warm-grain photos.
+   ADR-008 PROPOSED (docs/mnf8-adr-008-channel-diff.md): MNF8 flag
+   bit 6, encoder measures both organizations per file at complete
+   size (never-worse pick), decoder applies the per-pixel inverse;
+   implementation pending.
+3. X369 vortex-math grid (mnf11_x369_grid.py, on Jon's pilot's exact
+   family: C0=G, C1=(R−aG), C2=(B−bG), a,b ∈ {−2,−1,0,1,2,3,6,9}):
+   (1,1) = the GRID OPTIMUM over all 64 combos (888,754; next best
+   +16,080 worse); every 3/6/9-coefficient combo loses far worse
+   (spread 140,366 B). The pilot's independent corroboration stands:
+   no special role for 3-6-9; reversible inter-channel modular
+   relations are the keeper, decided by compressed byte count.
+4. MNF11-X1 Mathematical Program Discovery (mnf11_x1_pmd.py — the
+   moonshot lab's first experiment, Jon's directive): bounded
+   deterministic integer expression language (lin/rec/sin-LUT/lat/
+   mod/rep/sc/add; constants excluded = MNF9-const-owned), per-channel
+   entropy-screened sweep, finalists container-measured, complete
+   serialized L vs the released pick. HONEST NEGATIVE: gen corpus
+   16/16 lose (MNF9's framing economy owns where programs exist);
+   noise −218 and blob −485 decompose to the whole-plane-planar vs
+   per-tile arm-SHAPE artifact, not program discovery (the noise rec
+   program's container cost was bit-identical to raw: 65,550 =
+   65,550); plaid +25,325 (the language cannot express its 2-D
+   periodicity at wire cost). Instrument rules carried to X2+:
+   compose inside the shipped per-tile grammar; mandatory
+   decomposition check; whole-frame languages must include MNF9's
+   framing rules or lose by construction.
+5. G4 revised gate + G5 (earlier same-day research, records in
+   docs/mnf10-g3-shared-model.md): the review's corrections implemented
+   (baseline = the released CLI's actual output; the missing
+   identity+sparse vs D8+sparse comparison run under one budget);
+   G4's answer: sparse residuals + template reuse are the mechanism,
+   D8 remains a specialist for genuinely transformed content; sprite
+   redraws measured honest NEGATIVE (full-amplitude sparsity defeats
+   the residual coder — hero-pair −44 wins, guard-strip +5 loses).
+   G5 closed NOT-promoted: S1 (explicit positions + full RGB-delta)
+   beats compressed masks and channel-splitting everywhere; masks/
+   channel-split hypotheses DENIED; corpus control: fires 5/30, wins
+   2/30 (document −212, poster −391 = −603 total), 0 regressions;
+   2/30 × small deltas does not clear "earns its maintenance cost" —
+   identity+sparse rides G4's measured capability, promotable only
+   inside a future bundled release.
+
 ## v1.10.0 - MNF9: the exact-generative whole-frame format ships on the wire (ADR-007 Track A) (2026-10-28)
 
 Track A promoted from the discovery probe to the shipping library:
