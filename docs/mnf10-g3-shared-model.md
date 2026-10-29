@@ -108,3 +108,40 @@ then a real-texture corpus); the pick-arm promotion candidate is
 "shared-template refs with residual payloads" — decoder = template store
 + T-ref walk + per-ref residual, all bounds checked. The C/D/E family
 and search budget stay frozen at these 8 D8 orientations + 1 template.
+
+
+## G3-E2 corpus ladder (2026-10-28, frozen budget: D8 + one template/file)
+
+Per-file complete-selected cost, candidates fired where the pick already
+uses its own cheap structures (repeat/solid/screenshot = token/near-arm
+classes): the shared-template arm LOSES there (+140..+2,535 B — the
+pick's own structures dominate exact repeats; consistent with Arm C).
+
+Wins on REAL files: document −190 B (T=16, 40 approx refs), poster −391
+B (T=16, 5 refs). Zero regressions if the arm rides the pick; photos
+fire nothing (0/19 files any candidates — capability result, not a
+corpus claim).
+
+Ladder summary against the pre-declared success criteria:
+1. 30-file photo corpus: no photo wins (photos fire nothing) — the
+   boundary holds; document/poster classes win instead (flat-UI/edge
+   structure: the left-predictor-friendly classes the branch gate
+   already identified).
+2. Real repeated textures: no artificial duplicates in the corpus;
+   synthetic repeat/screenshot classes LOSE to existing structures.
+3. Identity-only vs D8: the approx-template refs need the D8 to fire on
+   document (identity-only matches zero there; D8 gives 10→T=16's 40) —
+   geometry adds reference reach, and the corrupted-residual class (Arm
+   E) is where the payoff concentrates (−65% capability fixture).
+4. Promotable shape: arm-behind-the-pick (never worse by construction).
+
+## G3 verdict (Track B, measured)
+
+The shared-template model is REAL for document/poster/sparse-corrupt
+classes and NOT promotable on this evidence as a general photographic
+layer; corpus-level claims are bounded to those two files' classes.
+The remaining rung before any format promotion: the Arm-E
+residual-carrying shared-template records measured on a REAL-texture
+corpus (wallpaper/screenshots-with-chrome), not constructed fixtures;
+then the same pick-arm port discipline as MNF9 (prototype → src →
+conformance → consumer).
