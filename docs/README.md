@@ -120,6 +120,11 @@ Earlier research notes: [v07-charts-replication.md](v07-charts-replication.md),
 
 - [vid03-r2-topology-gate.md](vid03-r2-topology-gate.md) — VID03-R2 topology-dependent reconstruction gate (DENIED: multi-sheet topology representable + renderable but not economical; sparse-event control covers the sheet record)
 
+- [gse02-gate.md](gse02-gate.md) — GSE-02 hierarchical MDL byte-stream
+  codec gate (Rust research crate: generator/partition/shared-model
+  separation measured; 4/8 vs framed zstd-19 on the acceptance
+  matrix; decode-verified; natural-data gate pending)
+
 ## Communication
 
 - [science.md](science.md) — the principles document: information theory,
