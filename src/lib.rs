@@ -36,9 +36,12 @@ pub mod error;
 /// Image-I/O shims (JPEG/PNG load, PNG save) — `image-io` feature.
 #[cfg(feature = "image-io")]
 pub mod img;
+/// MNF13-R5: the dual-timescale adaptive mix coder — MNF8 backend id 4
+/// (fixed-point dual-EWA estimators, zero model transport; docs/mnf13-r5.md).
+pub mod mix_coder;
 /// MNF6/7: zstd container, planar packing, YCoCg + modular color modes. `decode_mnf7` accepts both magics.
 pub mod mnf6;
-/// MNF8: versioned backend-byte container (zlib/zstd-19), profiles, `FLAG_PRED_MED`.
+/// MNF8: versioned backend-byte container (zlib/zstd-19/mix), profiles, `FLAG_PRED_MED`.
 pub mod mnf8;
 /// Independent MNF5 decoder (differential-testing instrument).
 pub mod refdecode;

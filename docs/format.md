@@ -290,6 +290,14 @@ the token path's own worst case (§3.1). Total file length MUST be exactly
     3 = RESERVED   custom mixed run/rANS coder — NOT shipped; decoders MUST
                    reject. Reserved for the mnf-mans prototype pending the
                    retention gate (docs/entropy-backends-v13.md stage 2).
+    4 = mix        the dual-timescale adaptive range coder (MANF13-R5,
+                   v1.13.0; docs/mnf13-r5.md): payload = [u32 stream_len]
+                   + LE u32 words; per-context fast/slow fixed-point
+                   (2^24-scale) estimators with a log-space EWA weight
+                   updated from the decoded symbol (zero model transport;
+                   contexts = the previous coded byte's 8-bucket
+                   magnitude); decode rejects unaligned payloads, an
+                   over-limit stream length, and truncations with errors.
     other          decoders MUST reject (unknown backend)
 
 ## 3. Records and flags

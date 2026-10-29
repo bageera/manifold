@@ -116,8 +116,8 @@ impl Dual {
             .iter()
             .zip(&self.slow.counts)
             .map(|(&cf, &cs)| {
-                ((wf * (cf as f64 / total_f) + (1.0 - wf) * (cs as f64 / total_s))
-                    * SCALE as f64) as u64
+                ((wf * (cf as f64 / total_f) + (1.0 - wf) * (cs as f64 / total_s)) * SCALE as f64)
+                    as u64
             })
             .collect();
         rebalance(mixed)
@@ -136,8 +136,7 @@ impl Dual {
         let pf = (self.fast.counts[s as usize] as f64 / total_f).max(1e-9);
         let ps = (self.slow.counts[s as usize] as f64 / total_s).max(1e-9);
         const LR: f64 = 0.15;
-        self.log_w = (self.log_w + LR * (pf.ln() - ps.ln()))
-            .clamp(-20.0, 20.0);
+        self.log_w = (self.log_w + LR * (pf.ln() - ps.ln())).clamp(-20.0, 20.0);
         self.fast.update(s);
         self.slow.update(s);
     }
@@ -162,7 +161,10 @@ fn main() {
         return;
     }
     let syms: Vec<u32> = body[..n].iter().map(|&b| u32::from(b)).collect();
-    let ck: Vec<usize> = body[n..2 * n].iter().map(|&b| usize::from(b) & 0x7F).collect();
+    let ck: Vec<usize> = body[n..2 * n]
+        .iter()
+        .map(|&b| usize::from(b) & 0x7F)
+        .collect();
     let nctx = ck.iter().copied().max().map(|m| m + 1).unwrap_or(1);
 
     let mut models = if let Some(rest) = mode.strip_prefix("mix") {
@@ -190,7 +192,6 @@ fn main() {
     }
     let mut enc = DefaultRangeEncoder::new();
     for i in 0..n {
-
         let m = match model_of!(models, ck[i]) {
             Some(m) => m,
             None => {
@@ -246,7 +247,10 @@ fn main() {
         {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("ERR decode sym at {i} (enc={:?} ctx={}): {e:?}", syms[i], ck[i]);
+                eprintln!(
+                    "ERR decode sym at {i} (enc={:?} ctx={}): {e:?}",
+                    syms[i], ck[i]
+                );
                 return;
             }
         } as u32;

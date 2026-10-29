@@ -3,7 +3,7 @@ members = [".", "crates/mnf-subspace", "crates/mnf-mans", "crates/manifold-capi"
 
 [package]
 name = "manifold-codec"
-version = "1.12.0"
+version = "1.13.0"
 edition = "2021"
 rust-version = "1.91"
 description = "Lossless RGB8 shared-patch atlas image codecs (MNF5/MNF6/MNF7/MNF8)"
@@ -35,6 +35,7 @@ image-io = ["dep:image", "dep:png"]
 
 [dependencies]
 flate2 = "1.0"
+constriction = "0.5"
 image = { version = "0.25", optional = true, default-features = false, features = ["jpeg", "png"] }
 png = { version = "0.17", optional = true }
 zstd = "0.13"

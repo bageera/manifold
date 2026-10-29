@@ -42,6 +42,23 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   GENERALIZED v1.12.0 to the 2-bit REF field (G/R/B selector; −2,146 B
   corpus = the C2 census's ≈ −2.1 kB prediction reproduced; REF2/REF3
   goldens + the bit-8 reject boundary).
+- [mnf13-r0.md](mnf13-r0.md) — conditional residual structure on the v1.12
+  streams: activity/direction contexts ≈ 0 (CLOSE); order-1 −0.33 bits
+  reproducible; offset profile flat (SI/DNA contact-map arms gated
+  negative).
+- [mnf13-rt4-disposition.md](mnf13-rt4-disposition.md) — rectangle
+  references: the representation existed all along (record mode-1 refs);
+  rerun ablation +150 on the best real case = CLOSE.
+- [mnf13-r1.md](mnf13-r1.md) — context-aware coding vs the v1.12 wires:
+  adaptive single-estimator loses +2..+4.4% (6/6); the FIRST honest
+  floors (shipped −5..−6% below the order-0 entropy floor; the
+  conditional floor = −7..−8% per file).
+- [mnf13-r5.md](mnf13-r5.md) — the dual-timescale mix coder promoted
+  (v1.13.0 backend 4): −1.80% corpus at the gate (−1.97% shipped),
+  19/19 wins, zero transport; the R4 mechanism shipped.
+- [mnf13-cf1-disposition.md](mnf13-cf1-disposition.md) — circular-field
+  records: 95-99% wins on radial-structure fixtures but the corpus
+  control rejects photos (CLOSED as an instrument).
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).

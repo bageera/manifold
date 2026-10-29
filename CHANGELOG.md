@@ -1,5 +1,33 @@
 # Changelog
 
+## v1.13.0 — MNF8 backend 4: the dual-timescale mix coder (MNF13-R5 promoted; 2026-10-29)
+
+The R5 gate's winner ships: MNF8 backend id 4 = per-context FAST
+(cap 4,096) and SLOW (cap 65,536) adaptive fixed-point (2^24-scale)
+estimators mixed by a log-space EWA weight updated per symbol from
+the DECODED symbol — identical model evolution on both sides (zero
+model transport; the wire = [u32 stream_len] + LE u32 words).
+Context = the previous coded byte's 8-bucket magnitude (decoder-side
+causal; every key recomputes from already-coded bytes).
+
+Real 30-file corpus at release (the pick measures the arm per file
+at complete serialized cost, never-worse): CLI 30/30 verify =
+816,341 B (**−16,398 = −1.97%** vs v1.12; the mix arm fires on 20/30
+— the class wins land on every photographic record file, −3..−7%
+each). Encode cost: theMaximum profile's search grows to three
+backends (measured +40% CLI wall time; the byte-exact complete-search
+pick retained). Decode: errors, never panics, on unaligned payloads /
+over-limit stream lengths / truncations; word-alignment + the stream
+length word = the payload's canonical form.
+
+R4's mechanism (the adaptation-rate compromise) = the shipped fix:
+R1's single-estimator adaptive coder lost +2..+4.4% on the same
+wires; the dual estimator + per-symbol EWA latch flips it 19-20/30
+to wins. Remaining gap to the conditional-entropy floor = ~1.5-2%
+per file (the next measured knobs). Conformance: the mix golden
+(LEFT|REF=3 pick, document) + unaligned/bomb rejects; fuzz via the
+existing --mnf8=maximum arm; instruments: examples/r1_ctx.rs (R1)
++ examples/r4_ctx.rs (R4/R5).
 ## v1.12.0 — MNF8 REF field: the channel-diff reference selector (ADR-008 generalized; 2026-10-29)
 
 The C2 gate's per-file census promoted to the wire: MNF8 flags bits

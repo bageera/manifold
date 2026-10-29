@@ -55,3 +55,18 @@ pick.
 - The honest-transport rule: zero model bytes carried (adaptive
   models); the wire = the 32-B MNF8 header + the mix-coded payload;
   every piece the decoder needs recomputes from decoded symbols.
+
+## v1.13.0 — the promotion shipped (the same day's rung)
+
+The arm = MNF8 backend id 4; the pick measures it at complete cost.
+The RELEASED numbers (CLI, 30/30 verify PASS): **816,341 B = −16,398
+(−1.97%) vs v1.12's 832,739**; mix picks on 20/30 (the two
+token-wire files + the synthetics keep backends 0/1); per-file class
+wins −3..−7%. Wire: [u32 stream_len] + LE u32 words (the length word
+= the range coder's transport; the corpus gate's +32 B/file framing =
+measured inside these numbers). Validation: word-alignment, the
+stream-length bound (bomb), truncations, unknown backends — all
+Err-not-panic. Conformance: mnf8_mix_document golden (the pick's
+LEFT|REF=3|mix shape, flags 0xe0) + unaligned/bomb rejects.
+Encode: +40% CLI wall time (the 3-backend complete search); decode =
+the same walk as the gate's arms.

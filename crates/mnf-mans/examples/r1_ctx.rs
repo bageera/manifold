@@ -84,11 +84,7 @@ impl Adaptive {
 fn main() {
     let mut stdin = Vec::new();
     std::io::stdin().read_to_end(&mut stdin).expect("stdin");
-    let hdr: Vec<u8> = stdin
-        .iter()
-        .copied()
-        .take_while(|&b| b != b'\n')
-        .collect();
+    let hdr: Vec<u8> = stdin.iter().copied().take_while(|&b| b != b'\n').collect();
     let hdr = String::from_utf8(hdr).expect("utf8");
     let mut it = hdr.split_whitespace();
     let n: usize = it.next().expect("n").parse().expect("n");
@@ -99,7 +95,10 @@ fn main() {
         return;
     }
     let syms: Vec<u32> = body[..n].iter().map(|&b| u32::from(b)).collect();
-    let ctx: Vec<usize> = body[n..2 * n].iter().map(|&b| usize::from(b) & 0x3F).collect();
+    let ctx: Vec<usize> = body[n..2 * n]
+        .iter()
+        .map(|&b| usize::from(b) & 0x3F)
+        .collect();
     let nctx = ctx.iter().copied().max().map(|m| m + 1).unwrap_or(1);
 
     // ---- encode: per-context adaptive models, chunk = 1 symbol/model
@@ -124,8 +123,8 @@ fn main() {
 
     // ---- decode (the exact mirror) — cost must equal wire
     let mut dmodels: Vec<Adaptive> = (0..nctx).map(|_| Adaptive::new(256)).collect();
-    let mut dec = DefaultRangeDecoder::from_compressed(compressed.as_slice().to_vec())
-        .expect("decoder open");
+    let mut dec =
+        DefaultRangeDecoder::from_compressed(compressed.as_slice().to_vec()).expect("decoder open");
     let mut back: Vec<u32> = Vec::with_capacity(n);
     for i in 0..n {
         let (m, _) = match dmodels[ctx[i]].model() {

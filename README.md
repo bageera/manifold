@@ -9,8 +9,9 @@ exact-generative whole-frame format (ADR-007: six decoder-defined integer
 families; the `--mnf8` flow emits an MNF9 file when the generative arm wins
 the pick; ADR-008's FLAG_CHANNEL_DIFF selects the per-pixel
 [g, r−g, b−g] residual organization when it wins the pick; the v1.12
-REF field generalizes bit 6 to a 2-bit reference selector
-(G/R/B per-file)) — release v1.12.0 · hardened decoders
+REF field generalizes bit 6 to a 2-bit reference selector (G/R/B
+per-file); the v1.13 backend 4 adds the dual-timescale mix coder to
+the pick)) — release v1.13.0 · hardened decoders
 (bounded, checksummed, canonical, fuzzed) · independently validated ·
 normative format spec at
 [docs/format.md](docs/format.md)
@@ -198,4 +199,5 @@ MIT — see [LICENSE](LICENSE).
 | v1.10.0 | MNF9 exact-generative whole-frame format ships (ADR-007 Track A) |
 | v1.11.0 | MNF8 FLAG_CHANNEL_DIFF: channel-difference residual organization (ADR-008; −12.3% corpus, 23/30 files) |
 | v1.12.0 | MNF8 REF field: the channel-diff reference selector G/R/B (ADR-008 generalized; −2,146 B corpus, REF dist 7/13/5/5) |
+| v1.13.0 | MNF8 backend 4: the dual-timescale mix coder (MNF13-R5; −16,398 B corpus = −1.97%, 20/30 mix picks, zero regressions) |
 | — (research) | MNF11: channeldiff relabel −62,675 B/17-of-30 on shipped streams (ADR-008 PROPOSED); X369 grid: (1,1) = optimum; X1 program discovery honest-negative; G4/G5 shared-template + mask verdicts (docs/mnf10-g3-shared-model.md) |
