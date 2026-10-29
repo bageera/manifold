@@ -3,7 +3,7 @@ members = [".", "crates/mnf-subspace", "crates/mnf-mans", "crates/manifold-capi"
 
 [package]
 name = "manifold-codec"
-version = "1.9.0"
+version = "1.10.0"
 edition = "2021"
 rust-version = "1.91"
 description = "Lossless RGB8 shared-patch atlas image codecs (MNF5/MNF6/MNF7/MNF8)"
