@@ -57,7 +57,7 @@ use crate::tokens;
 /// Header size: `MNF8` + 7×`u32` LE (adds backend id) — 4 B over MNF7.
 pub const HEADER8: usize = 32;
 
-// MNF8-only flags (MNF6/7 keep !0b11 frozen; MNF8 owns bits 2-3):
+// MNF8-only flags (MNF6/7 keep !0b11 frozen; MNF8 owns bits 2-6):
 /// Literal bodies carry image-wide MED residuals (decode inverts causally).
 pub const FLAG_PRED_MED: u32 = 4; // mode-0 literal bodies carry image-wide MED residuals
 /// Payload = LZ77-2D token wire over the MED residual plane (ADR-003).
@@ -66,8 +66,12 @@ pub const FLAG_TOKENS: u32 = 8;
 pub const FLAG_PRED_PLANE: u32 = 16;
 /// Image-wide predictor on literal bodies = pure left (ADR-004).
 pub const FLAG_PRED_LEFT: u32 = 32;
-/// Bits above bit5 reserved (MNF8 owns bits 2-5).
-pub const FLAGS_RESERVED8: u32 = !0b111111;
+/// ADR-008 channel-diff residual organization: mode-0 bodies and token
+/// tag-0 literals carry per-pixel `[G, R−G, B−G]` instead of `[R, G, B]`
+/// (reversible relabel, zero added bytes; decode = per-pixel inverse).
+pub const FLAG_CHANNEL_DIFF: u32 = 64;
+/// Bits above bit6 reserved (MNF8 owns bits 2-6).
+pub const FLAGS_RESERVED8: u32 = !0b1111111;
 
 /// zlib-9 backend.
 pub const BACKEND_ZLIB: u32 = 0;
@@ -204,12 +208,26 @@ pub fn encode_mnf8(
                 let med = kind == PredKind::Med;
                 let flags = kind.flag_bit() | if planar { FLAG_PLANAR } else { 0 };
                 let (file, st) = encode_stream_coder(
-                    pixels, dims, true, use_geom, flags, planar, med, kind, &coder, backend,
+                    pixels, dims, true, use_geom, flags, planar, med, kind, &coder, backend, false,
                 )
                 .expect("encoding an in-memory image cannot fail");
                 let size = file.len();
                 if best.as_ref().is_none_or(|b| size < b.0.len()) {
                     best = Some((file, flags, st, backend));
+                }
+                // ADR-008 channel-diff arm: same record walk, mode-0 bodies
+                // relabeled [r,g,b] → [g, r−g, b−g] before compression
+                // (reversible, zero added bytes; wins on channel-coupled
+                // photographic residuals — the MNF11 diagnostic's −6.6%).
+                let flags_cd = flags | FLAG_CHANNEL_DIFF;
+                let (file, st) = encode_stream_coder(
+                    pixels, dims, true, use_geom, flags_cd, planar, med, kind, &coder, backend,
+                    true,
+                )
+                .expect("encoding an in-memory image cannot fail");
+                let size = file.len();
+                if best.as_ref().is_none_or(|b| size < b.0.len()) {
+                    best = Some((file, flags_cd, st, backend));
                 }
             }
         }
@@ -218,11 +236,25 @@ pub fn encode_mnf8(
         // the record arms only). Rate-aware by construction.
         let flags = FLAG_PRED_MED | FLAG_TOKENS;
         for cap in [16, tokens::MAX_CANDIDATES] {
-            let (file, st) = encode_tokens_coder_cap(pixels, dims, backend, flags, cap)
+            let (file, st) = encode_tokens_coder_cap(pixels, dims, backend, flags, cap, false)
                 .expect("encoding an in-memory image cannot fail");
             let size = file.len();
             if best.as_ref().is_none_or(|b| size < b.0.len()) {
                 best = Some((file, flags, st, backend));
+            }
+            // ADR-008 token arm: tag-0 literals relabeled before compression.
+            let (file, st) = encode_tokens_coder_cap(
+                pixels,
+                dims,
+                backend,
+                flags | FLAG_CHANNEL_DIFF,
+                cap,
+                true,
+            )
+            .expect("encoding an in-memory image cannot fail");
+            let size = file.len();
+            if best.as_ref().is_none_or(|b| size < b.0.len()) {
+                best = Some((file, flags | FLAG_CHANNEL_DIFF, st, backend));
             }
         }
     }
@@ -313,17 +345,322 @@ fn image_predict(pixels: &[u8], w: usize, h: usize, kind: PredKind) -> Vec<u8> {
     out
 }
 
+/// ADR-008 channel-diff relabel, applied to RESIDUAL bytes in the
+/// stream's residual-domain bodies (mode-0 record bodies; token tag-0
+/// literals). Per pixel [r,g,b] → [g, r−g, b−g] mod 256 — a reversible
+/// relabel with ZERO added bytes; the decoder applies the inverse before
+/// the standard walk. `planar` relabels per-channel planes ([R][G][B] →
+/// [G][R−G][B−G]); `tokens` relabels tag-0 literal triplets in place.
+fn channel_diff_relabel(stream: &[u8], planar: bool, tokens: bool, w: u32, h: u32) -> Vec<u8> {
+    if tokens {
+        // token wire: relabel tag-0 (TAG_LIT) 3-B literal pixels
+        let mut out = Vec::with_capacity(stream.len());
+        let mut pos = 0usize;
+        let npx = (w as usize) * (h as usize);
+        let mut ppos = 0usize;
+        while ppos < npx && pos < stream.len() {
+            let tag = stream[pos];
+            out.push(tag);
+            pos += 1;
+            match tag {
+                tokens::TAG_LITERAL => {
+                    let px = &stream[pos..pos + 3];
+                    out.push(px[1]); // G
+                    out.push(px[0].wrapping_sub(px[1])); // R−G
+                    out.push(px[2].wrapping_sub(px[1])); // B−G
+                    pos += 3;
+                    ppos += 1;
+                }
+                tokens::TAG_MATCH => {
+                    if pos + 5 > stream.len() {
+                        panic!("cd: token match truncated (pos {pos}/{})", stream.len());
+                    }
+                    let len = u32::from(stream[pos + 4]) as usize;
+                    out.extend_from_slice(&stream[pos..pos + 5]);
+                    pos += 5;
+                    ppos += len;
+                }
+                tokens::TAG_NEAR => {
+                    if pos + 3 > stream.len() {
+                        panic!("cd: token near truncated (pos {pos}/{})", stream.len());
+                    }
+                    let len = u32::from(stream[pos + 2]) as usize;
+                    out.extend_from_slice(&stream[pos..pos + 3]);
+                    pos += 3;
+                    ppos += len;
+                }
+                other => panic!(
+                    "token tag {other} outside the recorded grammar (pos {pos}/{}, ppos {ppos}/{npx})",
+                    stream.len()
+                ),
+            }
+        }
+        debug_assert_eq!(ppos, npx);
+        out
+    } else if planar {
+        // planar record bodies: per-tile [R plane][G plane][B plane] →
+        // [G plane][R−G plane][B−G plane]
+        let mut out = Vec::with_capacity(stream.len());
+        let mut pos = 0usize;
+        let cols = (w as usize).div_ceil(TILE_SIZE as usize);
+        let tile_count =
+            (w as usize).div_ceil(TILE_SIZE as usize) * (h as usize).div_ceil(TILE_SIZE as usize);
+        for i in 0..tile_count {
+            let (row, col) = (i / cols, i % cols);
+            let tw = (TILE_SIZE as usize).min(w as usize - col * TILE_SIZE as usize);
+            let th = (TILE_SIZE as usize).min(h as usize - row * TILE_SIZE as usize);
+            let nb = tw * th * 3;
+            let mode = stream[pos];
+            out.push(mode);
+            pos += 1;
+            if mode == 0 {
+                let body = &stream[pos..pos + nb];
+                let third = nb / 3;
+                let (pr, pg, pb) = (&body[..third], &body[third..2 * third], &body[2 * third..]);
+                out.extend_from_slice(pg);
+                for (r, g) in pr.iter().zip(pg) {
+                    out.push(r.wrapping_sub(*g));
+                }
+                for (b, g) in pb.iter().zip(pg) {
+                    out.push(b.wrapping_sub(*g));
+                }
+                pos += nb;
+            } else if mode == 1 {
+                const META: usize = 4;
+                out.extend_from_slice(&stream[pos..pos + META + nb]);
+                pos += META + nb;
+            } else if mode == 2 {
+                const META: usize = 5;
+                out.extend_from_slice(&stream[pos..pos + META + nb]);
+                pos += META + nb;
+            } else if mode == 3 {
+                let np = nb / 3;
+                let n9 = (np * 9).div_ceil(8);
+                out.extend_from_slice(&stream[pos..pos + np + 2 * n9]);
+                pos += np + 2 * n9;
+            } else if mode == 4 || mode == 5 {
+                let meta = if mode == 5 { 5 } else { 4 };
+                out.extend_from_slice(&stream[pos..pos + meta + nb]);
+                pos += meta + nb;
+            } else {
+                panic!(
+                    "mode {mode} outside the recorded grammar (tile {i} pos {pos}/{})",
+                    stream.len()
+                );
+            }
+        }
+        debug_assert_eq!(pos, stream.len());
+        out
+    } else {
+        // interleaved record bodies: relabel every mode-0 body's per-pixel
+        // triplets in place
+        let mut out = Vec::with_capacity(stream.len());
+        let mut pos = 0usize;
+        let cols = (w as usize).div_ceil(TILE_SIZE as usize);
+        let tile_count =
+            (w as usize).div_ceil(TILE_SIZE as usize) * (h as usize).div_ceil(TILE_SIZE as usize);
+        for i in 0..tile_count {
+            let (row, col) = (i / cols, i % cols);
+            let tw = (TILE_SIZE as usize).min(w as usize - col * TILE_SIZE as usize);
+            let th = (TILE_SIZE as usize).min(h as usize - row * TILE_SIZE as usize);
+            let nb = tw * th * 3;
+            let mode = stream[pos];
+            out.push(mode);
+            pos += 1;
+            if mode == 0 {
+                for k in 0..nb / 3 {
+                    let t = &stream[pos + k * 3..pos + k * 3 + 3];
+                    out.push(t[1]);
+                    out.push(t[0].wrapping_sub(t[1]));
+                    out.push(t[2].wrapping_sub(t[1]));
+                }
+                pos += nb;
+            } else {
+                // copy the remaining record bytes for this tile verbatim
+                // (after the mode byte: idx u32 | idx+transform | y+co9+cg9)
+                let extra = match mode {
+                    1 | 4 => 4 + nb,
+                    2 | 5 => 5 + nb,
+                    3 => {
+                        let np = nb / 3;
+                        (np * 9).div_ceil(8) * 2 + np
+                    }
+                    other => panic!(
+                        "mode {other} outside the recorded grammar (pos {pos}/{})",
+                        stream.len()
+                    ),
+                };
+                out.extend_from_slice(&stream[pos..pos + extra]);
+                pos += extra;
+            }
+        }
+        debug_assert_eq!(pos, stream.len());
+        out
+    }
+}
+
+/// The decode-side inverse relabel: [G, R−G, B−G] → [R, G, B] across the
+/// same body classes, with explicit bounds checks — malformed streams are
+/// errors, never panics (truncated body/section, unknown mode/tag,
+/// trailing bytes).
+fn channel_diff_unrelabel(
+    stream: &[u8],
+    planar: bool,
+    tokens: bool,
+    w: u32,
+    h: u32,
+) -> Result<Vec<u8>> {
+    if tokens {
+        let mut out = Vec::with_capacity(stream.len());
+        let mut pos = 0usize;
+        let npx = (w as usize) * (h as usize);
+        let mut ppos = 0usize;
+        while ppos < npx {
+            if pos >= stream.len() {
+                return Err(Error::fmt_msg("cd: token wire truncated"));
+            }
+            let tag = stream[pos];
+            out.push(tag);
+            pos += 1;
+            match tag {
+                tokens::TAG_LITERAL => {
+                    if pos + 3 > stream.len() {
+                        return Err(Error::fmt_msg("cd: token literal truncated"));
+                    }
+                    let g = stream[pos];
+                    let rg = stream[pos + 1];
+                    let bg = stream[pos + 2];
+                    out.push(rg.wrapping_add(g)); // R
+                    out.push(g); // G
+                    out.push(bg.wrapping_add(g)); // B
+                    pos += 3;
+                    ppos += 1;
+                }
+                tokens::TAG_MATCH => {
+                    if pos + 5 > stream.len() {
+                        return Err(Error::fmt_msg("cd: token match truncated"));
+                    }
+                    let len = u32::from(stream[pos + 4]) as usize;
+                    out.extend_from_slice(&stream[pos..pos + 5]);
+                    pos += 5;
+                    ppos += len;
+                }
+                tokens::TAG_NEAR => {
+                    if pos + 3 > stream.len() {
+                        return Err(Error::fmt_msg("cd: token near truncated"));
+                    }
+                    let len = u32::from(stream[pos + 2]) as usize;
+                    out.extend_from_slice(&stream[pos..pos + 3]);
+                    pos += 3;
+                    ppos += len;
+                }
+                _ => return Err(Error::fmt_msg("token wire: unknown tag")),
+            }
+        }
+        if pos != stream.len() {
+            return Err(Error::fmt_msg("cd: token wire trailing bytes"));
+        }
+        if ppos != npx {
+            return Err(Error::fmt_msg("cd: token pixel accounting"));
+        }
+        Ok(out)
+    } else {
+        let cols = (w as usize).div_ceil(TILE_SIZE as usize);
+        let tile_count =
+            (w as usize).div_ceil(TILE_SIZE as usize) * (h as usize).div_ceil(TILE_SIZE as usize);
+        let mut out = Vec::with_capacity(stream.len());
+        let mut pos = 0usize;
+        for i in 0..tile_count {
+            let (row, col) = (i / cols, i % cols);
+            let tw = (TILE_SIZE as usize).min(w as usize - col * TILE_SIZE as usize);
+            let th = (TILE_SIZE as usize).min(h as usize - row * TILE_SIZE as usize);
+            let nb = tw * th * 3;
+            if pos >= stream.len() {
+                return Err(Error::fmt_msg("cd: record stream truncated"));
+            }
+            let mode = stream[pos];
+            out.push(mode);
+            pos += 1;
+            match mode {
+                0 => {
+                    #[allow(clippy::collapsible_if)]
+                    if pos + nb > stream.len() {
+                        return Err(Error::fmt_msg("cd: mode-0 body truncated"));
+                    }
+                    if planar {
+                        let third = nb / 3;
+                        let pg = &stream[pos..pos + third];
+                        let prg = &stream[pos + third..pos + 2 * third];
+                        let pbg = &stream[pos + 2 * third..pos + 3 * third];
+                        out.extend_from_slice(&{
+                            let mut r = Vec::with_capacity(nb);
+                            for (g, rg) in pg.iter().zip(prg) {
+                                r.push(rg.wrapping_add(*g));
+                            }
+                            for g in pg {
+                                r.push(*g);
+                            }
+                            for (g, bg) in pg.iter().zip(pbg) {
+                                r.push(bg.wrapping_add(*g));
+                            }
+                            r
+                        });
+                    } else {
+                        for k in 0..nb / 3 {
+                            let g = stream[pos + k * 3];
+                            let rg = stream[pos + k * 3 + 1];
+                            let bg = stream[pos + k * 3 + 2];
+                            out.push(rg.wrapping_add(g));
+                            out.push(g);
+                            out.push(bg.wrapping_add(g));
+                        }
+                    }
+                    pos += nb;
+                }
+                1 | 4 => {
+                    if pos + 4 + nb > stream.len() {
+                        return Err(Error::fmt_msg("cd: mode truncated"));
+                    }
+                    out.extend_from_slice(&stream[pos..pos + 4 + nb]);
+                    pos += 4 + nb;
+                }
+                2 | 5 => {
+                    if pos + 5 + nb > stream.len() {
+                        return Err(Error::fmt_msg("cd: mode truncated"));
+                    }
+                    out.extend_from_slice(&stream[pos..pos + 5 + nb]);
+                    pos += 5 + nb;
+                }
+                3 => {
+                    let np = nb / 3;
+                    let n9 = (np * 9).div_ceil(8);
+                    if pos + np + 2 * n9 > stream.len() {
+                        return Err(Error::fmt_msg("cd: mode-3 truncated"));
+                    }
+                    out.extend_from_slice(&stream[pos..pos + np + 2 * n9]);
+                    pos += np + 2 * n9;
+                }
+                _ => return Err(Error::fmt_msg(format!("cd: mode {mode}"))),
+            }
+        }
+        if pos != stream.len() {
+            return Err(Error::fmt_msg("cd: trailing stream bytes"));
+        }
+        Ok(out)
+    }
+}
 /// Token-arm stream builder (ADR-003): MED residual plane → token wire →
-/// container coder. Reuses every mnf6/mnf8 primitive; stats report the
-/// token counts in the literal fields (per-arm accounting preserved).
-/// Token arm with explicit matcher depth (ADR-005: the pick measures the
-/// v1.7 shallow arm AND the deep-chain arm; the pick absorbs the choice).
+/// container coder, with explicit matcher depth (ADR-005: the pick
+/// measures the v1.7 shallow arm AND the deep-chain arm; the pick
+/// absorbs the choice). ADR-008: when `cd`, tag-0 literals carry the
+/// channel-diff relabel (applied before compression).
 fn encode_tokens_coder_cap(
     pixels: &[u8],
     dims: Dims,
     backend: u32,
     flags: u32,
     cap: usize,
+    cd: bool,
 ) -> Result<(Vec<u8>, MnF6Stats)> {
     let med_pred = med_predict(pixels, dims.width as usize, dims.height as usize);
     let res: Vec<u8> = pixels
@@ -333,6 +670,12 @@ fn encode_tokens_coder_cap(
         .collect();
     let (wire, ts) =
         tokens::encode_plane_cap(&res, dims.width as usize, dims.height as usize, cap)?;
+    // ADR-008: relabel tag-0 literals before compression (cd flag)
+    let wire = if cd {
+        channel_diff_relabel(&wire, false, true, dims.width, dims.height)
+    } else {
+        wire
+    };
     let payload = backend_compress(backend, &wire)?;
     let payload_len =
         u32::try_from(payload.len()).map_err(|_| Error::fmt_msg("payload exceeds u32"))?;
@@ -381,6 +724,7 @@ fn encode_stream_coder(
     kind: PredKind,
     coder: &Coder,
     backend: u32,
+    cd: bool,
 ) -> Result<(Vec<u8>, MnF6Stats)> {
     // ADR-004: Plane/Left are PURE prediction arms (the measured gate's
     // winning form) — no atlas candidates, no YCoCg; mode-0 bodies only.
@@ -555,6 +899,12 @@ fn encode_stream_coder(
         atlas.insert(tile);
     }
 
+    // ADR-008: relabel mode-0 residual bodies before compression (cd flag)
+    let raw = if cd {
+        channel_diff_relabel(&raw, planar, false, dims.width, dims.height)
+    } else {
+        raw
+    };
     let payload = backend_compress(backend, &raw)?;
     let payload_len =
         u32::try_from(payload.len()).map_err(|_| Error::fmt_msg("payload exceeds u32"))?; // review: no lossy cast
@@ -708,6 +1058,16 @@ pub fn decode_mnf8_with_limits(
         other => return Err(Error::fmt_msg(format!("unsupported backend {other}"))),
     };
 
+    // ADR-008: the channel-diff inverse applies to the decompressed
+    // stream BEFORE any walk (mode-0 bodies / tag-0 literals relabeled
+    // back to [r,g,b]); the guard walk rejects truncations/unknown modes
+    // with errors, never panics.
+    let cd = flags & FLAG_CHANNEL_DIFF != 0;
+    let raw = if cd {
+        channel_diff_unrelabel(&raw, planar, token_wire, width, height)?
+    } else {
+        raw
+    };
     let pixels = if token_wire {
         // ADR-003 token payload: wire → residual plane → causal MED invert.
         // decode_plane validates the wire structurally (tags, ranges, exact
@@ -959,6 +1319,7 @@ mod gate30 {
                             kind,
                             &coder,
                             backend,
+                            false,
                         )
                         .unwrap();
                         // tokens arm
@@ -971,9 +1332,15 @@ mod gate30 {
                 (BACKEND_ZSTD19, Coder::Zstd(19)),
                 (BACKEND_ZLIB, Coder::Zlib),
             ] {
-                let (tw, _) =
-                    encode_tokens_coder_cap(&px, d, backend, FLAG_PRED_MED | FLAG_TOKENS, 16)
-                        .unwrap();
+                let (tw, _) = encode_tokens_coder_cap(
+                    &px,
+                    d,
+                    backend,
+                    FLAG_PRED_MED | FLAG_TOKENS,
+                    16,
+                    false,
+                )
+                .unwrap();
                 old = old.min(tw.len());
             }
             // NEW pick: + plane/left pure arms
@@ -995,6 +1362,7 @@ mod gate30 {
                         kind,
                         &coder,
                         backend,
+                        false,
                     )
                     .unwrap();
                     // exact decode check on the pure arm
@@ -1078,6 +1446,7 @@ mod gate30 {
                             kind,
                             &coder,
                             backend,
+                            false,
                         )
                         .unwrap();
                         if best.as_ref().is_none_or(|b| f.len() < b.0.len()) {
@@ -1085,9 +1454,15 @@ mod gate30 {
                         }
                     }
                 }
-                let (t, _) =
-                    encode_tokens_coder_cap(&px, d, backend, FLAG_PRED_MED | FLAG_TOKENS, 16)
-                        .unwrap();
+                let (t, _) = encode_tokens_coder_cap(
+                    &px,
+                    d,
+                    backend,
+                    FLAG_PRED_MED | FLAG_TOKENS,
+                    16,
+                    false,
+                )
+                .unwrap();
                 if best.as_ref().is_none_or(|b| t.len() < b.0.len()) {
                     best = Some((t, FLAG_TOKENS));
                 }
@@ -1339,6 +1714,7 @@ mod tests {
                 PredKind::None,
                 &Coder::Zstd(19),
                 BACKEND_ZSTD19,
+                false,
             )
             .expect("encode");
             if best.as_ref().is_none_or(|b| file.len() < b.0.len()) {
@@ -1659,5 +2035,227 @@ mod tests {
         file2.extend_from_slice(&comp2);
         let (_, out, _) = decode_mnf8(&file2).expect("valid token wire decodes");
         assert_eq!(out, pred_residual_invert(&res, 16, 16, PredKind::Med));
+    }
+}
+
+#[cfg(test)]
+mod channel_diff {
+    use super::*;
+    use crate::mnf6::Coder;
+    use std::path::Path;
+
+    fn load(name: &str) -> (Dims, Vec<u8>) {
+        let p = format!("{}/testdata/{}", env!("CARGO_MANIFEST_DIR"), name);
+        let img = image::open(Path::new(&p))
+            .unwrap_or_else(|e| panic!("{name}: {e}"))
+            .to_rgb8();
+        (
+            Dims {
+                width: img.width(),
+                height: img.height(),
+            },
+            img.into_raw(),
+        )
+    }
+
+    /// Roundtrip pin: the CD arm encodes/decodes exactly, all predictor and
+    /// planar variants, both backends, incl. an atlas-free pure arm.
+    #[test]
+    fn cd_roundtrip_all_predictor_shapes() {
+        let (d, px) = load("gradient_320x240.png");
+        for kind in [
+            PredKind::None,
+            PredKind::Med,
+            PredKind::Plane,
+            PredKind::Left,
+        ] {
+            for planar in [false, true] {
+                for (backend, coder) in [
+                    (BACKEND_ZLIB, Coder::Zlib),
+                    (BACKEND_ZSTD19, Coder::Zstd(19)),
+                ] {
+                    let flags =
+                        kind.flag_bit() | if planar { FLAG_PLANAR } else { 0 } | FLAG_CHANNEL_DIFF;
+                    let (file, _) = encode_stream_coder(
+                        &px,
+                        d,
+                        true,
+                        false,
+                        flags,
+                        planar,
+                        kind == PredKind::Med,
+                        kind,
+                        &coder,
+                        backend,
+                        true,
+                    )
+                    .expect("encode");
+                    let (dd, out, _) = decode_mnf8(&file).expect("decode");
+                    assert_eq!(dd, d);
+                    assert_eq!(out, px, "cd roundtrip {kind:?} planar={planar}");
+                }
+            }
+        }
+        // token arm with cd:
+        let flags = FLAG_PRED_MED | FLAG_TOKENS | FLAG_CHANNEL_DIFF;
+        for cap in [16, tokens::MAX_CANDIDATES] {
+            let (file, _) = encode_tokens_coder_cap(&px, d, BACKEND_ZSTD19, flags, cap, true)
+                .expect("token encode");
+            let (dd, out, _) = decode_mnf8(&file).expect("decode");
+            assert_eq!(dd, d);
+            assert_eq!(out, px, "cd token roundtrip cap={cap}");
+        }
+    }
+
+    /// The never-worse pin: the full pick (with CD arms) must not exceed
+    /// the pre-ADR-008 pick on a fire-class fixture and a no-fire one.
+    #[test]
+    fn cd_pick_never_worse() {
+        for name in ["photos/slate_224x160_s900008.png", "gradient_320x240.png"] {
+            let (d, px) = load(name);
+            let (cd_file, _, _) = encode_mnf8(&px, d, false, Profile::Maximum);
+            // the old pick = re-run the pre-CD loop inline (by-value loops
+            // mirroring encode_mnf8 minus the CD arms):
+            let candidates: Vec<(u32, Coder)> = backend_candidates();
+            let mut old = usize::MAX;
+            for (backend, coder) in candidates {
+                for kind in [
+                    PredKind::None,
+                    PredKind::Med,
+                    PredKind::Plane,
+                    PredKind::Left,
+                ] {
+                    for planar in [false, true] {
+                        let flags = kind.flag_bit() | if planar { FLAG_PLANAR } else { 0 };
+                        let (file, _) = encode_stream_coder(
+                            &px,
+                            d,
+                            true,
+                            false,
+                            flags,
+                            planar,
+                            kind == PredKind::Med,
+                            kind,
+                            &coder,
+                            backend,
+                            false,
+                        )
+                        .expect("encode");
+                        old = old.min(file.len());
+                    }
+                }
+                for cap in [16, tokens::MAX_CANDIDATES] {
+                    let (file, _) = encode_tokens_coder_cap(
+                        &px,
+                        d,
+                        backend,
+                        FLAG_PRED_MED | FLAG_TOKENS,
+                        cap,
+                        false,
+                    )
+                    .expect("encode");
+                    old = old.min(file.len());
+                }
+            }
+            assert!(
+                cd_file.len() <= old,
+                "{name}: pick {} above old {old}",
+                cd_file.len()
+            );
+        }
+    }
+
+    /// The corpus gate (slow, ~15 min): every file roundtrips under the
+    /// full CD pick; wins counted vs the old pick's own wire. #[ignore]d;
+    /// run explicitly at the ADR-008 gate.
+    #[test]
+    #[ignore]
+    fn cd_corpus_gate() {
+        let files = [
+            "gradient_320x240.png",
+            "noise_256x256.png",
+            "repeat_256x256.png",
+            "screenshot_640x400.png",
+            "solid_256x256.png",
+            "heldout/blob_224x160.png",
+            "heldout/blocks_192x128.png",
+            "heldout/document_200x280.png",
+            "heldout/plaid_192.png",
+            "heldout/poster_208x144.png",
+            "heldout-photos/autumn_160x120_s3100006.png",
+            "heldout-photos/dusk_160x120_s3100003.png",
+            "heldout-photos/dusk_224x160_s3100002.png",
+            "heldout-photos/forest_192x144_s3100001.png",
+            "heldout-photos/forest_224x160_s3100005.png",
+            "heldout-photos/forest_224x160_s3100008.png",
+            "heldout-photos/ocean_192x144_s3100007.png",
+            "heldout-photos/sand_192x144_s3100004.png",
+            "heldout-photos/slate_160x120_s3100009.png",
+            "heldout-photos/terrain_160x120_s3100000.png",
+            "photos/autumn_192x144_s900001.png",
+            "photos/dusk_160x120_s900003.png",
+            "photos/forest_224x160_s900002.png",
+            "photos/ocean_192x144_s900007.png",
+            "photos/sand_160x120_s900000.png",
+            "photos/slate_192x144_s900004.png",
+            "photos/slate_224x160_s900008.png",
+            "photos/stone_160x120_s900006.png",
+            "photos/terrain_160x120_s900009.png",
+            "photos/terrain_224x160_s900005.png",
+        ];
+        let mut tot = 0usize;
+        let mut cd_fires = 0usize;
+        for name in files {
+            let (d, px) = load(name);
+            let (file, st, _) = encode_mnf8(&px, d, false, crate::mnf8::Profile::Maximum);
+            assert_eq!(decode_mnf8(&file).unwrap().1, px, "{name}");
+            tot += file.len();
+            let fired = st.chosen_flags & FLAG_CHANNEL_DIFF != 0;
+            cd_fires += usize::from(fired);
+            if fired {
+                println!("{name}: cd fires, {}", file.len());
+            }
+        }
+        println!("corpus: total={tot} cd_fires={cd_fires}");
+        assert!(cd_fires >= 10, "cd must fire on the photographic class");
+    }
+
+    /// Malformed cd wires reject with errors (never panics): truncated
+    /// payload, unknown mode after the unrelabel guard.
+    #[test]
+    fn cd_malformed_rejects() {
+        let (d, px) = load("gradient_320x240.png");
+        let flags = FLAG_CHANNEL_DIFF;
+        let (file, _) = encode_stream_coder(
+            &px,
+            d,
+            true,
+            false,
+            flags,
+            false,
+            false,
+            PredKind::None,
+            &Coder::Zstd(19),
+            BACKEND_ZSTD19,
+            true,
+        )
+        .expect("encode");
+        // truncate the payload
+        for cut in [40, 41, 60, file.len() / 2] {
+            let mut t = file.clone();
+            t.truncate(cut.min(file.len()));
+            assert!(
+                decode_mnf8(&t).is_err(),
+                "truncated cd file must reject at {cut}"
+            );
+        }
+        // corrupt the flag region (invalid mode inside the body): flip a
+        // byte inside the container — the unrelabel walk or the container
+        // must reject
+        let mut t = file.clone();
+        let last = t.len() - 1;
+        t[last] = t[last].wrapping_add(1);
+        let _ = decode_mnf8(&t); // must not panic; result = Err or valid
+                                 // diff-file class on the container checksum
     }
 }

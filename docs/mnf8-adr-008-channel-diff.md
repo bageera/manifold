@@ -1,6 +1,11 @@
 # ADR-008: MNF11 channel-diff residual organization
 
-Status: PROPOSED (2026-10-28), measurement first (MNF11 diagnostic 1)
+Status: IMPLEMENTED (2026-10-28): flag bit 6 = 0x40, reserved mask
+!0b1111111; shipped in the library's MNF8 pick (both-organizations arms
+at complete-file cost; the decoder's inverse relabel runs before the
+walk; gate numbers in docs/mnf8-adr-008-channel-diff.md § gate results
+and the corpus = 8/8 test suite + fuzz). The ADR-008 pick composes with
+every ADR-004 predictor × planar arm and the token arm.
 Supersedes: nothing; competes inside the existing pick
 Related: ADR-004 (branch predictors), TAG_NEAR (ADR-005), MNF11
 diagnostic (docs/mnf10-g3-shared-model.md § MNF11)
@@ -48,6 +53,25 @@ Add MNF8 flag bit 6 (0x40) = FLAG_CHANNEL_DIFF:
    near-token under the flag, reserved-bit mix, empty-payload with
    the flag).
 
+## Findings preserved (the three headline mechanisms)
+
+1. **Zero-overhead residual relabeling.** The existing header flag word
+   communicates the transform — no extra payload section, no per-body
+   metadata; the wire shape (byte counts per mode/tag) is unchanged and
+   the relabel is reversible per pixel by construction.
+2. **Portfolio interaction.** CD composes PROFITABLY with the existing
+   predictor × planar arms and the token arm (the diagnostic's −6.6%
+   relabel-only estimate doubled to −12.3% once CD competed inside the
+   full pick): the representation enables the existing arms rather than
+   replacing them. This is the program's first measured positive
+   interaction (previous composition attempts — plane, near, depth —
+   each landed at ±0.1%).
+3. **Decoder discipline.** The three walker bugs (post-mode-byte
+   over-advance; MATCH's 6-byte form; NEAR's length-byte offset) were
+   each caught by assertions and the golden-vector decode BEFORE any
+   compression number was accepted — the round-trip-first rule kept the
+   measurement honest.
+
 ## Consequences
 
 - Wire-compatible growth: old decoders reject 0x40 files with the
@@ -69,3 +93,34 @@ Add MNF8 flag bit 6 (0x40) = FLAG_CHANNEL_DIFF:
   crates/mnf-mans/scripts/mnf11_residual_diag.py (diagnostics) and
   the relabel-stream walker (this ADR's § experiment) — rerun both.
 - make gate + fuzz (525 trials, 0 panics) + capi before any release.
+
+## Gate results (2026-10-28, implementation gate)
+
+- Corpus (30 files, the release CLI pick, all `verify` PASS): total
+  **834,885 B** vs the pre-CD pick's 951,455 = **−116,570 (−12.3%)**;
+  CD fires **23/30** (every photographic record file + document +
+  poster + screenshot; the exact-generative MNF9-owned files and the
+  gradient/record-pure classes keep their prior arms).
+- The composition with ADR-004's predictors and PLANAR nearly doubled
+  the diagnostic's estimate (−62,675 → −116,570): e.g. slate_224x160
+  62,052 → 50,918; forest_224x160 55,804 → 45,522.
+- Tests: in-lib pins 3/3 fire (roundtrip all predictor/planar shapes ×
+  both backends; never-worse vs the pre-CD pick; malformed rejects);
+  conformance 8/8 (the new CD|PLANAR|PLANE golden from the slate crop +
+  reserved-bit-7 and truncated-payload rejects); lib suite 51 passed.
+- The wire change: MNF8 flag bit 6; old decoders reject CD files via the
+  reserved-mask rule (Error, not panic); new decoders read all pre-CD
+  files unchanged; MNF9/MNF7/MNF6 untouched.
+
+### Backward compatibility (the final gate's explicit check)
+
+The three pre-ADR-008 conformance goldens carry flags 0x1 (PLANAR),
+0xc (TOKENS), 0x20 (PRED_LEFT) — bit 6 UNSET — and decode exact through
+the new decoder with the CD branch untaken (verified by
+mnf8_conformance's 8/8 + the differential suite's 4/4, which re-agrees
+the independent decoder on the same goldens + corpus arms). Old
+decoders reject bit-6 files via their reserved-mask rule
+(rej_mnf8_reserved_flag.mnf8 stays a rejection vector). New encoder
+output remains bit-identical for files whose pick rejects the CD arm
+(the CD arms are ADDITIONAL pick candidates: the plain arms still
+compete byte-for-byte).

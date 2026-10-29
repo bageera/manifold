@@ -7,7 +7,9 @@ Status: MNF5/MNF6/MNF7 frozen formats + MNF8 backend-field format (tokens,
 branch predictors, near matches, matcher depth; ADR-003..006) + the MNF9
 exact-generative whole-frame format (ADR-007: six decoder-defined integer
 families; the `--mnf8` flow emits an MNF9 file when the generative arm wins
-the pick) — release v1.10.0 · hardened decoders
+the pick; ADR-008's FLAG_CHANNEL_DIFF selects the per-pixel
+[g, r−g, b−g] residual organization when it wins the pick) — release
+v1.11.0 · hardened decoders
 (bounded, checksummed, canonical, fuzzed) · independently validated ·
 normative format spec at
 [docs/format.md](docs/format.md)
@@ -19,10 +21,10 @@ shipped streams measured −62,675 B (−6.6%) corpus-wide, 17/30 files
 of Jon's 64-combo modular grid; moonshot lab open with X1 (program
 discovery) closed honest-negative and the G4/G5 shared-template verdicts
 recorded (sparse+template is the mechanism; D8 is a specialist; sprite
-redraws a measured negative). v1.10.0 remains the shipping baseline
-throughout.
+redraws a measured negative). v1.11.0 (ADR-008) remains the shipping baseline
+throughout; v1.10.0's MNF9 arm is unchanged inside the pick.
 
-Identifier map: **Manifold v1.10.0** = the library release; **MNF9** = the
+Identifier map: **Manifold v1.11.0** = the library release; **MNF9** = the
 generative file format's magic; **MNF10** = the research program's milestone
 name (never a wire magic).
 
@@ -195,4 +197,5 @@ MIT — see [LICENSE](LICENSE).
 | v1.8.0 | MNF8 token-wire TAG_NEAR narrow-coordinate matches (ADR-005) |
 | v1.9.0 | MNF8 TAG_NEAR + matcher candidate depth two-arm pick (ADR-006) |
 | v1.10.0 | MNF9 exact-generative whole-frame format ships (ADR-007 Track A) |
+| v1.11.0 | MNF8 FLAG_CHANNEL_DIFF: channel-difference residual organization (ADR-008; −12.3% corpus, 23/30 files) |
 | — (research) | MNF11: channeldiff relabel −62,675 B/17-of-30 on shipped streams (ADR-008 PROPOSED); X369 grid: (1,1) = optimum; X1 program discovery honest-negative; G4/G5 shared-template + mask verdicts (docs/mnf10-g3-shared-model.md) |

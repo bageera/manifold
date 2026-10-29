@@ -1,6 +1,6 @@
 [package]
 name = "manifold-codec-capi"
-version = "1.10.0"
+version = "1.11.0"
 edition = "2021"
 rust-version = "1.91"
 description = "C FFI for the Manifold lossless RGB8 codecs"
