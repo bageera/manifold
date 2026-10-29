@@ -468,3 +468,75 @@ X369 verdict recorded: 3-6-9 residue cycles do not earn a compressor
 role; the modular-algebra framing (reversible relationships between
 channels, decided by compressed byte count) is the keeper — and its
 first proven member is ADR-008's (1,1).
+
+## MNF11-X2: Reversible Dynamics — predictor-source ablation (closed, 2026-10-28)
+
+Jon's design executed exactly: the X2 arms replace ONLY the mode-0
+residual prediction inside the shipped record grammar (identical
+downstream stream organization + backend); three measurements per arm
+(residual-only under the same pipe; complete file vs shipped; per-tile
+swap accounting), with a same-pipe KEEP control arm separating
+instrument framing from mechanism (the python zstd frame differs from
+the Rust encoder's by +1..+68 B — never cross-pipe).
+
+Arms: B = fixed integer recurrence per tile (a0, add, m table, per-tile
+selection); D = coupled-channel CAUSAL (pred(G) = recon R, pred(B) =
+recon G of the same pixel — the only in-grammar causal coupling; scan
+order c=0,1,2 forbids (c+2)%3 reads); E = state-space s_{n+1} =
+(7s + 3u + 1) % 256 over the shipped-predicted sequence.
+
+| fixture | shipped | B | D | E |
+|---|---|---|---|---|
+| poster | 1,142 | **−34** | +1,223 | +6,288 |
+| gradient | 254 | +230,494 | +159,694 | +230,494 |
+| blob | 5,986 | +3,682 | +9,263 | +98,724 |
+| autumn 192x144 | 21,355 | +21,858 | +11,553 | +61,608 |
+| dusk 160x120 | 26,232 | +16,361 | +14,237 | +31,493 |
+| forest 224x160 | 55,804 | +17,662 | +15,400 | +51,901 |
+| ocean 192x144 | 41,885 | +18,848 | +14,443 | +41,212 |
+| sand 160x120 | 31,345 | +11,988 | +7,127 | +26,377 |
+| slate 192x144 | 44,384 | +14,144 | +4,072 | +38,713 |
+| slate 224x160 | 62,052 | +16,944 | +4,431 | +45,653 |
+| stone 160x120 | 14,406 | +14,879 | +4,801 | +43,036 |
+| terrain 160x120 | 29,982 | +11,046 | +7,274 | +27,676 |
+| terrain 224x160 | 48,599 | +23,189 | +15,981 | +59,106 |
+| document/screenshot/blocks (token wires) | — | no-fire (literals few; matcher untouched per spec) | | |
+
+Verdict per the pre-registered rule (both families fail → close, no
+language tuning):
+
+1. **Deterministic dynamics lose the residual-prediction contest
+   everywhere real.** The shipped MED/PLANE predictors own the spatial
+   structure; recurrences along scan order pay full amplitude on the
+   residual's spatial unpredictability; E's 1-D state drift is
+   catastrophic (+26k..+62k) — chaotic-precision cost confirmed at its
+   smallest scale.
+2. **Coupled-channel PREDICTION loses even though coupled-channel
+   SYMBOLS win (ADR-008).** The decisive instrument distinction: the
+   −62,675 B channeldiff win lives in the residual DISTRIBUTION the
+   container sees (a relabeling, zero predictor change); making the
+   predictor itself read the neighbor channel (in-grammar causal
+   coupling) LOSES +4k..+16k — the shipped per-channel spatial context
+   beats intra-pixel channel chaining. Two different mechanisms, now
+   measured separately: representation-vs-predictor.
+3. The poster's B −34 is a control-scale rounding win on one flat
+   fixture (ctrl +6 same-pipe), squarely MNF9-const/MNF9-rec territory —
+   not a mechanism.
+
+Instrument catches (all three X1 lessons exercised):
+- The first D implementation used (c+2)%3 channel reads — NON-CAUSAL
+  under the shipped c-order scan (would have been an indecodable wire)
+  and showed a fake −21,626. The causality check killed it before any
+  number leaked; the decodable coupling variant loses honestly.
+- KEEP control arm (byte-identical bodies through the same pipe) sets
+  the cross-implementation floor at +1..+68 B; all verdicts are
+  same-pipe deltas.
+- The planar body repack had a (3,tw,th).T bug caught by the recon
+  assertion (reconstruct-then-verify against the true image per tile).
+
+X2 CLOSED. The moonshot lab's ledger: X1 (program synthesis) denied;
+X2 (dynamics as residual-predictor source) denied; the surviving
+mechanism for photographic residuals remains ADR-008's symbol
+relabeling (representation, not prediction). X3 (higher-dimensional
+lattice projection) runs only on a specific measured residual structure,
+per the instrument rules.
