@@ -1,7 +1,27 @@
 # Changelog
 
-# Changelog
+## v1.12.0 — MNF8 REF field: the channel-diff reference selector (ADR-008 generalized; 2026-10-29)
 
+The C2 gate's per-file census promoted to the wire: MNF8 flags bits
+6-7 = (flags >> 6) & 0b11 — 0 none, 1 G-centered (v1.11's bit-6 shape,
+every old CD file decodes unchanged), 2 R-centered, 3 B-centered
+(FLAG_REF_R = 128; the reserved mask widens to bits 8..31 — v1.11
+decoders reject REF=10/11 via their reserved rule, error not panic).
+
+The encoder pick sweeps the reference across every record arm and the
+token arm at complete-file cost (never-worse by construction). Real
+30-file corpus at release: test-gate 832,765 / release-CLI 832,739
+(−2,146 B = −0.26% vs v1.11; the 26-B instrument gap = the single
+file where the CLI's MNF9 whole-frame arm wins). REF distribution
+none 7 / G 13 / R 5 / B 5. Encode cost ~1.5x (the 4-ref sweep);
+decode unchanged. Conformance 10/10 with the REF=2/REF=3 goldens and
+the new bit-8 reject boundary. Fuzz green (see fuzz.py log in the
+commit's gate evidence).
+
+Census caveat recorded in the ADR: the C2 instrument's per-file
+repack used python-zlib-9 vs the shipped flate2-default(6) container;
+its per-file deltas are level-mismatched (document's −166 = a
+phantom) while the aggregate prediction (≈ −2.1 kB) survived.
 ## v1.11.0 — ADR-008: MNF8 FLAG_CHANNEL_DIFF, the channel-difference residual organization (2026-10-28)
 
 The MNF11 diagnostic's measured residual-structure win ships: MNF8

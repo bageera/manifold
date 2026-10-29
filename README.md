@@ -8,23 +8,22 @@ branch predictors, near matches, matcher depth; ADR-003..006) + the MNF9
 exact-generative whole-frame format (ADR-007: six decoder-defined integer
 families; the `--mnf8` flow emits an MNF9 file when the generative arm wins
 the pick; ADR-008's FLAG_CHANNEL_DIFF selects the per-pixel
-[g, r−g, b−g] residual organization when it wins the pick) — release
-v1.11.0 · hardened decoders
+[g, r−g, b−g] residual organization when it wins the pick; the v1.12
+REF field generalizes bit 6 to a 2-bit reference selector
+(G/R/B per-file)) — release v1.12.0 · hardened decoders
 (bounded, checksummed, canonical, fuzzed) · independently validated ·
 normative format spec at
 [docs/format.md](docs/format.md)
 
-Research frontier (2026-10-28): MNF11 residual-structure discovery — a
-per-pixel channel-difference relabel [r,g,b] → [g, r−g, b−g] of the
-shipped streams measured −62,675 B (−6.6%) corpus-wide, 17/30 files
-(ADR-008 PROPOSED, flag bit 6); the (1,1) anchor verified as the optimum
-of Jon's 64-combo modular grid; moonshot lab open with X1 (program
-discovery) closed honest-negative and the G4/G5 shared-template verdicts
-recorded (sparse+template is the mechanism; D8 is a specialist; sprite
-redraws a measured negative). v1.11.0 (ADR-008) remains the shipping baseline
-throughout; v1.10.0's MNF9 arm is unchanged inside the pick.
+Research frontier (2026-10-29): the moonshot lab's verdicts stand (X1
+program discovery closed honest-negative; X369's (1,1) anchor = the
+64-combo optimum; the G4/G5 sparse-template records); ADR-008 shipped
+(−12.3%) and generalized to the v1.12 REF selector (G/R/B, −2,146 B =
+the C2 census's ≈ −2.1 kB prediction reproduced by the production pick
+within 2%). v1.12.0 is the shipping baseline; v1.10.0's MNF9 arm is
+unchanged inside the pick.
 
-Identifier map: **Manifold v1.11.0** = the library release; **MNF9** = the
+Identifier map: **Manifold v1.12.0** = the library release; **MNF9** = the
 generative file format's magic; **MNF10** = the research program's milestone
 name (never a wire magic).
 
@@ -198,4 +197,5 @@ MIT — see [LICENSE](LICENSE).
 | v1.9.0 | MNF8 TAG_NEAR + matcher candidate depth two-arm pick (ADR-006) |
 | v1.10.0 | MNF9 exact-generative whole-frame format ships (ADR-007 Track A) |
 | v1.11.0 | MNF8 FLAG_CHANNEL_DIFF: channel-difference residual organization (ADR-008; −12.3% corpus, 23/30 files) |
+| v1.12.0 | MNF8 REF field: the channel-diff reference selector G/R/B (ADR-008 generalized; −2,146 B corpus, REF dist 7/13/5/5) |
 | — (research) | MNF11: channeldiff relabel −62,675 B/17-of-30 on shipped streams (ADR-008 PROPOSED); X369 grid: (1,1) = optimum; X1 program discovery honest-negative; G4/G5 shared-template + mask verdicts (docs/mnf10-g3-shared-model.md) |

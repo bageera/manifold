@@ -36,10 +36,12 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   sparse-representation economics (masks/channel-split DENIED), and
   the MNF11 diagnostic + relabel-shipped-stream experiment
   (−62,675 B, 17/30) + X369 grid + X1 program-discovery closure.
-- [ADR-008](mnf8-adr-008-channel-diff.md) — MNF8 FLAG_CHANNEL_DIFF (bit 6):
-  the channel-difference residual organization — IMPLEMENTED v1.11.0
-  (−12.3% corpus / −116,570 B, 23/30 files; pick-measured both
-  organizations; golden + reject vectors committed).
+- [ADR-008](mnf8-adr-008-channel-diff.md) — MNF8 channel-difference
+  residual organization — IMPLEMENTED v1.11.0 (bit 6; −12.3% corpus /
+  −116,570 B, 23/30 files; pick-measured both organizations) and
+  GENERALIZED v1.12.0 to the 2-bit REF field (G/R/B selector; −2,146 B
+  corpus = the C2 census's ≈ −2.1 kB prediction reproduced; REF2/REF3
+  goldens + the bit-8 reject boundary).
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).

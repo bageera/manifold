@@ -124,3 +124,51 @@ decoders reject bit-6 files via their reserved-mask rule
 output remains bit-identical for files whose pick rejects the CD arm
 (the CD arms are ADDITIONAL pick candidates: the plain arms still
 compete byte-for-byte).
+
+## v1.12 — the REF field (bits 6-7), the C2 gate's selector promoted
+
+The C2 gate measured alternate reference channels through the shipped
+streams' own walker: CD-G stands on aggregate (CD-R +19,278 / CD-B
++11,664 whole-corpus) but 9/27 MNF8 files prefer R or B per-file. The
+selector generalizes bit 6 to a 2-bit field `(flags >> 6) & 0b11`
+(0 none / 1 G = the exact v1.11 shape / 2 R / 3 B; FLAG_REF_R = 128;
+reserved mask widens to bits 8..31). Old bit-6 CD files decode
+unchanged (their shape = REF 01); a v1.11 decoder rejects REF=10/11
+through its reserved-bit-7 rule — verified against the released 1.11.0
+binary with the new goldens (ref2/ref3: reject on 1.11, exact on 1.12;
+cdg + plain goldens exact on both).
+
+Implementation: `channel_diff_relabel`/`channel_diff_unrelabel`
+generalized per `ref_pick` (1→(g,r,b), 2→(r,g,b), 3→(b,r,g)); planar
+bodies relabel per-plane in wire emission order; token tag-0 literals
+and interleaved mode-0 bodies relabel per pixel. The encoder pick sweeps
+reference 0..=3 across every record arm (predictor x planar x backend)
+and the token arm — 4x the CD-relevant arms; measured encode cost
+~1.5x on the CLI (photo 3.4→5.1 s, screenshot 12→17 s, document
+3.2→5.0 s). Decode cost unchanged (one inverse pass before the walk).
+
+Gate (this record's commit): corpus-gate test 832,765 (−2,120 vs
+v1.11's 834,885, cd_fires 23); release-CLI e2e 30/30 verify = 832,739
+(−2,146) — the 26-B instrument delta = exactly the one file where the
+CLI's MNF9 whole-frame arm wins (solid 62→36; every other file
+byte-identical between the two instruments). REF distribution
+none 7 / G 13 / R 5 / B 5. The C2 census's ≈ −2.1 kB prediction
+reproduced by the production pick within 2%.
+
+Census caveat (recorded for the next instrument author): the C2
+per-file table repacked with python-zlib level 9 while the shipped
+"zlib-9" backend is flate2's Compression::default() (level 6, frozen
+wire name); its per-file deltas are level-mismatched and document's
+census row (−166) was a phantom the real pick correctly declined. The
+aggregate direction survived (the real pick's −2.1 kB came from the
+R/B files the census named).
+
+Conformance: 10/10 — the two new REF goldens (mnf8_ref2_screenshot:
+TOKENS|REF=2 flags 0x8c, zstd backend, 640x400;
+mnf8_ref3_terrain160: PLANAR|PRED_MED|REF=3 flags 0xd1, zstd,
+160x120) + the bit-8 reject replacing the bit-7 vector the mask
+widening invalidated (the old vector's bytes are REF=11's shape and a
+legal v1.12 file class).
+
+Fuzz: scripts/fuzz.py full run on the v1.12 tree — see the commit's
+gate log; conformance + lib + CLI + fuzz all green before tag.
