@@ -76,3 +76,18 @@ the decision itself = a product-scope decision, Jon's call).
   `--mnfx` (opt-in per the freeze policy).
 - The 30-file corpus: MNFX-forced = ≥ 34 B overhead per file
   (measured, reported).
+
+## Decision (2026-10-30)
+
+JON DECISION: the wrapper = its own repo, `manifold-frame` (github:
+bageera/manifold-frame; crates.io name probed free) — the sibling
+crate option. W0 landed there (commit 458280e): the grammar frozen
+per the corrections above (18-B header + 16-B chunk header = +34 B
+minimum framing; CRC-before-parse with RFC 3720 vectors; bounds from
+the file length; unknown-critical reject / unknown-optional skip;
+exactly one PIXEL chunk; codec 5 = the sole MNF9 pixel layer; Err
+never panic). 11 tests green, clippy -D warnings clean. The
+manifold-codec crate's surface stays exactly as published (v1.13.0).
+W1 = the MNF8/MNF9 embed layer + the embedded==standalone decode
+gate on the 30-file corpus, against manifold-codec 1.13.0 as a
+path dependency.
