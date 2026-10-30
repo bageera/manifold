@@ -1,0 +1,297 @@
+# MNF14-CS1 gate log (complete serialized bytes per arm; growth exponents below)
+[
+ {
+  "class": "koch",
+  "width": 64,
+  "height": 64,
+  "png": 450,
+  "A_portfolio": 352,
+  "B_pyramid": 1308,
+  "C_boundary": 566,
+  "D_koch": 241
+ },
+ {
+  "class": "realmap",
+  "width": 64,
+  "height": 64,
+  "png": 615,
+  "A_portfolio": 422,
+  "B_pyramid": 1752,
+  "C_boundary": 769
+ },
+ {
+  "class": "alpha",
+  "width": 64,
+  "height": 64,
+  "png": 363,
+  "A_portfolio": 265,
+  "B_pyramid": 1167,
+  "C_boundary": 524
+ },
+ {
+  "class": "frac",
+  "width": 64,
+  "height": 64,
+  "png": 3835,
+  "A_portfolio": 5376,
+  "B_pyramid": 5177
+ },
+ {
+  "class": "photo",
+  "width": 64,
+  "height": 64,
+  "png": 5124,
+  "A_portfolio": 4850,
+  "B_pyramid": 6630
+ },
+ {
+  "class": "noise",
+  "width": 64,
+  "height": 64,
+  "png": 12420,
+  "A_portfolio": 12339,
+  "B_pyramid": 15875
+ },
+ {
+  "class": "koch",
+  "width": 128,
+  "height": 128,
+  "png": 1067,
+  "A_portfolio": 949,
+  "B_pyramid": 3208,
+  "C_boundary": 1278,
+  "D_koch": 241
+ },
+ {
+  "class": "realmap",
+  "width": 128,
+  "height": 128,
+  "png": 1542,
+  "A_portfolio": 1190,
+  "B_pyramid": 4584,
+  "C_boundary": 1878
+ },
+ {
+  "class": "alpha",
+  "width": 128,
+  "height": 128,
+  "png": 716,
+  "A_portfolio": 590,
+  "B_pyramid": 2386,
+  "C_boundary": 967
+ },
+ {
+  "class": "frac",
+  "width": 128,
+  "height": 128,
+  "png": 8926,
+  "A_portfolio": 13922,
+  "B_pyramid": 13567
+ },
+ {
+  "class": "photo",
+  "width": 128,
+  "height": 128,
+  "png": 17347,
+  "A_portfolio": 16918,
+  "B_pyramid": 21850
+ },
+ {
+  "class": "noise",
+  "width": 128,
+  "height": 128,
+  "png": 49353,
+  "A_portfolio": 49256,
+  "B_pyramid": 63072
+ },
+ {
+  "class": "koch",
+  "width": 256,
+  "height": 256,
+  "png": 2569,
+  "A_portfolio": 2528,
+  "B_pyramid": 7991,
+  "C_boundary": 3002,
+  "D_koch": 241
+ },
+ {
+  "class": "realmap",
+  "width": 256,
+  "height": 256,
+  "png": 3787,
+  "A_portfolio": 3110,
+  "B_pyramid": 11342,
+  "C_boundary": 4413
+ },
+ {
+  "class": "alpha",
+  "width": 256,
+  "height": 256,
+  "png": 1465,
+  "A_portfolio": 1397,
+  "B_pyramid": 4770,
+  "C_boundary": 1807
+ },
+ {
+  "class": "frac",
+  "width": 256,
+  "height": 256,
+  "png": 16568,
+  "A_portfolio": 27869,
+  "B_pyramid": 35719
+ },
+ {
+  "class": "photo",
+  "width": 256,
+  "height": 256,
+  "png": 63208,
+  "A_portfolio": 63164,
+  "B_pyramid": 75118
+ },
+ {
+  "class": "noise",
+  "width": 256,
+  "height": 256,
+  "png": 197172,
+  "A_portfolio": 196929,
+  "B_pyramid": 251915
+ },
+ {
+  "class": "koch",
+  "width": 512,
+  "height": 512,
+  "png": 6616,
+  "A_portfolio": 6804,
+  "B_pyramid": 19890,
+  "C_boundary": 6990,
+  "D_koch": 241
+ },
+ {
+  "class": "realmap",
+  "width": 512,
+  "height": 512,
+  "png": 9835,
+  "A_portfolio": 9018,
+  "B_pyramid": 30234,
+  "C_boundary": 11096
+ },
+ {
+  "class": "alpha",
+  "width": 512,
+  "height": 512,
+  "png": 3264,
+  "A_portfolio": 3506,
+  "B_pyramid": 9958,
+  "C_boundary": 3416
+ },
+ {
+  "class": "frac",
+  "width": 512,
+  "height": 512,
+  "png": 29396,
+  "A_portfolio": 51180,
+  "B_pyramid": 75073
+ },
+ {
+  "class": "photo",
+  "width": 512,
+  "height": 512,
+  "png": 243019,
+  "A_portfolio": 236435,
+  "B_pyramid": 270968
+ },
+ {
+  "class": "noise",
+  "width": 512,
+  "height": 512,
+  "png": 787984,
+  "A_portfolio": 787611,
+  "B_pyramid": 1007414
+ },
+ {
+  "class": "koch",
+  "width": 1024,
+  "height": 1024,
+  "png": 15796,
+  "A_portfolio": 19068,
+  "B_pyramid": 50561,
+  "C_boundary": 16416,
+  "D_koch": 241
+ },
+ {
+  "class": "realmap",
+  "width": 1024,
+  "height": 1024,
+  "png": 25913,
+  "A_portfolio": 25320,
+  "B_pyramid": 80767,
+  "C_boundary": 27770
+ },
+ {
+  "class": "alpha",
+  "width": 1024,
+  "height": 1024,
+  "png": 8226,
+  "A_portfolio": 9945,
+  "B_pyramid": 23399,
+  "C_boundary": 6602
+ },
+ {
+  "class": "frac",
+  "width": 1024,
+  "height": 1024,
+  "png": 49357,
+  "A_portfolio": 121846,
+  "B_pyramid": 149681
+ },
+ {
+  "class": "photo",
+  "width": 1024,
+  "height": 1024,
+  "png": 957459,
+  "A_portfolio": 896607,
+  "B_pyramid": 1013317
+ },
+ {
+  "class": "noise",
+  "width": 1024,
+  "height": 1024,
+  "png": 3151184,
+  "A_portfolio": 3150354,
+  "B_pyramid": 4029951
+ }
+]
+
+# growth exponents
+{
+ "koch.png": 1.2899379980833419,
+ "koch.A_portfolio": 1.4360771731507065,
+ "koch.B_pyramid": 1.317747833246749,
+ "koch.C_boundary": 1.2167718164866073,
+ "koch.D_koch": 0.0,
+ "realmap.png": 1.3467013943669555,
+ "realmap.A_portfolio": 1.4735627127659245,
+ "realmap.B_pyramid": 1.3774875459053966,
+ "realmap.C_boundary": 1.2911570262158603,
+ "realmap.D_koch": null,
+ "alpha.png": 1.1192908801716568,
+ "alpha.A_portfolio": 1.303085334905145,
+ "alpha.B_pyramid": 1.0712402789769113,
+ "alpha.C_boundary": 0.9131249023513829,
+ "alpha.D_koch": null,
+ "frac.png": 0.909144659481235,
+ "frac.A_portfolio": 1.0882977551782187,
+ "frac.B_pyramid": 1.217545434297699,
+ "frac.C_boundary": null,
+ "frac.D_koch": null,
+ "photo.png": 1.8899903871415153,
+ "photo.A_portfolio": 1.8865507095188514,
+ "photo.B_pyramid": 1.8144139267784885,
+ "photo.C_boundary": null,
+ "photo.D_koch": null,
+ "noise.png": 1.9971126673285107,
+ "noise.A_portfolio": 1.9991401207789203,
+ "noise.B_pyramid": 1.9973236983781772,
+ "noise.C_boundary": null,
+ "noise.D_koch": null
+}
