@@ -298,6 +298,16 @@ the token path's own worst case (§3.1). Total file length MUST be exactly
                    contexts = the previous coded byte's 8-bucket
                    magnitude); decode rejects unaligned payloads, an
                    over-limit stream length, and truncations with errors.
+    5 = mix6       the R6-tuned mix coder (MNF13-R6, v1.14.0;
+                   docs/mnf13-r6.md): the SAME algorithmic family and
+                   payload framing as backend 4, with the adaptation
+                   constants that define the decode evolution changed —
+                   context = 16 keys (prev byte's 8-bucket magnitude +
+                   a 2-band coarse pre-prev key), FAST cap 32,768, SLOW
+                   cap 1,048,576. A distinct backend id is MANDATORY:
+                   the model-update rules are the stream's meaning, so
+                   backend-4 decoders must reject backend-5 payloads
+                   (and vice versa) rather than mis-decode them.
     other          decoders MUST reject (unknown backend)
 
 ## 3. Records and flags

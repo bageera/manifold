@@ -363,6 +363,23 @@ fn parse_encode(a: &[String]) -> (PathBuf, PathBuf, bool, bool, bool, Option<Pro
             "--geom" => geom = true,
             "--mnf6" => mnf6 = true,
             "--mnf8" => mnf8 = Some(Profile::Balanced),
+            "--profile" => {
+                // Benchmark-integrity rule (R6 review): an intended profile
+                // must either take effect or fail loudly — silent fallback
+                // to Balanced is a measurement lie.
+                let v = a
+                    .get(i + 1)
+                    .unwrap_or_else(|| die("--profile requires a value"));
+                if mnf8.is_none() {
+                    die("--profile requires --mnf8 (try --mnf8 --profile maximum)");
+                }
+                i += 1;
+                mnf8 = Some(match v.as_str() {
+                    "maximum" => Profile::Maximum,
+                    "balanced" => Profile::Balanced,
+                    other => die(&format!("unknown profile '{other}' (balanced|maximum)")),
+                })
+            }
             v if v.starts_with("--mnf8=") => {
                 mnf8 = Some(match v.trim_start_matches("--mnf8=") {
                     "maximum" => Profile::Maximum,

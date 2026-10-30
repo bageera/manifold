@@ -97,6 +97,12 @@ pub const BACKEND_RESERVED3: u32 = 3;
 /// range coding of the residual bytes (docs/mnf13-r5.md).
 pub const BACKEND_MIX: u32 = 4;
 
+/// The R6-tuned mix coder backend (MNF13-R6, v1.14.0): 16-key joint
+/// context + long-horizon caps (docs/mnf13-r6.md; the decode evolution
+/// differs from backend 4's by the constants — a distinct backend id is
+/// mandatory).
+pub const BACKEND_MIX5: u32 = 5;
+
 // zstd-19's default window is 8 MiB = 2^23; hard-pin the decoder cap to it
 // (review fix 4: a hostile frame can't claim a 128 MiB window).
 /// zstd decoder window ceiling (8 MiB; matches level-19 encoder).
@@ -120,6 +126,7 @@ pub enum Profile {
 /// applies to any arm's payload; the pick measures it per file.
 fn backend_candidates() -> Vec<(u32, Coder)> {
     vec![
+        (BACKEND_MIX5, Coder::Zstd(19)),
         (BACKEND_MIX, Coder::Zstd(19)),
         (BACKEND_ZSTD19, Coder::Zstd(19)),
         (BACKEND_ZLIB, Coder::Zlib),
@@ -131,6 +138,10 @@ fn backend_compress(backend: u32, buf: &[u8]) -> Result<Vec<u8>> {
         BACKEND_ZLIB => Ok(compress_stream(&Coder::Zlib, buf)),
         BACKEND_ZSTD19 => Ok(compress_stream(&Coder::Zstd(19), buf)),
         BACKEND_MIX => Ok(crate::mix_coder::mix_encode(buf)),
+        BACKEND_MIX5 => Ok(crate::mix_coder::mix_encode_with(
+            &crate::mix_coder::MixParams::BACKEND5,
+            buf,
+        )),
         other => Err(Error::fmt_msg(format!(
             "backend {other} not a compressed-output coder"
         ))),
@@ -1128,7 +1139,12 @@ pub fn decode_mnf8_with_limits(
     let backend = u32le(28);
     if !matches!(
         backend,
-        BACKEND_ZLIB | BACKEND_ZSTD19 | BACKEND_RESERVED2 | BACKEND_RESERVED3 | BACKEND_MIX
+        BACKEND_ZLIB
+            | BACKEND_ZSTD19
+            | BACKEND_RESERVED2
+            | BACKEND_RESERVED3
+            | BACKEND_MIX
+            | BACKEND_MIX5
     ) {
         return Err(Error::fmt_msg(format!("unknown backend {backend}")));
     }
@@ -1176,6 +1192,11 @@ pub fn decode_mnf8_with_limits(
     let raw = match backend {
         BACKEND_ZLIB | BACKEND_ZSTD19 => backend_decompress(backend, payload, limit)?,
         BACKEND_MIX => crate::mix_coder::mix_decode(payload, limit.min(i64::MAX as u64) as usize)?,
+        BACKEND_MIX5 => crate::mix_coder::mix_decode_with(
+            &crate::mix_coder::MixParams::BACKEND5,
+            payload,
+            limit.min(i64::MAX as u64) as usize,
+        )?,
         other => return Err(Error::fmt_msg(format!("unsupported backend {other}"))),
     };
 

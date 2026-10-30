@@ -1,5 +1,39 @@
 # Changelog
 
+## v1.14.0 — Backend 5: the R6-tuned mix coder joins the pick (MNF13-R6 promoted; 2026-10-30)
+
+The R6 grid's winner ships as **backend id 5** (backend 4's decode
+evolution stays byte-frozen at v1.13.0's constants — the model-update
+rules ARE the stream's meaning, so a tuned variant is a new backend,
+never a changed backend):
+
+- context = **16 keys** (the previous coded byte's 8-bucket magnitude +
+  a 2-band coarse pre-prev key; decoder-causal, zero transport);
+- FAST halving cap **32,768**, SLOW cap **1,048,576** (the long horizon);
+- payload framing identical to backend 4 ([u32 stream_len] + LE words);
+  unaligned/bomb/truncation = Err, never panic (same guards, re-pinned
+  by `mnf8_mix5_rejects`).
+
+Real 30-file corpus at the release pick (report_sizes.py, all roundtrips
+exact): maximum-profile **812,180 B = −4,161 B
+(−0.51%) vs the v1.13 anchor 816,341** — the research projection
+(812,965) is beaten by 785 B; 29/30 files ≤ their pre-change size, 0
+regressions (the mix5 arm fires where it measures smaller; backends 0/1
+and the MNF9 records keep their picks). Conformance: the mix5 golden
+(document 200x280, LEFT|REF=3|mix5, flags 0xe0, CLI-generated at the
+measured pick) + the unchanged backend-4 mix golden.
+
+Encoder cost: the maximum profile's search grows to four backends (CLI
+wall ~+2.5× in the measurement — the byte-exact complete-search pick
+retained; the balanced profile is unchanged zstd-19).
+
+Also in this change — `--profile maximum` is now a real form
+(`--mnf8 --profile maximum` ≡ `--mnf8=maximum`, byte-identical; dies
+without `--mnf8`; rejects unknown values). Benchmark-integrity rule:
+an intended profile must take effect or fail loudly — silent fallback
+to Balanced (which mislabeled two size scripts' "maximum" columns for a
+release line, R6's finding) is a measurement lie.
+
 ## v1.13.0 — MNF8 backend 4: the dual-timescale mix coder (MNF13-R5 promoted; 2026-10-29)
 
 The R5 gate's winner ships: MNF8 backend id 4 = per-context FAST
