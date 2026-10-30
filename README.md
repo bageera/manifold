@@ -16,17 +16,22 @@ the pick)) — release v1.13.0 · hardened decoders
 normative format spec at
 [docs/format.md](docs/format.md)
 
-Research frontier (2026-10-29): the moonshot lab's verdicts stand (X1
+Research frontier (2026-10-30): the moonshot lab's verdicts stand (X1
 program discovery closed honest-negative; X369's (1,1) anchor = the
 64-combo optimum; the G4/G5 sparse-template records); ADR-008 shipped
-(−12.3%) and generalized to the v1.12 REF selector (G/R/B, −2,146 B =
-the C2 census's ≈ −2.1 kB prediction reproduced by the production pick
-within 2%). v1.12.0 is the shipping baseline; v1.10.0's MNF9 arm is
-unchanged inside the pick.
+(−12.3%) and generalized to the v1.12 REF selector (−2,146 B); v1.13.0's
+backend 4 mix coder took the released corpus to 816,341 B (−1.97% vs
+v1.12, 20/30 mix picks, no regressions). v1.13.0 is the shipping baseline;
+the MNF14-CS1 coastline-scaling probe closed the shared-rule and
+boundary-refinement arms as measured records
+([docs/mnf14-cs1-probe.md](docs/mnf14-cs1-probe.md)); MNFX = the wrapper
+format in its own repo ([bageera/manifold-frame](https://github.com/bageera/manifold-frame),
+ADR-009 review in docs/), not a change to this crate. v1.10.0's MNF9 arm
+is unchanged inside the pick.
 
-Identifier map: **Manifold v1.12.0** = the library release; **MNF9** = the
+Identifier map: **Manifold v1.13.0** = the library release; **MNF9** = the
 generative file format's magic; **MNF10** = the research program's milestone
-name (never a wire magic).
+name (never a wire magic); **MNFX** = the wrapper format, own repo.
 
 ## Library surface (v1.2+)
 
@@ -64,26 +69,29 @@ candidates from the last-128-window atlas by structural signature
 cost. MNF6/MNF7 encoders are rate-aware: they build the full tile stream
 under every flag variant and emit the smallest file. MNF8 additionally
 measures FLAG_PRED_MED (image-wide JPEG-LS MED pre-predictor in front of
-literal bodies, causal inversion in the decoder) — it wins on photographic
-content 20/20 (zlib-9 avg −21%).
+literal bodies, causal inversion in the decoder) and the v1.13 backend-4
+dual-timescale mix coder — both picked per file at complete-file cost;
+the shipped pick is never worse than the prior arms by construction.
 
-## Results snapshot (v1.1.2, synthetic + held-out corpus)
+## Results snapshot (v1.13.0 pick, fair corpus comparison)
 
-Every number pixel-exact (`verify`); honest losses included.
+Complete serialized bytes from one `make corpus` run (scripts/
+compare_lossless.py: identical decoded RGB8, pixel-exact checks, current
+corpus files, webp/jxl if installed); honest losses included.
 
-| Image | MNF5 best | MNF7 | PNG | JXL | WebP |
-|---|---|---|---|---|---|
-| repeat-pattern 256² | 1,760 | **757** | 140,074 | 7,261 | 358 |
-| solid 256² | 728 | **70** | 2,677 | 49 | 44 |
-| gradient 320×240 | 3,887 | **1,886** | 69,512 | 1,603 | 148 |
-| screenshot 640×400 | 3,947 | **1,823** | 11,181 | 498 | 320 |
-| blob (held-out) | 16,490 | **10,820** | 32,759 | 7,786 | 7,792 |
-| noise 256² | 196,929 | **196,908** | 196,947 | 216,172 | 196,688 |
+| Image | pick (mnf8-max) | PNG | WebP | JXL |
+|---|---|---|---|---|
+| solid 256² | **36** | 761 | 44 | 49 |
+| repeat-pattern 256² | **301** | 2,799 | 358 | 7,261 |
+| screenshot 640×400 | **667** | 2,118 | 320 | 498 |
+| gradient 320×240 | **254** | 2,902 | 148 | 1,603 |
+| blob (held-out) | **5,986** | 9,778 | 7,792 | 7,786 |
+| noise 256² | 196,912 | 197,106 | **196,688** | 216,172 |
 
-WebP's palette mode wins the flat-color classes; MNF7 wins 10/10 against
-the best MNF5; plain deflate beats MNF7 on solid tiles without the atlas
-(documented proxy-cost caveat). Peak RSS ~3–7 MB — the lowest measured.
-Full tables: [docs/benchmarks.md](docs/benchmarks.md).
+WebP's palette mode keeps the flat-color classes; the pick's MNF9/record
+arms keep the synthetic corpus; photographic files still lose to WebP/JXL
+(the engine-scale LZ77-2D-per-region gap, documented honest). Full tables:
+[docs/benchmarks.md](docs/benchmarks.md); regenerate with `make corpus`.
 
 ## Correctness and robustness
 
@@ -98,9 +106,10 @@ Full tables: [docs/benchmarks.md](docs/benchmarks.md).
 - Resource bounds: checked decompression limit `3WH + 6N` enforced
   during expansion, per-tile minimum-stream gate before image
   allocation, configurable [limits](`src/codec.rs` `DecodeLimits`).
-- Fuzzed: mutation harness (scripts/fuzz.py) in CI, 1,300+ trials
-  across arms, zero panics, corrupt streams rejected (checksummed:
-  zlib Adler32, MNF6/7 zstd xxh64).
+- Fuzzed: mutation harness (scripts/fuzz.py) in CI — 300 trials per CI
+  run across the 5 encoder arms, 1,500+ in full local gates, zero
+  panics, corrupt streams rejected (checksummed: zlib Adler32,
+  MNF6/7 zstd xxh64).
 
 ## Build and run
 
@@ -113,8 +122,6 @@ make sizes       # deterministic bitstream-size report (30 corpus roundtrips)
 make corpus      # one-command fair lossless comparison (png/webp/jxl)
 make fuzz        # bounded mutation fuzzer (must exit 0)
 ```
-
-## Build and run
 
 Requires Rust stable (crate pins MSRV 1.91) and crates.io access.
 
@@ -147,6 +154,9 @@ transparently by magic).
 - [docs/science.md](docs/science.md) — the principles behind the mechanisms
   (information theory, coding theory, MDL, measured research principles §11)
 - [docs/adr-001-color-transform.md](docs/adr-001-color-transform.md) — color-transform ADR
+- [docs/mnf14-cs1-probe.md](docs/mnf14-cs1-probe.md) — scale-axis growth curves
+  (coastline scaling): law-codings are constant-cost, boundary refinement grows
+  slowest of the honest arms — measured records, no format change
 - [docs/benchmarks.md](docs/benchmarks.md) — measured tables + held-out corpus
 - [CHANGELOG.md](CHANGELOG.md) — every milestone
 - [SECURITY.md](SECURITY.md) — vulnerability reporting (security@nocturnalinc.com)
@@ -200,4 +210,5 @@ MIT — see [LICENSE](LICENSE).
 | v1.11.0 | MNF8 FLAG_CHANNEL_DIFF: channel-difference residual organization (ADR-008; −12.3% corpus, 23/30 files) |
 | v1.12.0 | MNF8 REF field: the channel-diff reference selector G/R/B (ADR-008 generalized; −2,146 B corpus, REF dist 7/13/5/5) |
 | v1.13.0 | MNF8 backend 4: the dual-timescale mix coder (MNF13-R5; −16,398 B corpus = −1.97%, 20/30 mix picks, zero regressions) |
+| — (research) | MNF14-CS1 coastline scaling: rule-codings constant-cost but fixture-only; boundary refinement = slowest honest growth (docs/mnf14-cs1-probe.md) |
 | — (research) | MNF11: channeldiff relabel −62,675 B/17-of-30 on shipped streams (ADR-008 PROPOSED); X369 grid: (1,1) = optimum; X1 program discovery honest-negative; G4/G5 shared-template + mask verdicts (docs/mnf10-g3-shared-model.md) |

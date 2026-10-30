@@ -26,8 +26,8 @@ wires; the dual estimator + per-symbol EWA latch flips it 19-20/30
 to wins. Remaining gap to the conditional-entropy floor = ~1.5-2%
 per file (the next measured knobs). Conformance: the mix golden
 (LEFT|REF=3 pick, document) + unaligned/bomb rejects; fuzz via the
-existing --mnf8=maximum arm; instruments: examples/r1_ctx.rs (R1)
-+ examples/r4_ctx.rs (R4/R5).
+existing --mnf8=maximum arm; instruments: crates/mnf-mans/examples/r1_ctx.rs
+(R1) + crates/mnf-mans/examples/r4_ctx.rs (R4/R5).
 ## v1.12.0 — MNF8 REF field: the channel-diff reference selector (ADR-008 generalized; 2026-10-29)
 
 The C2 gate's per-file census promoted to the wire: MNF8 flags bits

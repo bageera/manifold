@@ -59,6 +59,13 @@ principles (information theory, coding theory, MDL) to the mechanisms.
 - [mnf13-cf1-disposition.md](mnf13-cf1-disposition.md) — circular-field
   records: 95-99% wins on radial-structure fixtures but the corpus
   control rejects photos (CLOSED as an instrument).
+- [mnf14-cs1-probe.md](mnf14-cs1-probe.md) — coastline scaling
+  (scale-axis growth exponents, 5 classes × 5 scales): shared Koch
+  rule = 241 B at every scale (exponent 0.000) but fixture-only (no
+  corpus class); recursive boundary refinement grows slowest of the
+  honest arms (koch 1.217, alpha 0.913 vs PNG 1.290/1.119) yet loses
+  absolutely at gate scales — DENIED as format arms; instrument
+  committed.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).
