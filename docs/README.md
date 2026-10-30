@@ -155,3 +155,11 @@ Earlier research notes: [v07-charts-replication.md](v07-charts-replication.md),
 
 - [audit-crate-131.md](audit-crate-131.md) — published-crate audit (v1.3.1).
 - [audit-2026-10-25.md](audit-2026-10-25.md) — full-repo technical audit.
+## Container decisions
+
+- [adr-009-mnfx-review.md](adr-009-mnfx-review.md) — ADR-009 MNFX
+  wrapper proposal: premises verified in-tree; layering/alpha/
+  metadata/orientation/16-bit-control agreements; W0 grammar
+  corrections (34-B minimum framing, one-MNF9-layer rule, bounds from
+  file length, CRC-before-parse); in-crate vs sibling-crate = the
+  open product-scope decision.
