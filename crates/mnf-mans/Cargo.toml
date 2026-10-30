@@ -9,3 +9,6 @@ publish = false
 [dependencies]
 constriction = "0.5"
 flate2 = "1.0"
+
+[dev-dependencies]
+manifold-codec = { path = "../.." }
