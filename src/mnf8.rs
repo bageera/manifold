@@ -486,6 +486,16 @@ fn channel_diff_relabel(
                 let meta = if mode == 5 { 5 } else { 4 };
                 out.extend_from_slice(&stream[pos..pos + meta + nb]);
                 pos += meta + nb;
+            } else if mode == 6 || mode == 7 {
+                // MNF14-IF4 law records: law params + per-pixel residual
+                // values (channel-independent) — copy verbatim.
+                let lb = if mode == 6 {
+                    crate::laws::PLANAR_LAW_BYTES
+                } else {
+                    crate::laws::BILINEAR_LAW_BYTES
+                };
+                out.extend_from_slice(&stream[pos..pos + lb + nb]);
+                pos += lb + nb;
             } else {
                 panic!(
                     "mode {mode} outside the recorded grammar (tile {i} pos {pos}/{})",
@@ -530,6 +540,10 @@ fn channel_diff_relabel(
                         let np = nb / 3;
                         (np * 9).div_ceil(8) * 2 + np
                     }
+                    // MNF14-IF4 law records: params + per-pixel residual
+                    // values — verbatim (channel-independent values).
+                    6 => crate::laws::PLANAR_LAW_BYTES + nb,
+                    7 => crate::laws::BILINEAR_LAW_BYTES + nb,
                     other => panic!(
                         "mode {other} outside the recorded grammar (pos {pos}/{})",
                         stream.len()
@@ -771,6 +785,20 @@ fn channel_diff_unrelabel(
                     out.extend_from_slice(&stream[pos..pos + np + 2 * n9]);
                     pos += np + 2 * n9;
                 }
+                // MNF14-IF4 law records: law params + per-pixel residual
+                // VALUES (channel-independent) — verbatim copy.
+                6 | 7 => {
+                    let lb = if mode == 6 {
+                        crate::laws::PLANAR_LAW_BYTES
+                    } else {
+                        crate::laws::BILINEAR_LAW_BYTES
+                    };
+                    if pos + lb + nb > stream.len() {
+                        return Err(Error::fmt_msg("cd: law record truncated"));
+                    }
+                    out.extend_from_slice(&stream[pos..pos + lb + nb]);
+                    pos += lb + nb;
+                }
                 _ => return Err(Error::fmt_msg(format!("cd: mode {mode}"))),
             }
         }
@@ -938,6 +966,107 @@ fn encode_stream_coder(
         // transform-independent — compute once per tile
         let tile_t = modcolor_forward_iter(&tile.data);
 
+        // MNF14-IF4: the compression-aware LAW arms (modes 6/7) compete at
+        // complete-record cost (mode byte + u8 params + compressed
+        // residual). The law is a per-channel planar / bilinear fit to the
+        // TILE's own pixels; discovery = bounded quantized-lattice sweep
+        // (charge every candidate). Decoder NEVER reruns the search.
+        if !pure_pred {
+            let (seed_p, seed_b) =
+                crate::laws::discovery_seeds(&tile.data, tile.width, tile.height);
+            // cost = the SHIPPED shape: [params][pack(resid)] — the pack
+            // is what the coder will actually compress under planar.
+            let pack = |r: &[u8]| -> Vec<u8> {
+                if planar {
+                    planar_pack(r)
+                } else {
+                    r.to_vec()
+                }
+            };
+            let law_cost =
+                |lb: usize, r: &[u8]| -> u64 { (1 + lb) as u64 + proxy_cost(coder, &pack(r)) };
+            let sweep = |base: &crate::laws::PlanarLaw| -> crate::laws::PlanarLaw {
+                let mut best = *base;
+                let mut best_cost = {
+                    let r = crate::laws::law_residuals(
+                        &tile.data,
+                        tile.width,
+                        tile.height,
+                        &|x, y, c| crate::laws::planar_pred(&best, x, y, c),
+                    );
+                    law_cost(crate::laws::PLANAR_LAW_BYTES, &r)
+                };
+                for db in [-2i8, -1, 0, 1, 2] {
+                    for dc in [-2i8, -1, 0, 1, 2] {
+                        for dt in [0i8, 1, 2, 3] {
+                            let mut law = *base;
+                            for ch in 0..3usize {
+                                law.coef[ch][1] = base.coef[ch][1].saturating_add(db);
+                                law.coef[ch][2] = base.coef[ch][2].saturating_add(dc);
+                                law.t[ch] =
+                                    (((base.t[ch] >> 3) as i8).saturating_add(dt).clamp(0, 31)
+                                        as u8)
+                                        << 3;
+                            }
+                            let r = crate::laws::law_residuals(
+                                &tile.data,
+                                tile.width,
+                                tile.height,
+                                &|x, y, c| crate::laws::planar_pred(&law, x, y, c),
+                            );
+                            let cost = law_cost(crate::laws::PLANAR_LAW_BYTES, &r);
+                            if cost < best_cost {
+                                best_cost = cost;
+                                best = law;
+                            }
+                        }
+                    }
+                }
+                best
+            };
+            let law_p = sweep(&seed_p);
+            let r_p =
+                crate::laws::law_residuals(&tile.data, tile.width, tile.height, &|x, y, c| {
+                    crate::laws::planar_pred(&law_p, x, y, c)
+                });
+            let cost_p = law_cost(crate::laws::PLANAR_LAW_BYTES, &r_p);
+            if cost_p < best_cost {
+                best_cost = cost_p;
+                choice_body = {
+                    let mut b = crate::laws::planar_wire(&law_p);
+                    b.extend_from_slice(&pack(&r_p));
+                    b
+                };
+                choice_mode = 6;
+                choice_ref = None;
+            }
+            // bilinear law arm (mode 7): seed = the tile's corners; a small
+            // global shift sweep (+-4, 0) charged
+            for d in [0i32, 4, -4] {
+                let mut law_b = seed_b;
+                for cc in law_b.corners.iter_mut() {
+                    for v in cc.iter_mut() {
+                        *v = (*v as i32 + d).clamp(0, 255) as u8;
+                    }
+                }
+                let r_b =
+                    crate::laws::law_residuals(&tile.data, tile.width, tile.height, &|x, y, c| {
+                        crate::laws::bilinear_pred(&law_b, x, y, tile.width, tile.height, c)
+                    });
+                let cost_b = law_cost(crate::laws::BILINEAR_LAW_BYTES, &r_b);
+                if cost_b < best_cost {
+                    best_cost = cost_b;
+                    choice_body = {
+                        let mut b = crate::laws::bilinear_wire(&law_b);
+                        b.extend_from_slice(&pack(&r_b));
+                        b
+                    };
+                    choice_mode = 7;
+                    choice_ref = None;
+                }
+            }
+        }
+
         // atlas candidates (arm-controlled; review fixes 2 + use_atlas).
         // ADR-004 pure prediction arms exclude the atlas (measured pure).
         if use_atlas && !pure_pred && tiles.len() > 1 {
@@ -1017,6 +1146,7 @@ fn encode_stream_coder(
                     stats.geom_nontrivial += 1;
                 }
             }
+            6 | 7 => {} // MNF14-IF4 law arms: counted via stats.modes only
             _ => unreachable!("mode byte constrained above"),
         }
         raw.push(choice_mode);

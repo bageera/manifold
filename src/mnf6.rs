@@ -766,6 +766,47 @@ pub fn decode_record_walk(
                     _ => unreachable!(),
                 }
             }
+            6 | 7 => {
+                // MNF14-IF4: per-tile mathematical law records. The wire =
+                // [law params (u8/i8)][n B residual over the law]; the law
+                // is decoder-reproducible from the shipped bytes alone.
+                let law_bytes = if mode == 6 {
+                    crate::laws::PLANAR_LAW_BYTES
+                } else {
+                    crate::laws::BILINEAR_LAW_BYTES
+                };
+                if ip + law_bytes > raw.len() {
+                    return Err(Error::fmt_msg(format!("tile {i}: law params")));
+                }
+                let law_buf = raw[ip..ip + law_bytes].to_vec();
+                ip += law_bytes;
+                if ip + n > raw.len() {
+                    return Err(Error::fmt_msg(format!("tile {i}: law body")));
+                }
+                let body = raw[ip..ip + n].to_vec();
+                ip += n;
+                let resid = if planar { planar_unpack(&body) } else { body };
+                match mode {
+                    6 => {
+                        let law = crate::laws::planar_unwire(&law_buf)?;
+                        crate::laws::law_recon(
+                            tw,
+                            th,
+                            &|x, y, c| crate::laws::planar_pred(&law, x, y, c),
+                            &resid,
+                        )
+                    }
+                    _ => {
+                        let law = crate::laws::bilinear_unwire(&law_buf)?;
+                        crate::laws::law_recon(
+                            tw,
+                            th,
+                            &|x, y, c| crate::laws::bilinear_pred(&law, x, y, tw, th, c),
+                            &resid,
+                        )
+                    }
+                }
+            }
             _ => {
                 return Err(Error::fmt_msg(format!(
                     "tile {i}: mode byte {mode:#04x} pos {ip}"

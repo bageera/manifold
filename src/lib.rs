@@ -36,6 +36,9 @@ pub mod error;
 /// Image-I/O shims (JPEG/PNG load, PNG save) — `image-io` feature.
 #[cfg(feature = "image-io")]
 pub mod img;
+/// MNF14-IF4: per-tile mathematical law arms — MNF8 record modes 6/7
+/// (compression-aware discovery, u8 wire params; docs/mnf14-if4.md).
+pub mod laws;
 /// MNF13-R5: the dual-timescale adaptive mix coder — MNF8 backend id 4
 /// (fixed-point dual-EWA estimators, zero model transport; docs/mnf13-r5.md).
 pub mod mix_coder;

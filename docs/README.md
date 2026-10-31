@@ -80,6 +80,14 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   new photographic signal (chelsea −5,146, coffee −4,554; 2/4) where
   structure-driven got 0/4 — the actionable rung for a Rust full-wire
   A/B vs v1.14's 812,180 pick. Deny promotion; retain the instrument.
+- [mnf14-if4-corpus.md](mnf14-if4-corpus.md) — IF4 shipped: the
+  compression-aware law arms (MNF8 record modes 6/7, planar + bilinear
+  laws, mod-256 residuals, decoder-never-reruns discovery) landed in
+  `src/laws.rs` + the encoder/decoder/relabel paths; ALL gates green
+  and the 30-file release corpus lands BYTE-IDENTICAL to the v1.14
+  anchor at 812,180 (law arms fire only when they win a tile; on this
+  corpus they don't). Research retained as shipped arms, no backend
+  change.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).
