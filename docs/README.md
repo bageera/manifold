@@ -108,6 +108,20 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   REAL precision-ladder result — transferred lesson from IF3's area
   3. The fibration adds no wire freedom: any future Hopf proposal
   reduces to a parameterized phase field under the existing pick.
+- [adr-010-discovery-engine.md](adr-010-discovery-engine.md) — the
+  pick IS the compression-aware discovery engine (post-HF1
+  architectural decision): new structure families enter ONLY as
+  candidate arms in the existing pick loops; the family admission
+  contract (wire doc frozen first, encoder-side deterministic
+  discovery with decoder-never-reruns, exact recon per candidate,
+  honest quantized complete-record cost, wire-granularity freeze
+  test, the five-site + pack-shape enumeration, corpus gate vs the
+  shipped anchor with full revert on tie); the precision-ladder rule
+  (fractional wire-lattice sweep before denying a grid-missed
+  family); the firing-surface rule (name where the shipped residual
+  is expensive BEFORE grammar work); losses recorded with instruments
+  + scope lines, never carried as dead arms. consolidates ADR-003..008
+  admission practice + IF4's shipped-arms precedent.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).
