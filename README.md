@@ -32,8 +32,11 @@ line continues: GSE-02 gate re-verified 8/8 on this machine (2026-10-30);
 GSE-09 (recursive Aleph regions) artifact package committed under
 [docs/gse09/](docs/gse09/) — honest provenance (original package not
 recoverable; report tables verbatim + seeded reproduction labeled as new
-measurements) and frozen wire-spec v1.1; GSE-10 (Rust analytical query
-engine, gates GQ1–GQ4) is specified and pending.
+measurements) and frozen wire-spec v1.1. GSE-10 step 2 landed:
+`crates/gse10/` (Rust analytical query engine over the frozen v1.1
+wire — floor-sum carry math, independent decoder, O(rows+exceptions)
+region sums, two exception-index strategies; 7/7 tests, clippy clean,
+publish=false) — gates GQ1–GQ4 pending in steps 5–7.
 
 Identifier map: **Manifold v1.13.0** = the library release; **MNF9** = the
 generative file format's magic; **MNF10** = the research program's milestone

@@ -183,8 +183,10 @@ Earlier research notes: [v07-charts-replication.md](v07-charts-replication.md),
   exception-charge granularity must equal query-index granularity
   (per-tile exceptions lose the sparse fixture; whole-frame
   exception table = a competing MDL arm in GSE-10, not a format
-  change). GSE-10 v1.1 = Rust analytical query engine,
-  gates GQ1–GQ4 pending.
+  change). GSE-10 step 2: `crates/gse10/` skeleton (independent v1.1
+  decoder, floor-sum carry math, analytical region sums
+  O(rows+exceptions), two exception-index strategies; 7/7 tests,
+  clippy `-D warnings` clean) — gates GQ1–GQ4 pending.
 
 ## Communication
 

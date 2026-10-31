@@ -1,5 +1,38 @@
 # Changelog
 
+## Research — GSE-10 crate skeleton (step 2 of the v1.1 plan; 2026-10-31, not a release)
+
+`crates/gse10/` exists, compiles standalone (`[workspace]`-excluded,
+`publish = false`, same convention as GSE-02), tests 7/7, clippy
+`-D warnings` clean. The wire stays byte-frozen at
+[docs/gse09/wire-spec.md](docs/gse09/wire-spec.md) v1.1 — this crate
+adds evaluation only, no format change:
+
+- `floor_sum.rs` — harmonic floor-sum exchange algorithm with
+  MATHEMATICAL floor division (Euclidean normalization; the
+  negative-coefficient rule is brute-force-enforced over ~57k
+  (n, m, a, b) cases), checked-i64 `window_sum_linear` implementing the
+  normative carry form `n·A + B(ns + n(n−1)/2) − 256·wraps`; overflow
+  returns Err, never wraps.
+- `model.rs` — independent v1.1 wire decoder (the GQ3 oracle entry):
+  error-not-panic on truncation, unknown type, duplicate/out-of-tile
+  exception positions, varint overflow, trailing bytes; side must be a
+  power of two ≥ 8. Regions→grid fill buffers exception replacement
+  bytes and applies them after the generator plane.
+- `query.rs` — `region_sum_rect`: analytical region sums in
+  O(rows + exceptions∩Q), per-row linear closed form, signed post-mod
+  corrections `v_p − M(p)`; a negative total is a decoded-contract
+  violation (Err, not a silent wrap).
+- `exceptions.rs` — the two spec'd index strategies (sorted positions
+  + row offsets; row buckets) with `(visited, hits)` cost attribution
+  so index-traversal charge and correction charge report separately
+  (v1.1 spec §3).
+
+Gates status: GQ1–GQ4 (latency matrix incl. 8×8 and the RAW-fallback
+control, storage-matrix re-run, randomized-window oracle, MDL
+portfolio accounting) remain pending — skeleton + math primitives
+only, no storage or wire changes.
+
 ## Research — GSE-09 artifact preservation (2026-10-30, not a release)
 
 Pre-GSE-10 reproducibility step committed (`docs/gse09/`): the original
