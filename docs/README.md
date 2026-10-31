@@ -98,6 +98,16 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   already near-free (the third measured statement of the floor, after
   windowed-geometry and CF1); scope section lists the open halves
   (content-estimated H, a projective-content corpus class).
+- [mnf14-hf1-disposition.md](mnf14-hf1-disposition.md) — Hopf-fiber /
+  relative-phase feature laws (MNF14-HF1): fiber identity asserted
+  exact (the fiber phase is unrepresentable — vibratory ≡ stationary
+  by construction), decoder-exact integer phase-ramp + cos/sin-LUT
+  laws at 24 B transport. DENIED on photos (+28k..+180k) AND on the
+  memo's own positive control (exact-law replay 81 B vs MED 60 B);
+  the off-lattice fixture row (fractional Q10 refinement −32%) is a
+  REAL precision-ladder result — transferred lesson from IF3's area
+  3. The fibration adds no wire freedom: any future Hopf proposal
+  reduces to a parameterized phase field under the existing pick.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).
