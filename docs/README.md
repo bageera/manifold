@@ -66,6 +66,12 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   honest arms (koch 1.217, alpha 0.913 vs PNG 1.290/1.119) yet loses
   absolutely at gate scales — DENIED as format arms; instrument
   committed.
+- [mnf14-if2-disposition.md](mnf14-if2-disposition.md) — fitted
+  photographic illumination fields (external pilot IF2 + an independent
+  in-repo reproduction): whole-frame field correction loses 4/4
+  aggregate (chelsea's win is single-file and protocol-sensitive);
+  precision-transfer control REPRODUCED (512² refit ≈ 8.6× under the
+  64²-inferred field); no promotion — CF1-shaped deny.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).
