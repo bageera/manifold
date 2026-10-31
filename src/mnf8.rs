@@ -496,6 +496,45 @@ fn channel_diff_relabel(
                 };
                 out.extend_from_slice(&stream[pos..pos + lb + nb]);
                 pos += lb + nb;
+            } else if mode == 8 {
+                // MNF14-ID2 flat-field: [3 B const][n B residual] — the
+                // relabel applies to the RESIDUAL BODY only (planar branch:
+                // body is planar-ordered per-tile like mode 0).
+                let body = &stream[pos + 3..pos + 3 + nb];
+                out.extend_from_slice(&stream[pos..pos + 3]);
+                let third = nb / 3;
+                let (pr, pg, pb) = (&body[..third], &body[third..2 * third], &body[2 * third..]);
+                match reference {
+                    1 => {
+                        out.extend_from_slice(pg);
+                        for (r, g) in pr.iter().zip(pg) {
+                            out.push(r.wrapping_sub(*g));
+                        }
+                        for (b, g) in pb.iter().zip(pg) {
+                            out.push(b.wrapping_sub(*g));
+                        }
+                    }
+                    2 => {
+                        out.extend_from_slice(pr);
+                        for (g, r) in pg.iter().zip(pr) {
+                            out.push(g.wrapping_sub(*r));
+                        }
+                        for (b, r) in pb.iter().zip(pr) {
+                            out.push(b.wrapping_sub(*r));
+                        }
+                    }
+                    3 => {
+                        out.extend_from_slice(pb);
+                        for (r, b) in pr.iter().zip(pb) {
+                            out.push(r.wrapping_sub(*b));
+                        }
+                        for (g, b) in pg.iter().zip(pb) {
+                            out.push(g.wrapping_sub(*b));
+                        }
+                    }
+                    _ => unreachable!("reference constrained"),
+                }
+                pos += 3 + nb;
             } else {
                 panic!(
                     "mode {mode} outside the recorded grammar (tile {i} pos {pos}/{})",
@@ -544,13 +583,30 @@ fn channel_diff_relabel(
                     // values — verbatim (channel-independent values).
                     6 => crate::laws::PLANAR_LAW_BYTES + nb,
                     7 => crate::laws::BILINEAR_LAW_BYTES + nb,
+                    // MNF14-ID2 flat-field: [3 B const][residual] — the
+                    // relabel applies per pixel to the residual body.
+                    8 => {
+                        let body = &stream[pos + 3..pos + 3 + nb];
+                        out.extend_from_slice(&stream[pos..pos + 3]);
+                        for k in 0..nb / 3 {
+                            let t = &body[k * 3..k * 3 + 3];
+                            let (refc, a, b) = ref_pick(t, reference);
+                            out.push(refc);
+                            out.push(a.wrapping_sub(refc));
+                            out.push(b.wrapping_sub(refc));
+                        }
+                        pos += 3 + nb;
+                        0 // already emitted + advanced
+                    }
                     other => panic!(
                         "mode {other} outside the recorded grammar (pos {pos}/{})",
                         stream.len()
                     ),
                 };
-                out.extend_from_slice(&stream[pos..pos + extra]);
-                pos += extra;
+                if extra > 0 {
+                    out.extend_from_slice(&stream[pos..pos + extra]);
+                    pos += extra;
+                }
             }
         }
         debug_assert_eq!(pos, stream.len());
@@ -798,6 +854,30 @@ fn channel_diff_unrelabel(
                     }
                     out.extend_from_slice(&stream[pos..pos + lb + nb]);
                     pos += lb + nb;
+                }
+                // MNF14-ID2 flat-field: [3 B const][resid body] — the body
+                // carries the (possibly relabeled) residual: invert per
+                // pixel like mode 0 (planar branch reorders planes).
+                8 => {
+                    if pos + 3 + nb > stream.len() {
+                        return Err(Error::fmt_msg("cd: const record truncated"));
+                    }
+                    out.extend_from_slice(&stream[pos..pos + 3]);
+                    if planar {
+                        let wire_planes = &stream[pos + 3..pos + 3 + nb];
+                        out.extend_from_slice(&unpermute_wire_to_planar(wire_planes, reference));
+                    } else {
+                        for k in 0..nb / 3 {
+                            push_inverse_pixel(
+                                &mut out,
+                                stream[pos + 3 + k * 3],
+                                stream[pos + 3 + k * 3 + 1],
+                                stream[pos + 3 + k * 3 + 2],
+                                reference,
+                            );
+                        }
+                    }
+                    pos += 3 + nb;
                 }
                 _ => return Err(Error::fmt_msg(format!("cd: mode {mode}"))),
             }
@@ -1065,6 +1145,45 @@ fn encode_stream_coder(
                     choice_ref = None;
                 }
             }
+
+            // MNF14-ID2 flat-field arm (mode 8): per-tile constant field
+            // (3 u8 params, channel-independent); seed = per-channel median,
+            // charged at complete-record cost like every law arm. The
+            // "prediction origin" candidate for zero-run/sky content.
+            {
+                let mut med_rgb = [0u8; 3];
+                for (ch, slot) in med_rgb.iter_mut().enumerate() {
+                    let mut col: Vec<u32> = (0..n)
+                        .step_by(3)
+                        .map(|k| u32::from(tile.data[k + ch]))
+                        .collect();
+                    col.sort_unstable();
+                    let mid = col.len() / 2;
+                    let v = if col.len() % 2 == 1 {
+                        col[mid]
+                    } else {
+                        (col[mid - 1] + col[mid]).div_ceil(2)
+                    };
+                    *slot = v.min(255) as u8;
+                }
+                let r_c = crate::laws::law_residuals(
+                    &tile.data,
+                    tile.width,
+                    tile.height,
+                    &move |_, _, c| i64::from(med_rgb[c]),
+                );
+                let cost_c = law_cost(3, &r_c);
+                if cost_c < best_cost {
+                    best_cost = cost_c;
+                    choice_body = {
+                        let mut b = med_rgb.to_vec();
+                        b.extend_from_slice(&pack(&r_c));
+                        b
+                    };
+                    choice_mode = 8;
+                    choice_ref = None;
+                }
+            }
         }
 
         // atlas candidates (arm-controlled; review fixes 2 + use_atlas).
@@ -1147,6 +1266,7 @@ fn encode_stream_coder(
                 }
             }
             6 | 7 => {} // MNF14-IF4 law arms: counted via stats.modes only
+            8 => {}     // MNF14-ID2 flat-field: counted via stats.modes only
             _ => unreachable!("mode byte constrained above"),
         }
         raw.push(choice_mode);

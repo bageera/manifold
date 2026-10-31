@@ -141,6 +141,18 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   the fixtures themselves (composition semantics, stride-based
   recurrence test, clipped-plane fixtures); final form = fixtures
   from the law's own replay.
+- [mnf14-id2-record.md](mnf14-id2-record.md) — ID2 flat-field arm
+  SHIPPED (MNF8 record mode 8, per-tile const field, 3-B params):
+  the flat-field inverse-discovery line's first production rung —
+  five-site slice per ADR-010 (e), wire-granularity freeze test,
+  86 tests / 0 failed, fuzz 525/0-panic, corpus gate 812,180
+  (byte-identical anchor), and the named-class photographic gate
+  THROUGH THE SHIPPED PICK: hubble 1,452,400 vs 1,479,904 =
+  **−27,504 (−1.86%), exact** — the first photographic win from the
+  discovery-engine line (isolation estimate −3.0%/832-of-1024 tiles
+  recorded separately per the R1 rule). Also the second confirmation
+  of ID1-B's composition conclusion: dispatch + economics compose
+  with a one-parameter law family.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).

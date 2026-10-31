@@ -807,6 +807,34 @@ pub fn decode_record_walk(
                     }
                 }
             }
+            8 => {
+                // MNF14-ID2 flat-field record: [1 B mode][3 B const RGB]
+                // [n B residual]; pred = the const (position-independent),
+                // recon = pred + resid mod 256.
+                if ip + 3 > raw.len() {
+                    return Err(Error::fmt_msg(format!("tile {i}: const params")));
+                }
+                let c = [raw[ip], raw[ip + 1], raw[ip + 2]];
+                ip += 3;
+                if ip + n > raw.len() {
+                    return Err(Error::fmt_msg(format!("tile {i}: const body")));
+                }
+                let body = raw[ip..ip + n].to_vec();
+                ip += n;
+                let resid = if planar { planar_unpack(&body) } else { body };
+                let mut out = vec![0u8; n];
+                for y in 0..th as usize {
+                    for x in 0..tw as usize {
+                        let k0 = (y * tw as usize + x) * 3;
+                        for (ch, cc) in c.iter().enumerate() {
+                            out[k0 + ch] = i64::from(*cc)
+                                .wrapping_add(i64::from(resid[k0 + ch]))
+                                .rem_euclid(256) as u8;
+                        }
+                    }
+                }
+                out
+            }
             _ => {
                 return Err(Error::fmt_msg(format!(
                     "tile {i}: mode byte {mode:#04x} pos {ip}"

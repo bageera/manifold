@@ -260,6 +260,24 @@ mod tests {
     }
 
     #[test]
+    fn const_law_recon_exact() {
+        // MNF14-ID2 mode-8 freeze test: the const field reproduces a
+        // UNIFORM tile exactly (zero residual), and a noisy tile survives
+        // the mod-256 recon roundtrip.
+        let tile: Vec<u8> = vec![77; 16 * 16 * 3];
+        let r = law_residuals(&tile, 16, 16, &|_, _, c| i64::from([77u8, 77, 77][c]));
+        assert!(r.iter().all(|v| *v == 0));
+        let recon = law_recon(16, 16, &|_, _, c| i64::from([77u8, 77, 77][c]), &r);
+        assert_eq!(recon, tile);
+        let noisy: Vec<u8> = (0..16 * 16 * 3).map(|i| 77 + ((i * 7) % 5) as u8).collect();
+        let r2 = law_residuals(&noisy, 16, 16, &|_, _, c| i64::from([77u8, 77, 77][c]));
+        assert_eq!(
+            law_recon(16, 16, &|_, _, c| i64::from([77u8, 77, 77][c]), &r2),
+            noisy
+        );
+    }
+
+    #[test]
     fn planar_seed_fits_an_actual_plane() {
         // a real plane tile (80 + 2x + y): the seed's own predict must
         // reproduce it EXACTLY in-tile (rates land on the lattice).
