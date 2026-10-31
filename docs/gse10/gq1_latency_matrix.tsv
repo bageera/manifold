@@ -1,0 +1,9 @@
+cell	analytical_med_ns	analytical_p95_ns	scan_med_ns	scan_p95_ns	visited	hits
+full	41	42	6084	6250	1	0
+64x64	42	42	3958	4792	1	0
+16x16	42	84	792	1000	1	0
+8x8	83	84	459	625	1	0
+dense8	42	84	42	42	1	0
+randwin	333	584	125	125	1	0
+sparse	208	291	334	458	-	27
+rawfall	41	42	6000	6250	1	0

@@ -25,11 +25,19 @@
 //! - GQ4 complete serialized cost (type+params+exceptions+container),
 //!   portfolio min() vs shipping comparator.
 
+mod encode;
 mod exceptions;
+mod fixtures;
 mod floor_sum;
 mod model;
 mod query;
+mod total_index;
 
+pub use encode::{
+    pack_quadtree, pack_single_const, pack_single_planar, pack_single_raw, PackStats,
+};
 pub use exceptions::{FlatExceptions, RowBucketIndex};
-pub use model::{decode_wire, regions_to_grid, ModelType, Region, WireError};
+pub use fixtures::{make, Kind, PythonRng, KIND_NAMES};
+pub use model::{decode_wire, grid_from_wire, regions_to_grid, ModelType, Region, WireError};
 pub use query::{brute_sum, region_sum_rect, region_sum_tree, Rect};
+pub use total_index::{CachedNode, TotalIndex};

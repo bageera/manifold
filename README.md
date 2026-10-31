@@ -32,11 +32,16 @@ line continues: GSE-02 gate re-verified 8/8 on this machine (2026-10-30);
 GSE-09 (recursive Aleph regions) artifact package committed under
 [docs/gse09/](docs/gse09/) — honest provenance (original package not
 recoverable; report tables verbatim + seeded reproduction labeled as new
-measurements) and frozen wire-spec v1.1. GSE-10 step 2 landed:
-`crates/gse10/` (Rust analytical query engine over the frozen v1.1
-wire — floor-sum carry math, independent decoder, O(rows+exceptions)
-region sums, two exception-index strategies; 7/7 tests, clippy clean,
-publish=false) — gates GQ1–GQ4 pending in steps 5–7.
+measurements) and frozen wire-spec v1.1. GSE-10 steps 2–7 landed: `crates/gse10/` (analytical query engine over the
+frozen v1.1 wire — floor-sum carry math, independent decoder, cached-totals
+region sums; and the gate matrix: GQ1 PASS (41 ns vs 6,084 ns native scan
+full-frame, 83 vs 459 ns at 8×8), GQ3 PASS (independent-decode oracle, 300
+randomized windows), GQ4 PASS (decomposition asserted), GQ2 NEGATIVE RESULT
+(12/14 vs zstd-19; +1 B on uniform random, honest). Packable sparse fit
+added (fit_planar_sparse: sparse-edits wire 4,913→245 B; dense-hotspot
+frame with 64 edits at 122 B) — wire byte-frozen at v1.1; the combined
+storage-and-query gate GSE-09 failed now passes on the structured family
+([docs/gse10/gate-report.md](docs/gse10/gate-report.md)).
 
 Identifier map: **Manifold v1.13.0** = the library release; **MNF9** = the
 generative file format's magic; **MNF10** = the research program's milestone

@@ -147,6 +147,12 @@ pub fn decode_wire(wire: &[u8], side: usize) -> Result<Region, WireError> {
     decode_wire_top(wire, side)
 }
 
+/// Decode the full grid from wire bytes (the GQ3 oracle entry).
+pub fn grid_from_wire(wire: &[u8], side: usize) -> Result<Vec<u8>, WireError> {
+    let reg = decode_wire(wire, side)?;
+    regions_to_grid(&reg, side)
+}
+
 fn read_region(r: &mut Reader<'_>, _offset: usize, side: usize) -> Result<Region, WireError> {
     let t = r.u8()?;
     match t {
@@ -205,7 +211,7 @@ fn read_region(r: &mut Reader<'_>, _offset: usize, side: usize) -> Result<Region
 /// replacements after — per spec.
 pub fn regions_to_grid(reg: &Region, side: usize) -> Result<Vec<u8>, WireError> {
     let mut grid = vec![0u8; side.checked_mul(side).ok_or(WireError::Truncated)?];
-    fill_region(reg, 0, 0, side, &mut grid)?;
+    fill_region(reg, 0, 0, side, side, &mut grid)?;
     Ok(grid)
 }
 
@@ -214,13 +220,14 @@ fn fill_region(
     top: usize,
     left: usize,
     side: usize,
+    stride: usize,
     g: &mut [u8],
 ) -> Result<(), WireError> {
     match reg {
         Region::Const { value, .. } => {
             for rr in 0..side {
                 for cc in 0..side {
-                    g[(top + rr) * side + left + cc] = *value;
+                    g[(top + rr) * stride + left + cc] = *value;
                 }
             }
         }
@@ -234,36 +241,35 @@ fn fill_region(
             for rr in 0..side {
                 let ar = ((*a as usize).wrapping_add((*b as usize).wrapping_mul(rr))) & 0xFF;
                 for cc in 0..side {
-                    g[(top + rr) * side + left + cc] =
+                    g[(top + rr) * stride + left + cc] =
                         (ar.wrapping_add((*c as usize).wrapping_mul(cc))) as u8;
                 }
             }
             for (pos, v) in exceptions {
                 let (pr, pc) = (*pos as usize / side, *pos as usize % side);
-                g[(top + pr) * side + left + pc] = *v;
+                g[(top + pr) * stride + left + pc] = *v;
             }
         }
         Region::Raw { body, .. } => {
             for rr in 0..side {
                 for cc in 0..side {
-                    g[(top + rr) * side + left + cc] = body[rr * side + cc];
+                    g[(top + rr) * stride + left + cc] = body[rr * side + cc];
                 }
             }
         }
         Region::Split { children, .. } => {
             let h = side / 2;
-            fill_region(&children[0], top, left, h, g)?;
-            fill_region(&children[1], top, left + h, h, g)?;
-            fill_region(&children[2], top + h, left, h, g)?;
-            fill_region(&children[3], top + h, left + h, h, g)?;
+            fill_region(&children[0], top, left, h, stride, g)?;
+            fill_region(&children[1], top, left + h, h, stride, g)?;
+            fill_region(&children[2], top + h, left, h, stride, g)?;
+            fill_region(&children[3], top + h, left + h, h, stride, g)?;
         }
     }
     Ok(())
 }
 
-// The stray helpers above (grid_from_wire/fill/stride_of) are superseded
-// by regions_to_grid/fill_region — kept compilation clean by the tests
-// module exercising only the real paths.
+// grid_from_wire is the GQ3 oracle entry defined above (independent
+// decode path); no stray helpers remain.
 #[cfg(test)]
 mod tests {
     use super::*;

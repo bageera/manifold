@@ -90,6 +90,12 @@ results-*-reproduction.json are NEW measurements by
 prototype_reproduction.py, not regenerations of the original GSE-09
 session (see gate-record.md provenance section).
 
+- Exception-tolerant sparse fit (GSE-10): `fit_planar_sparse`
+  (majority column-step + re-based anchor) — the planar-with-
+  exceptions arm the v1.1 wire always supported becomes REACHABLE
+  in the packer (the exact-fit-only policy never fired it; measured
+  sparse_edits wire 4,913→245 B). Wire format unchanged.
+
 ## Known measured limitation (carried into GSE-10 design)
 
 Per-tile exception overhead dominates when edits scatter across tile

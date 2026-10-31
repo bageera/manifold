@@ -9,5 +9,7 @@ publish = false
 
 [dependencies]
 flate2 = "1.0"
+mt19937 = "3"
+rand_core = "0.10"
 zstd = "0.13"
 [workspace]

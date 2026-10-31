@@ -3,3 +3,4 @@
 *.mnf5
 __pycache__/
 !tests/conformance/*.mnf5
+crates/*/out/

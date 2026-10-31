@@ -28,10 +28,23 @@ adds evaluation only, no format change:
   so index-traversal charge and correction charge report separately
   (v1.1 spec §3).
 
-Gates status: GQ1–GQ4 (latency matrix incl. 8×8 and the RAW-fallback
-control, storage-matrix re-run, randomized-window oracle, MDL
-portfolio accounting) remain pending — skeleton + math primitives
-only, no storage or wire changes.
+Steps 5–7 ran the preregistered gates (docs/gse10/gate-report.md,
+2026-10-31): GQ1 PASS — full-frame analytical 41 ns vs native scan
+6,084 ns (150×), aligned 8×8 83 ns vs 459 ns (5.5×), unaligned windows
+LOSE honestly (333 vs 125 ns, recorded as the boundary); GQ3 PASS —
+300 randomized windows byte-exact vs the independent-decode oracle,
+wraparound −250 corrections exact with 1-visited/1-hit accounting;
+GQ4 PASS — wire decomposition asserted, container charged; GQ2
+NEGATIVE RESULT — 12/14 vs zstd-19, the two non-wins are +1 byte on
+uniform random (the RAW leaf's type byte under the container), reported
+without framing tricks. The packer gained an exception-tolerant sparse
+fit (fit_planar_sparse; majority column-step, re-based anchor): the
+planar-with-exceptions arm the v1.1 wire always supported becomes
+reachable — sparse_edits wire 4,913→245 B (the reproduction's +86%
+loss row becomes −64.9%), dense-hotspot 128² frame with 64 edits
+packs at 122 B (−73.6%). Wire format stays byte-frozen at v1.1; the
+combined storage-and-query gate GSE-09 failed now PASSES on the
+structured synthetic family, with boundaries recorded.
 
 ## Research — GSE-09 artifact preservation (2026-10-30, not a release)
 

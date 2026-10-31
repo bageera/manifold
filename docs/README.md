@@ -220,7 +220,17 @@ Earlier research notes: [v07-charts-replication.md](v07-charts-replication.md),
   change). GSE-10 step 2: `crates/gse10/` skeleton (independent v1.1
   decoder, floor-sum carry math, analytical region sums
   O(rows+exceptions), two exception-index strategies; 7/7 tests,
-  clippy `-D warnings` clean) — gates GQ1–GQ4 pending.
+  clippy `-D warnings` clean) + the steps 5–7 gate matrix
+  ([gse10/gate-report.md](gse10/gate-report.md)): GQ1 PASS
+  (full-frame 41 ns vs 6,084 ns native scan; aligned 8×8 83 vs
+  459 ns; unaligned windows lose honestly), GQ3 PASS (300
+  randomized windows vs independent decode), GQ4 PASS (decomposition
+  asserted, container charged), GQ2 NEGATIVE RESULT (12/14 vs
+  zstd-19; +1 B on uniform random). Exception-tolerant sparse fit
+  added — planar-with-exceptions reachable (sparse_edits wire
+  4,913→245 B); wire byte-frozen at v1.1; the combined
+  storage-and-query gate GSE-09 failed now PASSES on the
+  structured synthetic family.
 
 ## Communication
 
