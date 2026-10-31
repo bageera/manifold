@@ -88,6 +88,16 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   anchor at 812,180 (law arms fire only when they win a tile; on this
   corpus they don't). Research retained as shipped arms, no backend
   change.
+- [mnf14-pg1-disposition.md](mnf14-pg1-disposition.md) — projective
+  RGB geometry discovery (MNF14-PG1): homography + color law in
+  projected (s,t) coordinates, honest q12 transport, scale ladder
+  256/512/1024 on the mechanism's own perspective fixture + the four
+  photos. DENIED at every measured scale — the quantized-continuous
+  model floor (fixed transport tax + quantization error) cannot beat
+  causal prediction's zero-transport residual on content where MED is
+  already near-free (the third measured statement of the floor, after
+  windowed-geometry and CF1); scope section lists the open halves
+  (content-estimated H, a projective-content corpus class).
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).
