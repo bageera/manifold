@@ -72,6 +72,14 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   aggregate (chelsea's win is single-file and protocol-sensitive);
   precision-transfer control REPRODUCED (512² refit ≈ 8.6× under the
   64²-inferred field); no promotion — CF1-shaped deny.
+- [mnf14-if3-disposition.md](mnf14-if3-disposition.md) — spatially
+  LOCALIZED illumination (external pilot IF3 + independent reproduction):
+  fixed-grid localization loses 4/4 at every resolution; subdivision
+  destroys chelsea's global win; the memo's θ*-form (fit against actual
+  compressed cost) exercised as a cost-driven quadtree produced the ONE
+  new photographic signal (chelsea −5,146, coffee −4,554; 2/4) where
+  structure-driven got 0/4 — the actionable rung for a Rust full-wire
+  A/B vs v1.14's 812,180 pick. Deny promotion; retain the instrument.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).
