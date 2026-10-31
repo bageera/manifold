@@ -1,0 +1,97 @@
+{
+  "side": 128,
+  "rows": [
+    {
+      "dataset": "constant",
+      "side": 128,
+      "bytes": 16384,
+      "zstd19": 22,
+      "gse09_wire": 5,
+      "gse09": 18,
+      "delta_pct": -18.2,
+      "tiles": {
+        "planar": 1,
+        "raw": 0,
+        "const": 0,
+        "split": 0
+      }
+    },
+    {
+      "dataset": "mathematical",
+      "side": 128,
+      "bytes": 16384,
+      "zstd19": 412,
+      "gse09_wire": 5,
+      "gse09": 18,
+      "delta_pct": -95.6,
+      "tiles": {
+        "planar": 1,
+        "raw": 0,
+        "const": 0,
+        "split": 0
+      }
+    },
+    {
+      "dataset": "sparse_edits",
+      "side": 128,
+      "bytes": 16384,
+      "zstd19": 735,
+      "gse09_wire": 4913,
+      "gse09": 1369,
+      "delta_pct": 86.3,
+      "tiles": {
+        "planar": 125,
+        "raw": 65,
+        "const": 0,
+        "split": 63
+      }
+    },
+    {
+      "dataset": "mixed",
+      "side": 128,
+      "bytes": 16384,
+      "zstd19": 15942,
+      "gse09_wire": 9045,
+      "gse09": 8966,
+      "delta_pct": -43.8,
+      "tiles": {
+        "planar": 128,
+        "raw": 128,
+        "const": 0,
+        "split": 85
+      }
+    },
+    {
+      "dataset": "smooth_noisy",
+      "side": 128,
+      "bytes": 16384,
+      "zstd19": 15092,
+      "gse09_wire": 16725,
+      "gse09": 15903,
+      "delta_pct": 5.4,
+      "tiles": {
+        "planar": 0,
+        "raw": 256,
+        "const": 0,
+        "split": 85
+      }
+    },
+    {
+      "dataset": "random",
+      "side": 128,
+      "bytes": 16384,
+      "zstd19": 16398,
+      "gse09_wire": 16725,
+      "gse09": 16739,
+      "delta_pct": 2.1,
+      "tiles": {
+        "planar": 0,
+        "raw": 256,
+        "const": 0,
+        "split": 85
+      }
+    }
+  ],
+  "method": "gse09-reproduction (quadtree regions, full wire cost, zstd-19 container)",
+  "sha": "560a9da7893dd1f9"
+}
