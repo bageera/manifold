@@ -1,5 +1,27 @@
 # Changelog
 
+## Research — GSE-09 artifact preservation (2026-10-30, not a release)
+
+Pre-GSE-10 reproducibility step committed (`docs/gse09/`): the original
+GSE-09 prototype package was not recoverable on this machine, so its
+measured tables are preserved verbatim
+([results-original-from-report.md](docs/gse09/results-original-from-report.md),
+including the failed combined storage+query verdict), a reimplementation
+([prototype_reproduction.py](docs/gse09/prototype_reproduction.py))
+produced NEW seeded measurements (16/64 KiB, roundtrip ×72, malformed
+rejection, signed-correction selftest that explicitly fails a mod-256
+implementation), and the shared region wire format is frozen at v1.1
+([wire-spec.md](docs/gse09/wire-spec.md)): replacement bytes on the
+wire, signed post-mod corrections in the evaluator, floor-sum carry
+accounting, independent-decode oracle. Carried design constraint:
+exception-charge granularity must equal query-index granularity (the
+per-tile exception accounting loses the sparse-edits fixture at both
+sizes; whole-frame exception table competes as an MDL arm in GSE-10).
+The GSE-02 gate was re-run on this machine and reproduced 8/8 committed
+rows verbatim. GSE-10 (Rust analytical query engine, gates GQ1–GQ4,
+crates/gse10) is approved and next; no wire or release changes in this
+commit.
+
 ## v1.14.0 — Backend 5: the R6-tuned mix coder joins the pick (MNF13-R6 promoted; 2026-10-30)
 
 The R6 grid's winner ships as **backend id 5** (backend 4's decode

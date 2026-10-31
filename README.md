@@ -27,7 +27,13 @@ boundary-refinement arms as measured records
 ([docs/mnf14-cs1-probe.md](docs/mnf14-cs1-probe.md)); MNFX = the wrapper
 format in its own repo ([bageera/manifold-frame](https://github.com/bageera/manifold-frame),
 ADR-009 review in docs/), not a change to this crate. v1.10.0's MNF9 arm
-is unchanged inside the pick.
+is unchanged inside the pick. Separately, the GSE byte-stream research
+line continues: GSE-02 gate re-verified 8/8 on this machine (2026-10-30);
+GSE-09 (recursive Aleph regions) artifact package committed under
+[docs/gse09/](docs/gse09/) — honest provenance (original package not
+recoverable; report tables verbatim + seeded reproduction labeled as new
+measurements) and frozen wire-spec v1.1; GSE-10 (Rust analytical query
+engine, gates GQ1–GQ4) is specified and pending.
 
 Identifier map: **Manifold v1.13.0** = the library release; **MNF9** = the
 generative file format's magic; **MNF10** = the research program's milestone
