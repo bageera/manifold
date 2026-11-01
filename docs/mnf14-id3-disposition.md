@@ -1,8 +1,13 @@
 # MNF14-ID3 — Tile-scale div-form law family: honest negative (instrument-only)
 
-Status: DENIED as an arm — the firing surface named by the work order does
-not exist in the div-form's reach on any measured content. Instruments in
-`crates/mnf-mans/scripts/mnf14_id3_probe.py`; rows in
+Status: **CLOSED as a production candidate** (Jon's disposition, 2026-11-01):
+the inverse solver is retained as a research instrument and a measured
+member of the composition-aware candidate bank; no arm, no wire record.
+The decisive number is not 15/16 exactness — it is **0 winning tiles
+across 1,324 opportunities** (300 gradient + 1,024 hubble). The sixteenth
+fixture is preserved as an explicit negative control (the pre-registered
+family boundary), NOT folded into the solver to score a perfect board.
+Instruments in `crates/mnf-mans/scripts/mnf14_id3_probe.py`; rows in
 `/private/tmp/mnf14_id3/id3_rows.json` (regenerable).
 
 ## The proposal (wire block frozen before the harness, ADR-010(a))
