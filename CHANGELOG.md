@@ -1,5 +1,32 @@
 # Changelog
 
+## Research — MNF14-ID4 production residual-cost census: the entropy-turn baseline (2026-11-01, not a release)
+
+The ID3 close directed research at measuring where the release codec
+spends its bytes BEFORE another vocabulary. The census
+(`scripts/residual_census.py`, [docs/mnf14-id4-census.md](docs/mnf14-id4-census.md))
+encodes the 30-file corpus + hubble through the release CLI
+(maximum AND balanced), walks the exact record grammar with
+consumed==stream on every file, reconstructs 6,675 tiles FROM wire
+bytes asserting == source pixels (catching and fixing a real predictor
+edge-semantics bug in the walker: left col = ABOVE neighbor, not the
+127 fill), and classifies residuals by the file's own predictor
+deltas. Results: 30-corpus maximum-profile total reconciled BYTE-EXACT
+at **812,180**; **3,341 record tiles all mode 0** (no reference, color,
+law, or const mode fires in-corpus); residual classes by z9 proxy
+share = **98.1% edge/texture, 1.8% mixed, 0.1% sparse-small**; hubble
+is the only law/reference firing site (mode 8 ×146, 7 ×91, 6 ×20,
+refs ×20) with the same full-amplitude profile. Qualifications carry
+to the next instrument: concentration is not a Shannon bound (the edge
+class conflates structures), and backend-5 payloads lack statistical
+attribution (23/30 walked at balanced, labeled walk_src=balanced —
+mix backends have no python decode). Consequences pre-register
+MNF13-R9 (frozen representation; entropy models only): R9-A byte-equal
+backend-5 symbol extraction, R9-B prequential probability-cost census,
+R9-C R7 hierarchical backoff and R9-D R8 higher-order contexts on the
+production stream, R9-E complete-file maximum-profile gate — every
+verdict complete-profile vs 812,180 at the shipped pick.
+
 ## Research — MNF14-ID3 tile-scale div-form: honest negative, instrument-only (2026-11-01, not a release)
 
 The work order's ID3 rung (tile-scale `v(v00,tau,vx,vy,D)` div-form law,

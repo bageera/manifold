@@ -165,6 +165,17 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   law arms a third time (96/256 div picks, −6.5% on the mixed frame).
   Instrument `crates/mnf-mans/scripts/mnf14_id3_probe.py`; wire
   byte-frozen, 812,180 anchor untouched.
+- [mnf14-id4-census.md](mnf14-id4-census.md) — ID4 production
+  residual-cost census, the entropy-turn baseline: 812,180 reconciled
+  BYTE-EXACT through the instrument, 3,341 record tiles all mode 0,
+  6,675 wire-exactness assertions (REF inverse + predictor semantics
+  pinned), edge-class residuals 98.1% of proxy bytes. Qualifications
+  recorded: cost concentration ≠ entropy limit (edge class conflates
+  structures); backend-5 payloads not yet statistically attributed
+  (23/30 walked at balanced, labeled). Consequences pre-register
+  MNF13-R9 stages A–E (byte-equal backend-5 extraction → prequential
+  census → R7/R8 backoff models → complete-profile gate); the
+  production codec stays frozen.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).
