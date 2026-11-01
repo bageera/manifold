@@ -153,6 +153,18 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   recorded separately per the R1 rule). Also the second confirmation
   of ID1-B's composition conclusion: dispatch + economics compose
   with a one-parameter law family.
+- [mnf14-id3-disposition.md](mnf14-id3-disposition.md) — ID3 tile-scale
+  div-form law family (free D + i16 rates + clamp): honest NEGATIVE —
+  exact inversion 15/16 member fixtures (clips, negative slopes,
+  sub-unit lattices; one pre-registered family-boundary decline), fp
+  control names mode 6's decline as transport (i8 rate), but the
+  firing surface is EMPTY: 0/300 tiles on gradient (the LEFT
+  predictor owns axis-aligned ramps at ~0 cost, flags 0x20) and
+  0/1024 on hubble-512 (const/literal/MED own the noise-dominant
+  tiles). Composition stage (C) confirms the per-tile pick composes
+  law arms a third time (96/256 div picks, −6.5% on the mixed frame).
+  Instrument `crates/mnf-mans/scripts/mnf14_id3_probe.py`; wire
+  byte-frozen, 812,180 anchor untouched.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).

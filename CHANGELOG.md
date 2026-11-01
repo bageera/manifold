@@ -1,5 +1,28 @@
 # Changelog
 
+## Research — MNF14-ID3 tile-scale div-form: honest negative, instrument-only (2026-11-01, not a release)
+
+The work order's ID3 rung (tile-scale `v(v00,tau,vx,vy,D)` div-form law,
+floor-div + clamp, free denominator D) measured as an in-repo probe
+(`crates/mnf-mans/scripts/mnf14_id3_probe.py`,
+[docs/mnf14-id3-disposition.md](docs/mnf14-id3-disposition.md)): exact
+inversion 15/16 member fixtures including clip saturation, negative
+slopes, and sub-unit lattices (family boundary recorded); fp control
+names the mechanism precisely — mode 6's decline on steep content is
+transport (i8 rate at 1/32), not fit quality. The decisive negative is
+the firing surface: **0/300 tiles on gradient (LEFT predictor owns ramps:
+flags 0x20) and 0/1024 on hubble-512 (const 282 / literal 515 / med 227
+own the prediction-expensive tiles; div not even exact on any tile)**. A
+law-family's class must be expensive-for-every-shipped-arm to justify a
+wire record; the div-form's class is already owned at ~0 marginal cost.
+Composition stage (C) is the positive instrument — the per-tile pick
+selects div on 96/256 law tiles and literal on noise tiles, −6.5%
+proxy-sum on the mixed frame — confirming ID1-B's dispatch mechanism a
+third time. Wire untouched; the 812,180 anchor and every record mode
+stay byte-frozen. Next rung per ADR-010.4's ordering: autopsy the
+picker's residuals on real photographic classes BEFORE proposing the
+next vocabulary.
+
 ## Research — GSE-10 crate skeleton (step 2 of the v1.1 plan; 2026-10-31, not a release)
 
 `crates/gse10/` exists, compiles standalone (`[workspace]`-excluded,
