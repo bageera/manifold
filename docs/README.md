@@ -176,6 +176,15 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   MNF13-R9 stages A–E (byte-equal backend-5 extraction → prequential
   census → R7/R8 backoff models → complete-profile gate); the
   production codec stays frozen.
+- [mnf13-r9a-record.md](mnf13-r9a-record.md) — R9-A DONE: byte-equal
+  backend-5 extraction (22 files anchored BOTH directions, 0 failures)
+  + prequential audit — L_model ≈ L_entropy_wire to ≤ 0.006% coder
+  overhead; adaptation regret 0.47% (9,671 B over 23 files); hubble
+  audited at wire-decode provenance (its 277 non-mode-0 tiles make a
+  recompute anchor a search re-run — out of instrument scope per
+  ADR-010(b)). Attribution points the next rung at ctx-0 (the
+  zero-run context carries 80–85% of model cost on document/
+  screenshot). Instrument `r9_audit.rs` + `mnf13_r9a_gate.py`.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).

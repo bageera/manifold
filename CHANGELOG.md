@@ -1,5 +1,35 @@
 # Changelog
 
+## Research — MNF13-R9-A: byte-equal backend-5 extraction + prequential audit (2026-11-01, not a release)
+
+The R9 gateway instrument
+(`crates/mnf-mans/examples/r9_audit.rs` + `crates/mnf-mans/scripts/mnf13_r9a_gate.py`,
+[docs/mnf13-r9a-record.md](docs/mnf13-r9a-record.md)) closes the
+measurement bridge ID4 demanded: the shipped mix coder's symbol
+stream, extracted from the production wire, anchored BYTE-IDENTICAL
+in both directions on every applicable corpus file (22 backend-5
+mode-0-only files: pixels→grammar→CD-relabel→mix == shipped payload,
+and the payload decodes back == the assembled stream; 0 anchor
+failures; 8 honest skips incl. token wires and backend-1 files;
+hubble audits at labeled wire-decode provenance — its 277 law/const/
+ref tiles make a recompute anchor equivalent to re-running the pick's
+search). The prequential audit prices every symbol under the shipped
+2^24 fixed-point model state and reconciles the three columns:
+L_model 2,037,050 B ≈ L_entropy_wire 2,037,168 B (**coder overhead
++117.9 B ≤ 0.006%** — the range coder is essentially tight);
+adaptation regret vs the diagnostic zero-model static floor
+= **9,671 B = 0.47% of L_model** (per file 64–2,577 B; hubble 0.18%).
+Per-context attribution: the zero-run context (ctx 0) carries
+80–85% of model cost on document/screenshot — R9-C hierarchical
+sharing and R9-D higher-order keys have a concrete target; the
+R1 −7..−8% hypothesis now reads as richer conditionality, not less
+regret. Instrument bugs all caught by assertions and fixed in-record:
+tail-state context poisoning (decode key schedule restarts at (0,0)),
+a symbols-roundtrip masquerading as a payload decoder, an off-by-one
+words slice, and the mix-codes-RELABELED-stream causality (proven by
+byte compare). Production codec untouched; R9-C/D run on these exact
+streams; R9-E gates vs 812,180.
+
 ## Research — MNF14-ID4 production residual-cost census: the entropy-turn baseline (2026-11-01, not a release)
 
 The ID3 close directed research at measuring where the release codec
