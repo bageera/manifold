@@ -192,6 +192,14 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   transitions 1.5×+ cost density; mid-buckets cost ≤2.3% each.
   Targets bounded: R9-C parent-shared warm-up (≤9.7 kB pool), R9-D
   ctx-15/7 band refinement; durable artifacts in `.research/r9/`.
+- [mnf13-r9c-record.md](mnf13-r9c-record.md) — R9-C measured: C2
+  warm2p12/14 −288 B (20/22 wins) — mixing only while cold harvests
+  the measured cold-start regret; C1 init −20 B (too little to seed
+  from); C3 constant-λ −356 B but loses exactly on the ctx-0-heavy
+  streams (hot pollution, as R9-B predicted; fix30 net-negative).
+  All arms roundtrip byte-exact (one seeding order bug caught by the
+  roundtrip assert). Promotion = new backend id, Jon's call after
+  R9-D; R9-E gate vs 812,180 unchanged.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).

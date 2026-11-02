@@ -1,5 +1,26 @@
 # Changelog
 
+## Research — MNF13-R9-C: parent-shared warm-up measured on production streams (2026-11-01, not a release)
+
+Three warm-up sharing designs through the R9-A bridge on the 22
+production streams (`r9_audit.rs` warm* modes + `mnf13_r9c_gate.py`,
+[docs/mnf13-r9c-record.md](docs/mnf13-r9c-record.md)); C0 anchored
+byte-identical everywhere; every arm's decode replicates the
+seeding/mixing rules exactly (one off-by-one caught by the roundtrip:
+C1 must seed BEFORE the first model build). Measured: **C1 warminit
+−20 B, wins 5/22** — first-use parents carry too little to seed from;
+**C2 warm2p12/14 −288 B, wins 20/22, 2 tiny losses** — mixing only
+while cold (λ = 2^N/(2^N+n), nlocal < 256) harvests exactly the
+cold-start regret R9-B measured; **C3 constant-λ −356 B but its 2
+losses are precisely the ctx-0-dominated streams** (document +12,
+screenshot +8) — the hot-context pollution R9-B predicted, and
+fix30 flips net-negative (+64 B, 6 losses). Verdict: warm2p12/14 is
+the real candidate (−0.05% of the streams, zero transport, honest
+20/22 shape); constant mixing is the wrong form for non-stationary
+photo streams. Captures ~3% of the 9,671 B diagnostic pool. Promotion
+per the standing rule (tuned model ⇒ new backend id) stays Jon's
+call after R9-D; R9-E portfolio gate vs 812,180 unchanged.
+
 ## Research — MNF13-R9-B: statistical attribution of the production model cost (2026-11-01, not a release)
 
 Attribution on the SAVED R9-A per-symbol bits
