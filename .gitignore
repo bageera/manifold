@@ -4,3 +4,6 @@
 __pycache__/
 !tests/conformance/*.mnf5
 crates/*/out/
+
+# research workdir artifacts (large binaries; regenerable via committed instruments)
+.research/

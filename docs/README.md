@@ -185,6 +185,13 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   ADR-010(b)). Attribution points the next rung at ctx-0 (the
   zero-run context carries 80–85% of model cost on document/
   screenshot). Instrument `r9_audit.rs` + `mnf13_r9a_gate.py`.
+- [mnf13-r9b-record.md](mnf13-r9b-record.md) — R9-B attribution on the
+  saved per-symbol bits: ctx-0's cost share is POPULATION (lowest
+  b/sym of any context); regret uniform across contexts and
+  COLD-START-shaped in all 22 files (first 10% ≈ 9× the rest's rate);
+  transitions 1.5×+ cost density; mid-buckets cost ≤2.3% each.
+  Targets bounded: R9-C parent-shared warm-up (≤9.7 kB pool), R9-D
+  ctx-15/7 band refinement; durable artifacts in `.research/r9/`.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).

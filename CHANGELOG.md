@@ -1,5 +1,28 @@
 # Changelog
 
+## Research — MNF13-R9-B: statistical attribution of the production model cost (2026-11-01, not a release)
+
+Attribution on the SAVED R9-A per-symbol bits
+(`crates/mnf-mans/scripts/mnf13_r9b_attrib.py`,
+[docs/mnf13-r9b-record.md](docs/mnf13-r9b-record.md); durable copies +
+hashes in gitignored `.research/r9/` with the full regeneration recipe
+— no /tmp dependency). Four quantities per context over 22
+recompute-anchored files, plus position/transition/cumulative-regret
+structure. Headlines: **ctx-0's large cost share is POPULATION, not
+inefficiency** (85% of document's bits but the LOWEST b/sym of any
+context, 2.06 corpus-mean, 0.02 on document's zero-runs);
+**adaptation regret is uniform across contexts** (6 big contexts each
+8.9–11.0% of measured regret) and **COLD-START-shaped in all 22
+files** (first 10% of the stream ≈ 9× the per-symbol regret rate of
+the rest); **post-key-change symbols carry 1.5×+ cost density**
+everywhere. Mid-bucket contexts cost ≤2.3% of bits each — sparse-
+bucket sharing would win almost nothing. Targets, bounded by THIS
+attribution: R9-C = parent-shared warm-up (cold-start + transitions;
+ceiling the 9,671 B regret pool); R9-D = refine the heavy ctx-15/7
+band (3.25–5.06 b/sym, 16–24% of bits, population to support a
+split). R9-C/D pre-registered gates: same-bridge complete-wire,
+byte-exact anchors, three columns, R9-E vs 812,180.
+
 ## Research — MNF13-R9-A: byte-equal backend-5 extraction + prequential audit (2026-11-01, not a release)
 
 The R9 gateway instrument
