@@ -254,8 +254,9 @@ pub fn mix_decode_with(
         return Err(crate::error::Error::fmt_msg("bomb"));
     }
     let mut words = Vec::with_capacity((data.len() - 4) / 4);
-    for chunk in data[4..].chunks_exact(4) {
-        words.push(u32::from_le_bytes(chunk.try_into().expect("4 bytes")));
+    let (chunks, _) = data[4..].as_chunks::<4>();
+    for chunk in chunks {
+        words.push(u32::from_le_bytes(*chunk));
     }
     let mut dec = DefaultRangeDecoder::from_compressed(words)
         .map_err(|e| crate::error::Error::fmt_msg(format!("mix decoder open: {e:?}")))?;

@@ -399,8 +399,9 @@ fn main() {
     if cmd == "p" {
         // payload decode: full tree + seeding parity with the encoder
         let mut words = Vec::new();
-        for chunk in body[4..].chunks_exact(4) {
-            words.push(u32::from_le_bytes(chunk.try_into().expect("word")));
+        let (chunks, _) = body[4..].as_chunks::<4>();
+        for chunk in chunks {
+            words.push(u32::from_le_bytes(*chunk));
         }
         if words.is_empty() {
             eprintln!("ERR empty payload");
