@@ -200,6 +200,16 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   All arms roundtrip byte-exact (one seeding order bug caught by the
   roundtrip assert). Promotion = new backend id, Jon's call after
   R9-D; R9-E gate vs 812,180 unchanged.
+- [mnf13-r9d-record.md](mnf13-r9d-record.md) — R9-D measured: the heavy
+  band's prev3 refinement is real (D1A −564 B, gain lives entirely
+  inside ctx7/15, elsewhere asserted exactly 0) but per-file unstable
+  (7/14); D4's composition works ONLY with live ancestors — D2
+  (refineA + warm2p12 + share) −996 B, refine7+w2p12+share achieves the
+  best refine-family shape (−640, 17/4). The mid-flight merged design
+  (keys 7+15 collapsed) measured +1088 — merging destroys the
+  conditioning; merged also loses statically (+8.6 kB). Per-file picked
+  portfolio readout −1,346 B (+1 B flag); promotion = NEW backend id at
+  R9-E, Jon's call.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).

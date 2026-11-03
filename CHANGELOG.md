@@ -1,5 +1,26 @@
 # Changelog
 
+## Research — MNF13-R9-D: ctx-15/7 higher-order refinement measured on production streams (2026-11-03, not a release)
+
+The registered R9 arms D0–D4 through the R9-A bridge
+(`r9_audit.rs` refine*/share modes + `mnf13_r9d_gate.py`,
+[docs/mnf13-r9d-record.md](docs/mnf13-r9d-record.md)): extra prev3-band
+history ONLY inside the heavy contexts (base keys 7/15), C0 anchored
+byte-identical everywhere, attribution asserted to close exactly
+(no-warm refine arms change non-heavy contexts by exactly 0 bits).
+Measured: static omniscient floor −14.2 kB says the conditional
+structure exists; the causal, complete-file fraction realized is
+**D1 refineA −564 B** (unstable, 7/14), **D2 refineA+warm2p12+share
+−996 B** (13/8), refine7+warm2p12+share the best distribution shape
+(−640, 17/4); per-file picked portfolio readout **−1,346 B** (+1 B
+flag). The mid-flight merged-children design (keys 7+15 collapsed,
+parents mis-wired) is registered as its own arm and loses BOTH
+statically (+8.6 kB) and causally (+1088 B); fixing its parents
+isolates `share` (live ancestors) as the mechanism that makes the
+composition work (no-share −456 vs with-share −996). No backend id
+changed; promotion = NEW backend id at R9-E (vs 812,180), Jon's call.
+R9-C's C2 comparator re-verified per-file byte-identical.
+
 ## Research — MNF13-R9-C: parent-shared warm-up measured on production streams (2026-11-01, not a release)
 
 Three warm-up sharing designs through the R9-A bridge on the 22

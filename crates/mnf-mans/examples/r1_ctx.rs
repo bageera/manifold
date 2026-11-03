@@ -25,19 +25,17 @@ const TOT: u32 = 4096;
 
 struct Adaptive {
     counts: Vec<u64>, // per symbol
-    used: Vec<u32>,
 }
 
 impl Adaptive {
     fn new(nsym: usize) -> Self {
         Self {
             counts: vec![1; nsym],
-            used: (0..nsym as u32).collect(),
         }
     }
     fn model(&self) -> Option<(ContiguousCategoricalEntropyModel<u32, Vec<u32>, 24>, usize)> {
         // snapshot probabilities from counts over used symbols
-        let mut used: Vec<u32> = (0..self.counts.len() as u32)
+        let used: Vec<u32> = (0..self.counts.len() as u32)
             .filter(|&i| self.counts[i as usize] > 0)
             .collect();
         let total: u64 = self.counts.iter().sum();

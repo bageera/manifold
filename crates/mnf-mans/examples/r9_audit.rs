@@ -77,7 +77,7 @@ impl Dual {
     /// R9-C warm variants mix with the parent's vector here (the parent's
     /// own probs() — the hierarchy is recursive in principle; band0
     /// parents have no grandparent).
-    fn probs_with(&self, tree: Option<&[Dual]>, idx: usize, warm: Warm) -> Vec<u64> {
+    fn probs_with(&self, tree: Option<&[Dual]>, warm: Warm) -> Vec<u64> {
         let base = self.probs();
         let parent = match (tree, self.parent) {
             (Some(t), p) if p != 0xFF => Some(&t[p as usize]),
@@ -111,24 +111,10 @@ impl Dual {
         p
     }
 
-    fn model(&self) -> Option<ContiguousCategoricalEntropyModel<u32, Vec<u32>, 24>> {
-        let p32: Vec<u32> = self.probs().iter().map(|&v| v as u32).collect();
-        ContiguousCategoricalEntropyModel::<u32, Vec<u32>, 24>::from_nonzero_fixed_point_probabilities(
-            p32, false,
-        )
-        .ok()
-    }
-
     /// Prequential self-information of symbol s under the CURRENT state
-    /// (before the update): -log2(p_s), exact under the fixed-point
-    /// vector this model codes with.
-    fn self_info(&self, s: u8) -> f64 {
-        let p = self.probs()[usize::from(s)] as f64;
-        (SCALE as f64 / p).log2()
-    }
-
-    fn self_info_with(&self, tree: Option<&[Dual]>, idx: usize, warm: Warm, s: u8) -> f64 {
-        let p = self.probs_with(tree, idx, warm)[usize::from(s)] as f64;
+    /// (before the update): -log2(p_s) with warm mixing applied.
+    fn self_info_with(&self, tree: Option<&[Dual]>, warm: Warm, s: u8) -> f64 {
+        let p = self.probs_with(tree, warm)[usize::from(s)] as f64;
         (SCALE as f64 / p).log2()
     }
 
@@ -141,9 +127,8 @@ impl Dual {
         self.log_w = (self.log_w + self.lr * (pf.ln() - ps.ln())).clamp(-20.0, 20.0);
         self.fast[si] += self.inc;
         self.slow[si] += self.inc;
-        if self.nlocal != u64::MAX {
-            self.nlocal += 1;
-        }
+        // nlocal stops counting once Init-seeded (u64::MAX saturates)
+        self.nlocal = self.nlocal.saturating_add(1);
         if self.fast.iter().sum::<u64>() > self.cap_fast {
             for c in &mut self.fast {
                 *c = (*c + 1) >> 1;
@@ -176,7 +161,7 @@ fn mix_vecs(a: &[u64], b: &[u64], lam: f64) -> Vec<u64> {
     p
 }
 
-fn rebalance(p: &mut Vec<u64>) {
+fn rebalance(p: &mut [u64]) {
     let sum: u64 = p.iter().sum();
     p[0] += SCALE - sum;
     let mut dense = 0usize;
@@ -228,6 +213,29 @@ struct Cfg {
     inc: u64,
     nctx: usize,
     warm: Warm,
+    refine: Refine,
+    share: bool,
+}
+
+/// R9-D refinement scope (the registered arms). Base backend-5 key =
+/// bucket(prev) | band(prev2)<<3 — keys 7 and 15 are the heavy band
+/// (prev >= 97, R9-B: 3.25/2.75 b/sym). Refinement adds prev3's band
+/// bit inside the heavy band, per the work order's attribution plan:
+///   Merged  — register the MID-FLIGHT design verbatim: keys 7 AND 15
+///             share one child pair {16,17} keyed on prev3's band; the
+///             base-key band bit is discarded (this is what "refine"
+///             first measured, +1088 B before its parents were fixed;
+///             its comment at the time claimed per-key children).
+///   K7Only  — D3b: key 7 only -> child 16+band3 (key15 stays base key 15)
+///   K15Only — D3a: key 15 only -> child 18+band3 (key7 stays base key 7)
+///   Both    — D1: distinct children per key (7 -> 16+b3, 15 -> 18+b3)
+#[derive(Clone, Copy, PartialEq)]
+enum Refine {
+    None,
+    Merged,
+    K7Only,
+    K15Only,
+    Both,
 }
 
 fn parse_mode(mode: &str) -> Cfg {
@@ -238,6 +246,8 @@ fn parse_mode(mode: &str) -> Cfg {
         inc: 32,
         nctx: 16,
         warm: Warm::None,
+        refine: Refine::None,
+        share: false,
     };
     for tok in mode.split('-') {
         if let Some(rest) = tok.strip_prefix("mix") {
@@ -252,6 +262,34 @@ fn parse_mode(mode: &str) -> Cfg {
             c.nctx = 8;
         } else if tok == "ctx16" {
             c.nctx = 16;
+        } else if let Some(rest) = tok.strip_prefix("refine") {
+            // R9-D refinement scope — see the Refine enum comment for the
+            // registered arm semantics. Children: 16,17 = key 7's (18,19
+            // = key 15's), split on prev3's band; Merged shares one pair.
+            match rest {
+                "M" | "merged" => {
+                    c.refine = Refine::Merged;
+                    c.nctx = 18;
+                }
+                "7" => {
+                    c.refine = Refine::K7Only;
+                    c.nctx = 20;
+                }
+                "15" => {
+                    c.refine = Refine::K15Only;
+                    c.nctx = 20;
+                }
+                "A" | "both" => {
+                    c.refine = Refine::Both;
+                    c.nctx = 20;
+                }
+                _ => {}
+            }
+        } else if tok == "share" {
+            // ancestor liveness: the chain's parent model also gets the
+            // symbol's update (child -> base heavy key -> [R5 bucket]).
+            // Decode-side replicates it; zero transport.
+            c.share = true;
         } else if let Some(rest) = tok.strip_prefix("warm") {
             // warm<X>: C1 init / C2 schedule / C3 constant
             // warminit          — C1: seed from parent on first use
@@ -260,9 +298,9 @@ fn parse_mode(mode: &str) -> Cfg {
             if rest == "init" {
                 c.warm = Warm::Init;
             } else if let Some(num) = rest.strip_prefix("2p") {
-                c.warm = Warm::Mix(u64::from_str_radix(num, 10).unwrap_or(10));
+                c.warm = Warm::Mix(num.parse::<u64>().unwrap_or(10));
             } else if let Some(num) = rest.strip_prefix("fix") {
-                c.warm = Warm::Fix(u64::from_str_radix(num, 10).unwrap_or(15) as f64 / 100.0);
+                c.warm = Warm::Fix(num.parse::<u64>().unwrap_or(15) as f64 / 100.0);
             }
         }
         // s<N> accepted-and-ignored here: the audit reads self-info from
@@ -271,12 +309,29 @@ fn parse_mode(mode: &str) -> Cfg {
     c
 }
 
-fn key_of(cfg: Cfg, prev: u8, prev2: u8) -> usize {
+fn key_of(cfg: Cfg, prev: u8, prev2: u8, prev3: u8) -> usize {
     let pb = bucket(prev);
     if cfg.nctx == 8 {
         pb
     } else {
-        pb | ((bucket(prev2) >= 3) as usize) << 3
+        let band = (bucket(prev2) >= 3) as usize;
+        let base = pb | band << 3;
+        if cfg.refine == Refine::None || pb != 7 {
+            return base;
+        }
+        // heavy band (keys 7/15): refined child lookup by prev3's band.
+        // NOTE: the refined key rule REPLACES the base key, so for a
+        // refined scope the base parent table stops receiving symbols
+        // entirely — with `share` off its state stays at init.
+        let band3 = (bucket(prev3) >= 3) as usize;
+        match cfg.refine {
+            Refine::Merged => 16 + band3,
+            Refine::K7Only if band == 0 => 16 + band3,
+            Refine::K15Only if band == 1 => 18 + band3,
+            Refine::Both if band == 0 => 16 + band3,
+            Refine::Both if band == 1 => 18 + band3,
+            _ => base, // refinement scope did not select this key
+        }
     }
 }
 
@@ -304,19 +359,39 @@ fn main() {
         eprintln!("ERR short body");
         std::process::exit(2);
     }
-    let syms: Vec<u8> = if cmd == "p" {
-        Vec::new() // payload bytes are read in the 'p' branch from `body`
-    } else {
-        body[..n].to_vec()
-    };
     let cfg = parse_mode(&mode);
 
     // R9-C: shared tree-building helper state — parent of band-split key
-    // k = k & 7 (the R5 bucket; band-0 keys have no parent).
+    // k = k & 7 (the R5 bucket; band-0 keys have no parent). Parents are
+    // set UNCONDITIONALLY (probs_with ignores them for Warm::None); the
+    // 0xFF default of base band-0 keys stays. Refined children (16..19)
+    // look to the base heavy keys they refine; the merged slot's own R5
+    // bucket is 7.
     let build_tree = |models: &mut Vec<Dual>| {
-        if cfg.warm != Warm::None {
-            for k in 8..cfg.nctx {
-                models[k].parent = (k & 7) as u8;
+        models
+            .iter_mut()
+            .enumerate()
+            .skip(8)
+            .take(cfg.nctx - 8)
+            .for_each(|(k, m)| m.parent = (k & 7) as u8);
+        if cfg.nctx > 16 {
+            models[16].parent = 7;
+            models[17].parent = 7;
+        }
+        if cfg.nctx > 18 {
+            models[18].parent = 15;
+            models[19].parent = 15;
+        }
+    };
+    // R9-D `share`: also step the ancestor chain's model with the same
+    // symbol (child -> its parent; one chain level). The ancestor then
+    // keeps LIVE statistics for the child to mix against while cold —
+    // without it a refined arm's base parent stops receiving symbols.
+    let share_update = |models: &mut [Dual], cfg: Cfg, k: usize, s: u8| {
+        if cfg.share {
+            let p = models[k].parent;
+            if p != 0xFF {
+                models[p as usize].step(s);
             }
         }
     };
@@ -332,8 +407,9 @@ fn main() {
             std::process::exit(2);
         }
         let stream_len = u32::from_le_bytes(body[..4].try_into().expect("len word")) as usize;
-        let mut dmodels: Vec<Dual> =
-            (0..cfg.nctx).map(|_| Dual::new(cfg.cap_f, cfg.cap_s, cfg.lr, cfg.inc)).collect();
+        let mut dmodels: Vec<Dual> = (0..cfg.nctx)
+            .map(|_| Dual::new(cfg.cap_f, cfg.cap_s, cfg.lr, cfg.inc))
+            .collect();
         build_tree(&mut dmodels);
         let mut dec = match DefaultRangeDecoder::from_compressed(words) {
             Ok(d) => d,
@@ -344,9 +420,10 @@ fn main() {
         };
         let mut prev = 0u8;
         let mut prev2 = 0u8;
+        let mut prev3 = 0u8;
         let mut back: Vec<u8> = Vec::with_capacity(stream_len);
         for _ in 0..stream_len {
-            let k = key_of(cfg, prev, prev2);
+            let k = key_of(cfg, prev, prev2, prev3);
             if cfg.warm == Warm::Init && dmodels[k].nlocal == 0 && dmodels[k].parent != 0xFF {
                 let p = dmodels[k].parent as usize;
                 dmodels[k].fast = dmodels[p].fast.clone();
@@ -355,8 +432,7 @@ fn main() {
                 dmodels[k].nlocal = u64::MAX;
             }
             let m = ContiguousCategoricalEntropyModel::<u32, Vec<u32>, 24>::from_nonzero_fixed_point_probabilities(
-                dmodels[k]
-                    .probs_with(Some(&dmodels), k, cfg.warm)
+                dmodels[k].probs_with(Some(&dmodels), cfg.warm)
                     .iter()
                     .map(|&v| v as u32)
                     .collect::<Vec<u32>>(),
@@ -367,7 +443,9 @@ fn main() {
                 Some(Ok(s)) => {
                     let s = s as u8;
                     dmodels[k].step(s);
+                    share_update(&mut dmodels, cfg, k, s);
                     back.push(s);
+                    prev3 = prev2;
                     prev2 = prev;
                     prev = s;
                 }
@@ -383,15 +461,17 @@ fn main() {
     }
 
     let syms: Vec<u8> = body[..n].to_vec();
-    let mut models: Vec<Dual> =
-        (0..cfg.nctx).map(|_| Dual::new(cfg.cap_f, cfg.cap_s, cfg.lr, cfg.inc)).collect();
+    let mut models: Vec<Dual> = (0..cfg.nctx)
+        .map(|_| Dual::new(cfg.cap_f, cfg.cap_s, cfg.lr, cfg.inc))
+        .collect();
     build_tree(&mut models);
     let mut enc = DefaultRangeEncoder::new();
     let mut costs: Vec<f64> = Vec::new();
     let mut prev = 0u8;
     let mut prev2 = 0u8;
+    let mut prev3 = 0u8;
     for &b in &syms {
-        let k = key_of(cfg, prev, prev2);
+        let k = key_of(cfg, prev, prev2, prev3);
         // C1 Init seeding BEFORE the model build (the decode side seeds
         // before its build; an encode-after-seed order made the first
         // symbol of a fresh context use different models and the
@@ -404,11 +484,11 @@ fn main() {
             models[k].nlocal = u64::MAX; // stop cold-counting; updates continue
         }
         if cmd == "a" {
-            costs.push(models[k].self_info_with(Some(&models), k, cfg.warm, b));
+            costs.push(models[k].self_info_with(Some(&models), cfg.warm, b));
         }
         let m = ContiguousCategoricalEntropyModel::<u32, Vec<u32>, 24>::from_nonzero_fixed_point_probabilities(
             models[k]
-                .probs_with(Some(&models), k, cfg.warm)
+                .probs_with(Some(&models), cfg.warm)
                 .iter()
                 .map(|&v| v as u32)
                 .collect::<Vec<u32>>(),
@@ -418,6 +498,8 @@ fn main() {
         enc.encode_symbols(std::iter::once((usize::from(b), &m)))
             .expect("encode sym");
         models[k].step(b);
+        share_update(&mut models, cfg, k, b);
+        prev3 = prev2;
         prev2 = prev;
         prev = b;
     }
@@ -446,8 +528,9 @@ fn main() {
     let mut back: Vec<u8> = Vec::with_capacity(n);
     let mut prev = 0u8;
     let mut prev2 = 0u8;
+    let mut prev3 = 0u8;
     for _ in 0..n {
-        let k = key_of(cfg, prev, prev2);
+        let k = key_of(cfg, prev, prev2, prev3);
         if cfg.warm == Warm::Init && dmodels[k].nlocal == 0 && dmodels[k].parent != 0xFF {
             let p = dmodels[k].parent as usize;
             dmodels[k].fast = dmodels[p].fast.clone();
@@ -456,7 +539,7 @@ fn main() {
             dmodels[k].nlocal = u64::MAX;
         }
         let pv: Vec<u32> = dmodels[k]
-            .probs_with(Some(&dmodels), k, cfg.warm)
+            .probs_with(Some(&dmodels), cfg.warm)
             .iter()
             .map(|&v| v as u32)
             .collect();
@@ -478,6 +561,8 @@ fn main() {
         }
         let s = *back.last().expect("just pushed");
         dmodels[k].step(s);
+        share_update(&mut dmodels, cfg, k, s);
+        prev3 = prev2;
         prev2 = prev;
         prev = s;
     }

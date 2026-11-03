@@ -154,7 +154,7 @@ fn main() {
     let hdr = String::from_utf8(stdin[..hdr_len].to_vec()).expect("utf8");
     let mut it = hdr.split_whitespace();
     let n: usize = it.next().expect("n").parse().expect("n");
-    let mode = it.next().unwrap_or_else(|| "a4096").to_string();
+    let mode = it.next().unwrap_or("a4096").to_string();
     let body = &stdin[hdr_len + 1..];
     if body.len() < 2 * n {
         eprintln!("ERR short body");
