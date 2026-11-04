@@ -49,7 +49,14 @@ retained as a valid mix5 wire-form record (its "current pick" claim
 recomputed per the dethrone rule). Gates: full release suite 86 tests
 / 0 fail, fuzz 525 trials / 0 panics (the one accepted = the
 documented benign MNF9 valid-different-file class), CI green at
-`7ae4cf0` (44m44s). Record: docs/mnf13-r9e-record.md.
+`7ae4cf0`. Published to crates.io as **manifold-codec v1.15.0** and
+verified three ways: registry read-back (`max_version 1.15.0`, head
+1.15.0/1.14.0/1.13.0), a fresh /tmp consumer smoke on `=1.15.0`
+(`encode_mnf8` maximum + `decode_mnf8` exact roundtrip through the
+registry pull path), and the release suite re-run post-packaging
+(16/0). Release commit `3fd714d`, tag `v1.15.0` on the publish
+vintage, GitHub Release with the full notes.
+Record: docs/mnf13-r9e-record.md.
 
 ## Research — MNF13-R9-E: backend 6 joins the pick — the R9 warm/refined mix coder gated and integrated (2026-11-04, not a release)
 
