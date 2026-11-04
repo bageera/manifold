@@ -16,12 +16,17 @@ the pick)) — release v1.13.0 · hardened decoders
 normative format spec at
 [docs/format.md](docs/format.md)
 
-Research frontier (2026-10-30): the moonshot lab's verdicts stand (X1
+Research frontier (2026-11-04): the moonshot lab's verdicts stand (X1
 program discovery closed honest-negative; X369's (1,1) anchor = the
 64-combo optimum; the G4/G5 sparse-template records); ADR-008 shipped
-(−12.3%) and generalized to the v1.12 REF selector (−2,146 B); v1.13.0's
-backend 4 mix coder took the released corpus to 816,341 B (−1.97% vs
-v1.12, 20/30 mix picks, no regressions). v1.13.0 is the shipping baseline;
+(−12.3%) and generalized to the v1.12 REF selector (−2,146 B); backend
+4's mix coder carried the released corpus to 816,341 B (v1.13, −1.97%
+vs v1.12, 20/30 mix picks, no regressions), backend 5's R6 tuning to
+812,180 B (v1.14, −0.51% at the release pick), and v1.15.0's backend 6
+(the R9 warm/refined mix coder — 20 contexts with the prev3-split
+heavy band, the cold-mix live-parent schedule) takes it to **810,816 B
+(−0.17%: 14 wins / 0 losses / 16 ties, mix6 fires 15/30)**.
+v1.15.0 is the shipping baseline;
 the MNF14-CS1 coastline-scaling probe closed the shared-rule and
 boundary-refinement arms as measured records
 ([docs/mnf14-cs1-probe.md](docs/mnf14-cs1-probe.md)); MNFX = the wrapper

@@ -1,5 +1,56 @@
 # Changelog
 
+## v1.15.0 — Backend 6: the R9 warm/refined mix coder joins the pick (MNF13-R9-E promoted; 2026-11-04)
+
+The R9-C/D composition ships as **backend id 6** (backends 4/5's decode
+evolutions stay byte-frozen at their release constants; the knobs are
+inert for their constant sets — pinned by unit test):
+
+- context = **20 keys**: backend 5's 16 keys + 4 refined heavy-band
+  children — the heavy band (prev ≥ 97, keys 7/15) splits by prev3's
+  coarse band into {16,17} and {18,19} (the distinct-children form the
+  R9-D measurements picked; the merged form measured LOSES and is not
+  shipped);
+- cold-mix schedule: every band-split key mixes with its grammar-tree
+  parent while cold — **λ = n0/(n0+n), n0 = 12, while nlocal < 256**
+  (the record's earlier 2^N prose was wrong; the code's form, now
+  frozen with the backend, is the contract);
+- **live ancestors (`share`)**: the parent model also takes the
+  symbol's update — the mechanism the R9-D gate measured (−996 B
+  bridge aggregate; frozen parents measured −456);
+- payload framing identical to backend 5 (unaligned/bomb/truncation =
+  Err, never panic — re-pinned by `mnf8_mix6_rejects`); a distinct
+  backend id is MANDATORY: the decode-model evolution differs from
+  every prior backend.
+
+Promotion discipline this time: byte parity with the measuring
+instrument proven FIRST — the shipped `BACKEND6` == the r9_audit
+bridge wire on all 22 production streams, byte-equal, via
+`crates/mnf-mans/examples/r9e_parity.rs`; then the corpus gate
+through the release CLI with the comparator re-swept in the same run.
+
+Real 30-file corpus at the release CLI pick (comparator = the
+pre-backend-6 binary, total reproduces the v1.14 anchor 812,180
+exactly): **810,816 B = −1,364 B (−0.168%) — 14 wins / 0 losses /
+16 ties** (the pick's min() absorbs every losing arm by
+construction), backend 6 fires 15/30 (one genuine equal-size tie).
+The fixed-stream bridge estimate (−1,076) reconciles exactly: the
+−288 gap is the joint backend × predictor × planar × REF sweep
+picking mix6-favoring arm combos on 4 files. Encode time reported
+separately, never collapsed into the decision: maximum-profile
+encode 870 → 1145 s summed (median 22.8 → 30.1 s — the 5th sweep arm
+plus mix6's per-symbol overhead); **Balanced (zstd-19-only) is
+unchanged**, so the default consumer path pays nothing.
+
+Conformance: golden `mnf8_mix6_document` at the CURRENT measured pick
+(LEFT|REF=3|mix6, flags 0xe0, stream_len 168,234) via the committed
+generator `scripts/gen_mnf8_mix6_fixture.py`; the v1.14 mix5 golden
+retained as a valid mix5 wire-form record (its "current pick" claim
+recomputed per the dethrone rule). Gates: full release suite 86 tests
+/ 0 fail, fuzz 525 trials / 0 panics (the one accepted = the
+documented benign MNF9 valid-different-file class), CI green at
+`7ae4cf0` (44m44s). Record: docs/mnf13-r9e-record.md.
+
 ## Research — MNF13-R9-E: backend 6 joins the pick — the R9 warm/refined mix coder gated and integrated (2026-11-04, not a release)
 
 The R9-C/D composition ships as backend id 6 (NOT yet a version release):
