@@ -308,6 +308,19 @@ the token path's own worst case (§3.1). Total file length MUST be exactly
                    the model-update rules are the stream's meaning, so
                    backend-4 decoders must reject backend-5 payloads
                    (and vice versa) rather than mis-decode them.
+    6 = mix9       the R9 warm/refined mix coder (MNF13-R9-E;
+                   docs/mnf13-r9d-record.md, docs/mnf13-r9e-record.md):
+                   the SAME algorithmic family and payload framing as
+                   backend 5, with a 20-context table — backend 5's 16
+                   keys + 4 refined heavy-band children (prev >= 97, keys
+                   7/15 split by prev3's coarse band) — plus backend-6-
+                   only model evolution: every band-split key mixes with
+                   its grammar-tree parent while cold (lambda =
+                   n0/(n0+n) with n0 = 12, while nlocal < 256 — the
+                   measured R9-C schedule) and the parent model also
+                   takes the symbol's update (live ancestors). A
+                   distinct backend id is MANDATORY: the decode-model
+                   evolution differs from every prior backend.
     other          decoders MUST reject (unknown backend)
 
 ## 3. Records and flags

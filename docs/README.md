@@ -210,6 +210,14 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   conditioning; merged also loses statically (+8.6 kB). Per-file picked
   portfolio readout −1,346 B (+1 B flag); promotion = NEW backend id at
   R9-E, Jon's call.
+- [mnf13-r9e-record.md](mnf13-r9e-record.md) — R9-E measured AND
+  integrated as backend id 6 (byte parity with the instrument proven
+  22/22 first): corpus gate 812,180 → 810,816 (−1,364, −0.168%), 14
+  wins / 0 losses / 16 ties, mix6 fires 15/30; the fixed-stream gap
+  (−288) reconciles exactly to the joint backend×arm sweep; encode-time
+  + memory columns reported separately. Backend 4/5 byte-frozen (knobs
+  inert); new mix6 golden + generator; mix5 golden's pick claim
+  recomputed. Version release pending review.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).

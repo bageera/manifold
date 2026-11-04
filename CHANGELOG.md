@@ -1,5 +1,28 @@
 # Changelog
 
+## Research — MNF13-R9-E: backend 6 joins the pick — the R9 warm/refined mix coder gated and integrated (2026-11-04, not a release)
+
+The R9-C/D composition ships as backend id 6 (NOT yet a version release):
+backend 5's algorithmic family with a 20-context table (heavy-band prev3
+children), the cold-mix schedule (λ = n0/(n0+n), n0 = 12, nlocal < 256 —
+the record's 2^N prose corrected to the code's form before freezing),
+and the live-ancestor `share` rule. Promotion discipline: byte parity
+with the measuring instrument proven first (shipped `BACKEND6` ==
+bridge `refineA-warm2p12-share` on all 22 production streams,
+byte-equal, via `r9e_parity.rs`); then the corpus gate through the
+release CLI with a re-swept comparator — **812,180 (the v1.14
+portfolio, reproduced exactly) → 810,816 (−1,364, −0.168%), 14 wins /
+0 losses / 16 ties**, backend 6 fires 15/30; reconciled exactly against
+the fixed-stream estimate (−1,076) — the −288 gap IS the joint
+backend×predictor×planar×REF sweep's extra picks on 4 files, which the
+fixed-flags instrument cannot see. Encode time reported separately
+(maximum: 870→1145 s summed; Balanced unchanged). Conformance: new
+mix6 golden at the measured pick via a committed generator; the v1.14
+mix5 golden retained as a wire-form record (its "current pick" claim
+recomputed per the dethrone rule); fuzz 300/0-panic; full gates green.
+Version bump / tag / publish = the release decision, pending review
+([docs/mnf13-r9e-record.md](docs/mnf13-r9e-record.md)).
+
 ## Research — MNF13-R9-D: ctx-15/7 higher-order refinement measured on production streams (2026-11-03, not a release)
 
 The registered R9 arms D0–D4 through the R9-A bridge

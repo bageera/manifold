@@ -103,6 +103,14 @@ pub const BACKEND_MIX: u32 = 4;
 /// mandatory).
 pub const BACKEND_MIX5: u32 = 5;
 
+/// The R9 warm/refined mix coder backend (MNF13-R9-E): backend 5's caps
+/// plus the heavy-band prev3 refinement, the R9-C cold-mix schedule
+/// (lambda = n0/(n0+n), nlocal < 256, measured winner n0 = 12), and the
+/// `share` live-parent update rule. See docs/mnf13-r9d-record.md and
+/// docs/mnf13-r9e-record.md; the decode evolution differs from backend
+/// 5's, hence the distinct id.
+pub const BACKEND_MIX6: u32 = 6;
+
 // zstd-19's default window is 8 MiB = 2^23; hard-pin the decoder cap to it
 // (review fix 4: a hostile frame can't claim a 128 MiB window).
 /// zstd decoder window ceiling (8 MiB; matches level-19 encoder).
@@ -126,6 +134,7 @@ pub enum Profile {
 /// applies to any arm's payload; the pick measures it per file.
 fn backend_candidates() -> Vec<(u32, Coder)> {
     vec![
+        (BACKEND_MIX6, Coder::Zstd(19)),
         (BACKEND_MIX5, Coder::Zstd(19)),
         (BACKEND_MIX, Coder::Zstd(19)),
         (BACKEND_ZSTD19, Coder::Zstd(19)),
@@ -140,6 +149,10 @@ fn backend_compress(backend: u32, buf: &[u8]) -> Result<Vec<u8>> {
         BACKEND_MIX => Ok(crate::mix_coder::mix_encode(buf)),
         BACKEND_MIX5 => Ok(crate::mix_coder::mix_encode_with(
             &crate::mix_coder::MixParams::BACKEND5,
+            buf,
+        )),
+        BACKEND_MIX6 => Ok(crate::mix_coder::mix_encode_with(
+            &crate::mix_coder::MixParams::BACKEND6,
             buf,
         )),
         other => Err(Error::fmt_msg(format!(
@@ -1395,6 +1408,7 @@ pub fn decode_mnf8_with_limits(
             | BACKEND_RESERVED3
             | BACKEND_MIX
             | BACKEND_MIX5
+            | BACKEND_MIX6
     ) {
         return Err(Error::fmt_msg(format!("unknown backend {backend}")));
     }
@@ -1444,6 +1458,11 @@ pub fn decode_mnf8_with_limits(
         BACKEND_MIX => crate::mix_coder::mix_decode(payload, limit.min(i64::MAX as u64) as usize)?,
         BACKEND_MIX5 => crate::mix_coder::mix_decode_with(
             &crate::mix_coder::MixParams::BACKEND5,
+            payload,
+            limit.min(i64::MAX as u64) as usize,
+        )?,
+        BACKEND_MIX6 => crate::mix_coder::mix_decode_with(
+            &crate::mix_coder::MixParams::BACKEND6,
             payload,
             limit.min(i64::MAX as u64) as usize,
         )?,
