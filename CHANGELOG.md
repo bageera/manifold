@@ -44,6 +44,26 @@ external hubble reproduced BOTH v1.15 reference wires byte-identically
 timing closed: 165.92 → 164.17 s idle-machine back-to-back (−1.1%),
 RSS 97.6 → 98.1 MB.
 
+## Research — MNF15-P1-C: exact construction pruning shipped, corpus byte-identical, wall −57.3% cumulative (2026-11-14, not a release)
+
+P1-C's "cheap provable bound" was found to have an exact, ~zero-cost
+form: the `proxy_cost`-driven per-tile sweep and the token matcher are
+both REFERENCE-BLIND — the ADR-008 REF field (v1.12) is a terminal
+`channel_diff_relabel` pass ([docs/mnf15-p1c-record.md](docs/mnf15-p1c-record.md)).
+Both builders now return the ref-0 stream and the pick applies the
+relabel per variant: constructions per Maximum encode drop **72 → 18
+(−75%)** (64 sweep rebuilds → 16 + 48 O(len) relabels; token wires 8 →
+2) with every candidate byte identical. Gates: the committed 200-candidate
+manifest reproduced byte-exactly (C1); 30/30 max + 30/30 balanced
+digests identical, 810,816 = the anchor (C2); hubble re-encoded
+byte-identically (C7); fuzz 525/0 (C6). Measured: Maximum corpus wall
+**481.1 s vs 1,127.9 s = −57.3% cumulative (2.34×; P1-C alone −32.3%)**,
+Balanced **56.38 s (−65.7% vs its P1-B 164.17 s)**, RSS corpus peak
+96.2 MB (below its P1-B 100.6; +0.1 vs the historical anchor). B5 split:
+construction share now 31% (was 64%) — the residual surface is the 16
+genuine sweeps and the coding side (P1-D quantified the probe: zlib
+bodies probe an actual zlib compress; zstd bodies probe level 3).
+
 ## v1.15.0 — Backend 6: the R9 warm/refined mix coder joins the pick (MNF13-R9-E promoted; 2026-11-04)
 
 The R9-C/D composition ships as **backend id 6** (backends 4/5's decode

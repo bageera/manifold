@@ -306,27 +306,44 @@ pub fn encode_mnf8(
     for (kidx, kind) in pred_arms.iter().enumerate() {
         for (pidx, planar) in [false, true].iter().enumerate() {
             let med = *kind == PredKind::Med;
-            // ADR-008 (v1.12): the reference-channel field 0..3 — none,
-            // G (v1.11's bit-6 semantic), R, B — per-file at complete
-            // serialized cost (the C2 gate's table).
-            for reference in 0u8..=3 {
-                let flags = kind.flag_bit()
-                    | if *planar { FLAG_PLANAR } else { 0 }
-                    | (u32::from(reference) << 6);
-                let arm = (kidx * 8 + pidx * 4) as u32 + u32::from(reference);
-                for (class, group) in &classes {
-                    let coder = match class {
-                        (true, _) => Coder::Zlib,
-                        (false, level) => Coder::Zstd(*level),
+            for (class, group) in &classes {
+                let coder = match class {
+                    (true, _) => Coder::Zlib,
+                    (false, level) => Coder::Zstd(*level),
+                };
+                // P1-C (docs/mnf15-p1c-record.md): the per-tile sweep is
+                // REFERENCE-BLIND — the ADR-008 REF field is a terminal
+                // channel_diff_relabel pass. One construction per
+                // (kind, layout, proxy class); each REF variant is a
+                // cheap O(len) terminal relabel (ref 0 = the raw stream
+                // untouched, exactly this builder's output).
+                let arm_base = (kidx * 8 + pidx * 4) as u32;
+                let (raw0, st) =
+                    build_record_stream(pixels, dims, true, use_geom, *planar, med, *kind, &coder)
+                        .expect("encoding an in-memory image cannot fail");
+                // ADR-008 (v1.12): the reference-channel field 0..3 — none,
+                // G (v1.11's bit-6 semantic), R, B — per-file at complete
+                // serialized cost (the C2 gate's table).
+                for reference in 0u8..=3 {
+                    let flags = kind.flag_bit()
+                        | if *planar { FLAG_PLANAR } else { 0 }
+                        | (u32::from(reference) << 6);
+                    let arm = arm_base + u32::from(reference);
+                    let raw = if reference == 0 {
+                        &raw0
+                    } else {
+                        &channel_diff_relabel(
+                            &raw0,
+                            *planar,
+                            false,
+                            dims.width,
+                            dims.height,
+                            reference,
+                        )
                     };
-                    // B1: one construction per (flags, proxy class).
-                    let (raw, st) = build_record_stream(
-                        pixels, dims, true, use_geom, *planar, med, *kind, &coder, reference,
-                    )
-                    .expect("encoding an in-memory image cannot fail");
                     for &(bidx, backend) in group {
                         let rank = bidx * 40 + arm;
-                        let payload = backend_compress(backend, &raw)
+                        let payload = backend_compress(backend, raw)
                             .expect("encoding an in-memory image cannot fail");
                         let tile_count = u32::try_from(st.modes.len())
                             .map_err(|_| Error::fmt_msg("too many tiles"))
@@ -349,15 +366,22 @@ pub fn encode_mnf8(
     // ADR-003 token arm: tokens over the MED plane (the token grammar's
     // predictor is fixed = MED; ADR-004 composes with the record arms
     // only). Rate-aware by construction; the wire is backend-independent.
+    // P1-C: the token matcher is reference-blind too — one construct per
+    // cap, the REF field is a terminal tag-walk relabel.
     for (cidx, cap) in [16, tokens::MAX_CANDIDATES].iter().enumerate() {
+        let (wire0, ts) =
+            build_token_wire(pixels, dims, *cap).expect("encoding an in-memory image cannot fail");
         for reference in 0u8..=3 {
             let flags = FLAG_PRED_MED | FLAG_TOKENS | (u32::from(reference) << 6);
             let arm = 32 + (cidx as u32) * 4 + u32::from(reference);
-            let (wire, ts) = build_token_wire(pixels, dims, *cap, reference)
-                .expect("encoding an in-memory image cannot fail");
+            let wire = if reference == 0 {
+                &wire0
+            } else {
+                &channel_diff_relabel(&wire0, false, true, dims.width, dims.height, reference)
+            };
             for (bidx, (backend, _coder)) in candidates.iter().enumerate() {
                 let rank = (bidx as u32) * 40 + arm;
-                let payload = backend_compress(*backend, &wire)
+                let payload = backend_compress(*backend, wire)
                     .expect("encoding an in-memory image cannot fail");
                 let cols = div_ceil(dims.width, TILE_SIZE);
                 let rows = div_ceil(dims.height, TILE_SIZE);
@@ -1017,7 +1041,13 @@ fn encode_tokens_coder_cap(
     cap: usize,
     reference: u8,
 ) -> Result<(Vec<u8>, MnF6Stats)> {
-    let (wire, ts) = build_token_wire(pixels, dims, cap, reference)?;
+    let (wire0, ts) = build_token_wire(pixels, dims, cap)?;
+    // P1-C: the REF field is a terminal relabel (ref 0 = untouched).
+    let wire = if reference == 0 {
+        wire0
+    } else {
+        channel_diff_relabel(&wire0, false, true, dims.width, dims.height, reference)
+    };
     let payload = backend_compress(backend, &wire)?;
     let cols = div_ceil(dims.width, TILE_SIZE);
     let rows = div_ceil(dims.height, TILE_SIZE);
@@ -1034,13 +1064,14 @@ fn encode_tokens_coder_cap(
 }
 
 /// The token wire is FULLY backend-independent (no proxy cost enters the
-/// token builder): MED residual plane -> token wire -> the ADR-008 REF
-/// relabel. Built once per (cap, reference) in the P1-B pick (B1).
+/// token builder): MED residual plane -> token wire (ref-0: ADR-008
+/// relabel NOT applied — like the record sweep, the token matcher is
+/// reference-blind and the caller applies `channel_diff_relabel` per REF
+/// variant; MNF15-P1-C, docs/mnf15-p1c-record.md).
 fn build_token_wire(
     pixels: &[u8],
     dims: Dims,
     cap: usize,
-    reference: u8,
 ) -> Result<(Vec<u8>, tokens::TokenStats)> {
     let med_pred = med_predict(pixels, dims.width as usize, dims.height as usize);
     let res: Vec<u8> = pixels
@@ -1050,21 +1081,18 @@ fn build_token_wire(
         .collect();
     let (wire, ts) =
         tokens::encode_plane_cap(&res, dims.width as usize, dims.height as usize, cap)?;
-    // ADR-008: relabel tag-0 literals before compression (REF field)
-    let wire = if reference != 0 {
-        channel_diff_relabel(&wire, false, true, dims.width, dims.height, reference)
-    } else {
-        wire
-    };
     Ok((wire, ts))
 }
-/// Builds the backend-independent record stream (`raw`, ADR-008
-/// relabeled) plus the per-tile selection stats. B1 contract
-/// (docs/mnf15-p1b-record.md): at fixed (predictor, layout, reference)
-/// the stream depends ONLY on the coder PROXY — proxy_cost drives every
-/// per-tile mode choice — so four of the five Maximum-profile backends
-/// share Coder::Zstd(19)'s stream byte-for-byte and the zlib arm
-/// (Coder::Zlib proxy) selects its own. No backend id enters this
+/// Builds the backend-independent record stream (`raw`, ref-0: ADR-008
+/// relabel NOT applied) plus the per-tile selection stats. B1 contract
+/// (docs/mnf15-p1b-record.md): the stream depends ONLY on the coder PROXY
+/// — proxy_cost drives every per-tile mode choice — so four of the five
+/// Maximum-profile backends share Coder::Zstd(19)'s stream byte-for-byte
+/// and the zlib arm (Coder::Zlib proxy) selects its own. P1-C contract
+/// (docs/mnf15-p1c-record.md): the sweep is ALSO reference-blind — the
+/// per-tile loop below never touches `reference`; the ADR-008 REF field
+/// is a terminal `channel_diff_relabel` pass the CALLER applies per
+/// variant (0 = untouched). No backend id, no REF value enters this
 /// function.
 ///
 /// Arm controls (both default true, plumbable for ablation):
@@ -1084,7 +1112,6 @@ fn build_record_stream(
     med: bool,
     kind: PredKind,
     coder: &Coder,
-    reference: u8,
 ) -> Result<(Vec<u8>, MnF6Stats)> {
     // ADR-004: Plane/Left are PURE prediction arms (the measured gate's
     // winning form) — no atlas candidates, no YCoCg; mode-0 bodies only.
@@ -1400,13 +1427,9 @@ fn build_record_stream(
         raw.extend_from_slice(&choice_body);
         atlas.insert(tile);
     }
-
-    // ADR-008: relabel mode-0 residual bodies before compression (REF)
-    let raw = if reference != 0 {
-        channel_diff_relabel(&raw, planar, false, dims.width, dims.height, reference)
-    } else {
-        raw
-    };
+    // P1-C: no ADR-008 relabel here — the sweep is reference-blind and
+    // the caller applies channel_diff_relabel per REF variant (ref 0 =
+    // this stream untouched). See docs/mnf15-p1c-record.md.
     Ok((raw, stats))
 }
 
@@ -1437,9 +1460,14 @@ fn encode_stream_coder(
     backend: u32,
     reference: u8,
 ) -> Result<(Vec<u8>, MnF6Stats)> {
-    let (raw, stats) = build_record_stream(
-        pixels, dims, use_atlas, use_geom, planar, med, kind, coder, reference,
-    )?;
+    let (raw, stats) =
+        build_record_stream(pixels, dims, use_atlas, use_geom, planar, med, kind, coder)?;
+    // P1-C: the REF field is a terminal relabel (ref 0 = untouched).
+    let raw = if reference == 0 {
+        raw
+    } else {
+        channel_diff_relabel(&raw, planar, false, dims.width, dims.height, reference)
+    };
     let payload = backend_compress(backend, &raw)?;
     let tile_count =
         u32::try_from(stats.modes.len()).map_err(|_| Error::fmt_msg("too many tiles"))?;
@@ -2898,14 +2926,18 @@ mod channel_diff {
     }
 
     /// B5 attribution: construction vs coding split on gradient (one
-    /// representative Maximum-profile pick; the construction set = 64
-    /// record streams (32 Zstd-proxy + 32 zlib-proxy) + 8 token wires).
+    /// representative Maximum-profile pick). The P1-C construction set =
+    /// 16 record sweeps (4 kinds × 2 layouts × 2 proxy classes) + 48
+    /// terminal relabels (REF 1..3 per sweep) + 2 token wires + 6 token
+    /// relabels; the relabels are O(len) byte passes (ADR-008 REF field),
+    /// so their cost is counted in the same build-time bucket.
     #[test]
     #[ignore] // timing instrument; run with -- --ignored
     fn p1b_build_code_split() {
         let (d, px) = load("gradient_320x240.png");
         let t0 = std::time::Instant::now();
         let mut build_count = 0u32;
+        let mut relabel_count = 0u32;
         for &kind in &[
             PredKind::None,
             PredKind::Med,
@@ -2913,29 +2945,34 @@ mod channel_diff {
             PredKind::Left,
         ] {
             for planar in [false, true] {
-                for reference in 0u8..=3 {
-                    for coder in [&Coder::Zstd(19), &Coder::Zlib] {
-                        let _ = build_record_stream(
-                            &px,
-                            d,
-                            true,
-                            true,
-                            planar,
-                            kind == PredKind::Med,
-                            kind,
-                            coder,
-                            reference,
-                        )
-                        .expect("in-memory build");
-                        build_count += 1;
+                for coder in [&Coder::Zstd(19), &Coder::Zlib] {
+                    let (raw0, _) = build_record_stream(
+                        &px,
+                        d,
+                        true,
+                        true,
+                        planar,
+                        kind == PredKind::Med,
+                        kind,
+                        coder,
+                    )
+                    .expect("in-memory build");
+                    build_count += 1;
+                    for reference in 1u8..=3 {
+                        let _ = channel_diff_relabel(
+                            &raw0, planar, false, d.width, d.height, reference,
+                        );
+                        relabel_count += 1;
                     }
                 }
             }
         }
         for &cap in &[16usize, tokens::MAX_CANDIDATES] {
-            for reference in 0u8..=3 {
-                let _ = build_token_wire(&px, d, cap, reference).expect("wire");
-                build_count += 1;
+            let (wire0, _) = build_token_wire(&px, d, cap).expect("wire");
+            build_count += 1;
+            for reference in 1u8..=3 {
+                let _ = channel_diff_relabel(&wire0, false, true, d.width, d.height, reference);
+                relabel_count += 1;
             }
         }
         let build_s = t0.elapsed().as_secs_f32();
@@ -2943,7 +2980,7 @@ mod channel_diff {
         let _ = encode_mnf8(&px, d, true, Profile::Maximum);
         let full_s = t1.elapsed().as_secs_f32();
         println!(
-            "P1B split: {build_count} constructions in {build_s:.2}s; full pick {full_s:.2}s; construction share {:.0}%",
+            "P1C split: {build_count} sweeps + {relabel_count} terminal relabels in {build_s:.2}s; full pick {full_s:.2}s; construction share {:.0}%",
             build_s / full_s * 100.0
         );
     }

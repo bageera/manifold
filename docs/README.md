@@ -250,6 +250,14 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   Maximum search); acceptance closed: hubble external wires byte-identical
   both profiles (lossless wire round-trip check) + matched balanced
   timing 165.92→164.17 s (−1.1%, RSS +0.5 MB) — (mnf15-p1b-acceptance.log).
+- [mnf15-p1c-record.md](mnf15-p1c-record.md) — P1-C exact construction
+  pruning SHIPPED: the per-tile sweep + token matcher are reference-blind
+  (ADR-008 REF = terminal relabel applied by the caller); constructions
+  per Maximum encode 72 → 18 (−75%); every candidate byte identical
+  (committed manifest, 30/30 max + 30/30 bal, hubble); Maximum wall
+  481.1 s = −57.3% cumulative vs the pre-P1 baseline (2.34×), Balanced
+  56.38 s (−65.7%), RSS 96.2 MB; construction share 31% → P1-D's probe
+  surface quantified (mnf15-p1c-gate.log).
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).

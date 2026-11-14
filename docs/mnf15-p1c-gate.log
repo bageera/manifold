@@ -1,0 +1,47 @@
+MNF15-P1-C gate log (2026-11-14) — exact construction pruning (reference-blind hoist)
+
+Construction set per Maximum-profile encode:
+  pre-P1-C: 64 record-stream constructions + 8 token wires
+  post-P1-C: 16 record sweeps + 48 terminal relabels + 2 token wires
+             + 6 token relabels (the relabels are O(len) byte passes)
+  sweep constructions: 72 -> 18 (-75%)
+
+B5 split (gradient, test binary, matched run): 18 sweeps + 54 relabels
+  in 9.33 s of a 29.94 s full pick = construction share 31% (was 64% at
+  the P1-B vintage: 39.28 s of 61.46 s; sweeps alone now 16+2 builds).
+
+C1 — exactness, candidate level: p1b_candidate_identity reproduced the
+  committed docs/mnf15-p1b-candidates.sha manifest byte-exactly (200
+  candidates x 3 files + pick digests, generated at the pre-both-refactors
+  vintage; 269.1 s run). The reorder is exact: the per-tile sweep is
+  reference-blind, so relabel(build(ref=0), ref) == the old per-ref build,
+  byte for byte.
+C2 — corpus: B4 30/30 Maximum sha256 identical, total 810,816 = the
+  anchor; B6 30/30 balanced sha256 identical (docs/mnf15-p1b-gate.log rows
+  from crates/mnf-mans/scripts/mnf15_p1b_verify.py, rerun as-is).
+C3 — B5 corpus wall: Maximum 481.1 s vs the 1,127.9 s same-machine
+  baseline = -57.3% cumulative (P1-C alone: 710.2 -> 481.1 = -32.3%; 2.34x
+  cumulative vs baseline). vs the recorded 1,145.3 s historical: -58.0%.
+C4 — RSS: corpus peak 96.2 MB (the P1-B vintage's 100.6 MB included a
+  transient the hoist removed; +0.1 MB vs the 96.1 MB historical anchor);
+  worst per-file delta vs the r9e column +5.2 MB.
+C5 — Balanced matched timing (idle machine, back-to-back with the C3
+  sweep): 164.17 s (P1-B vintage) -> 56.38 s = -65.7% (-66.0% cumul. vs
+  the 165.92 s pre-refactor sweep); peak RSS 98.1 -> 95.9 MB; all 30
+  digests == the committed baseline (mnf15_p1b_bal_timing.py).
+C6 — Robustness: fuzz 525 trials, 0 panics, 1 accepted mutation diffed to
+  the recorded benign class (solid 36->36, valid-different-file).
+C7 — External (hubble, lossless wire round trip): maximum re-encoded
+  BYTE-IDENTICAL to the v1.15 reference wire (1,452,400 B,
+  sha 27f7d222...); 376.9 s wall (P1-B vintage: 585.9 s; the recorded
+  R9-F-era ~950 s reference scales to this machine's ~890 s model), RSS
+  133.2 MB; verify PASS exact RGB8 reconstruction (1000x872, 3465 tiles).
+Release suite: 91 tests / 0 failed; clippy -D warnings + fmt + rustdoc
+  clean. In-repo timing corroboration: the release profile's own
+  non-ignored corpus-test legs shrank 254.9 -> 156.1 s.
+
+Anchor arithmetic (digit-checked):
+  810,816 B corpus = the v1.15.0 anchor in both profiles and on hubble.
+  1,127.9 -> 710.2 (P1-B, -37.0%) -> 481.1 (P1-C, -32.3%) — cumulative
+  -57.3%, 2.34x, beyond the original 30% (801.7 s) target by 320.6 s.
+  The 30% line was crossed at P1-B; P1-C doubles the margin.
