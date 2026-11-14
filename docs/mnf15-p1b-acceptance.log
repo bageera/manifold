@@ -1,0 +1,32 @@
+MNF15-P1-B acceptance (2026-11-14) — B6 balanced matched timing + B7 external identity
+
+B7 — hubble external surface, exact output identity vs the v1.15 reference wires
+  Input: the wire-decoded pixels (lossless round trip) of the reference
+  maximum wire /tmp/r9f_new_maximum.mnf8 (1,452,400 B,
+  sha256 27f7d2229cd32dd81464f292c0d73df5a3b2b8530b96398c18e2e63ed344efd1).
+  maximum : re-encoded → 1,452,400 B, cmp == the reference wire BYTE-IDENTICAL
+            (verify PASS: exact RGB8 reconstruction, 1000x872, 3465 tiles);
+            585.9 s wall (554.6 s user), RSS 136.5 MB (idle machine).
+  balanced: re-encoded → 1,502,259 B (66249fbe75a07b20dc484055e03cbbfba0b4518863afd962175aa3010efcb118),
+            cmp == /tmp/r9f_new_balanced.mnf8 BYTE-IDENTICAL; 152.6 s, RSS 134.3 MB.
+  Byte identity is the strongest form of "law selections preserved": the
+  wire's law/REF/mode fields ride inside the compared bytes.
+  Contended first run (maximum, 598.4 s) is superseded by the idle-machine
+  re-run above; its byte result was identical too (MAX-BYTE-IDENTICAL).
+
+B6 — Balanced matched-environment timing (the one measured gap Jon flagged)
+  30-file production corpus, balanced profile, back-to-back sweeps on an
+  idle machine, both digests compared against the committed
+  docs/mnf15-p1b-balanced.sha (every one of the 30 identical, both runs):
+    pre-refactor  (746483f worktree build): 165.92 s total, peak RSS 97.6 MB
+    post-refactor (this vintage):            164.17 s total, peak RSS 98.1 MB
+    delta: −1.75 s (−1.1%), +0.5 MB — no regression.
+  Reading: Balanced's construction surface is small (its arm set is a
+  single proxy class), which is WHY the reuse gain is tiny there — the
+  big B5 construction share lives in the Maximum profile's multi-backend
+  matrix, as the corpus table shows.
+
+Instruments: crates/mnf-mans/scripts/mnf15_p1b_bal_timing.py (both sweeps,
+CSVs .research/p1b/bal_pre.csv / bal_new.csv); run A logs
+/tmp/p1b_max_enc.log, /tmp/p1b_bal_enc.log; clean run
+/tmp/p1b_max2_enc.log (in-machine, reproducible).

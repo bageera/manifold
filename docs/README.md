@@ -247,7 +247,9 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   identical, total 810,816 = the anchor; corpus wall 710.2 s = −37.0% vs
   the 1,127.9 s same-machine baseline, above the 30% target; RSS
   +4.7%; fuzz 525/0); B5 instrument retained (construction ≈ 64% of
-  Maximum search).
+  Maximum search); acceptance closed: hubble external wires byte-identical
+  both profiles (lossless wire round-trip check) + matched balanced
+  timing 165.92→164.17 s (−1.1%, RSS +0.5 MB) — (mnf15-p1b-acceptance.log).
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).

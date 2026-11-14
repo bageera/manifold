@@ -44,6 +44,8 @@ all, so 40→8. Per Maximum encode: constructions 200 → **72 (−64%)**.
 | B5 split (gradient, one core, test binary) | 72 constructions **39.28 s** in a **61.46 s** pick = **64% construction / 36% coding** |
 | B5 corpus wall | post-refactor 710.2 s vs 1,127.9 s same-machine baseline = **−37.0%** (vs the recorded 1,145.3 s: −38.0%) |
 | B6 balanced identity | 30/30 sha256 identical (832,791 B) |
+| B6 balanced timing (matched, idle machine, back-to-back) | 165.92 s → **164.17 s (−1.1%)**, peak RSS 97.6 → 98.1 MB — no regression; Balanced's surface is one proxy class, so the reuse gain is small there (see [mnf15-p1b-acceptance.log](mnf15-p1b-acceptance.log)) |
+| B7 external (hubble, wire-decoded round trip) | maximum **byte-identical** (1,452,400 B; 585.9 s idle, RSS 136.5 MB) and balanced **byte-identical** (1,502,259 B; 152.6 s) vs the v1.15 reference wires — law selections preserved inside the compared bytes |
 | B6 RSS | corpus peak **100.6 MB** (was 96.1 = +4.7%); worst per-file delta vs the r9e column +13.2 MB (gradient 100.6 vs 87.4) |
 | Robustness | fuzz 525 trials, 0 panics, 1 accepted mutation diffed to the recorded benign class |
 | Release suite | 91 tests / 0 failed (release profile) + doc `-D warnings` clean |
@@ -89,10 +91,13 @@ formula; the identity gate proves it empirically.
 ## Scope
 
 Corpus-scoped (30-file production corpus, maximum + balanced profiles,
-release CLI). External assets (hubble) not re-run: the pick loop is
-input-agnostic under the proven identity contract; the CLI anchors in
-docs/mnf13-r9f-record.md are unchanged wire records. One machine. RSS
-measured via /usr/bin/time -l (bytes→MB as on this macOS build; the r9e
+release CLI). The external hubble surface IS covered: acceptance re-encode
+from the wire-decoded pixels (lossless round trip) reproduced BOTH
+reference wires byte-identically (maximum 1,452,400 B, balanced
+1,502,259 B) — see [mnf15-p1b-acceptance.log](mnf15-p1b-acceptance.log).
+One machine; the B6 balanced timing and all walls in the acceptance log
+are idle-machine back-to-back measurements. RSS measured via
+/usr/bin/time -l (bytes→MB as on this macOS build; the r9e
 column remains the committed comparator). The B5 split instrument's
 absolute seconds are measured inside the test binary — the honest
 corpus-level wall lives in mnf15-p1b-verify's log; the instrument's ROLE

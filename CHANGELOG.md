@@ -38,6 +38,11 @@ recorded 1,145.3) — above the 30% target; RSS peak 100.6 MB (+4.7% = no
 material regression); fuzz 525 trials 0 panics. B5 instrument (retained):
 construction share ≈ 64% of Maximum search — the mechanism is the
 construction, not the coding. Wire, decoder, backend ids untouched.
+ACCEPTANCE (same day, [docs/mnf15-p1b-acceptance.log](docs/mnf15-p1b-acceptance.log)):
+external hubble reproduced BOTH v1.15 reference wires byte-identically
+(maximum 1,452,400 B, balanced 1,502,259 B), and the Balanced matched
+timing closed: 165.92 → 164.17 s idle-machine back-to-back (−1.1%),
+RSS 97.6 → 98.1 MB.
 
 ## v1.15.0 — Backend 6: the R9 warm/refined mix coder joins the pick (MNF13-R9-E promoted; 2026-11-04)
 
