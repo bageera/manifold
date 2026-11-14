@@ -10,8 +10,8 @@ families; the `--mnf8` flow emits an MNF9 file when the generative arm wins
 the pick; ADR-008's FLAG_CHANNEL_DIFF selects the per-pixel
 [g, r−g, b−g] residual organization when it wins the pick; the v1.12
 REF field generalizes bit 6 to a 2-bit reference selector (G/R/B
-per-file); the v1.13 backend 4 adds the dual-timescale mix coder to
-the pick)) — release v1.13.0 · hardened decoders
+per-file); the mix-coder backends 4-6 (v1.13-v1.15) add rate-aware
+entropy arms to the pick)) — release v1.15.0 · hardened decoders
 (bounded, checksummed, canonical, fuzzed) · independently validated ·
 normative format spec at
 [docs/format.md](docs/format.md)
@@ -48,7 +48,7 @@ frame with 64 edits at 122 B) — wire byte-frozen at v1.1; the combined
 storage-and-query gate GSE-09 failed now passes on the structured family
 ([docs/gse10/gate-report.md](docs/gse10/gate-report.md)).
 
-Identifier map: **Manifold v1.13.0** = the library release; **MNF9** = the
+Identifier map: **Manifold v1.15.0** = the library release; **MNF9** = the
 generative file format's magic; **MNF10** = the research program's milestone
 name (never a wire magic); **MNFX** = the wrapper format, own repo.
 
@@ -62,15 +62,17 @@ the in-repo crate and lib name stay `manifold`) and **`manifold-codec-capi`**
 | --- | ------ | ----- |
 | `manifold-codec` / `codec::*` (MNF5 encode/decode, `DecodeLimits`) | stable (v1.x semver) | v1.0 |
 | MNF8 (backend field + FLAG_PRED_MED + FLAG_TOKENS, ADR-002/003) | stable (v1.x semver; TOKENS since v1.6) | v1.2.1 |
-| `mnf8::*` MNF8 encode/decode, profiles, predictor flags (ADR-002/003/004) | stable | v1.2.0 |
+| `mnf8::*` MNF8 encode/decode, profiles, predictor flags; `mix_coder` backend 4/5/6 mix coders (v1.13+), `laws` IF4 tile-law record modes 6/7 (v1.15) | stable | v1.2.0 |
+| `mnf9::*` MNF9 exact-generative whole-frame encode/decode (ADR-007) | stable | v1.10.0 |
 | `error::Error` / `error::Result` (matchable categories) | stable | v1.2.1 |
 | `refdecode::ref_decode` (independent MNF5 decoder) | stable | v1.2.1 |
 | `img` I/O shims (JPEG/PNG) | stable under the default `image-io` feature | v1.0 |
-| `crates/manifold-codec-capi` (`manifold_decode`, `manifold_encode`, `manifold_encode_mnf8`) — published as `manifold-codec-capi` | stable status codes | v1.2.1 |
+| `crates/manifold-codec-capi` (`manifold_decode`, `manifold_encode_mnf5`, `manifold_encode`, `manifold_encode_mnf8`) — published as `manifold-codec-capi` | stable status codes | v1.2.1 |
 | `crates/mnf-subspace`, `crates/mnf-mans` | research, workspace-only (`publish = false`), no semver | — |
 
-Formats are frozen (MNF6/7 flag masks frozen; MNF8 owns flag bit2 only). All
-fallible library operations return `error::Result<T>`; malformed input is
+Formats are frozen (MNF6/7 flag masks frozen; MNF8 owns flag bits 2-7 —
+TOKENS, branch predictors, channel-diff + REF — plus the backend byte).
+All fallible library operations return `error::Result<T>`; malformed input is
 `Error::Format`, never a panic. MSRV: current stable Rust (`rust-version = 1.91`).
 
 ## Formats
@@ -80,7 +82,7 @@ fallible library operations return `error::Result<T>`; malformed input is
 | MNF5 | `MNF5` | 24 B | zlib | 0 literal, 1 exact ref, 2 geometric (D8, opt-in `--geom`) | v0.5 |
 | MNF6 | `MNF6` | 28 B + flags | zlib or zstd-19 (bit 1), planar RGB bodies (bit 0) | 0-3 (3 = YCoCg-R literal, 9-bit packed chroma) | v0.9 |
 | MNF7 | `MNF7` | 28 B + flags | as MNF6 | 0-5 (4/5 = color-domain residuals, [ADR-001](docs/adr-001-color-transform.md)) | v1.1 |
-| MNF8 | `MNF8` | 32 B + flags + backend | zlib-9 or zstd-19 per-image ([ADR-002](docs/adr-002-entropy-backends.md); balanced/maximum profiles; backends 2/3 reserved) | as MNF7 | v1.2 |
+| MNF8 | `MNF8` | 32 B + flags + backend | zlib-9, zstd-19, or the mix coders (backends 4/5/6) per-image ([ADR-002](docs/adr-002-entropy-backends.md); balanced/maximum profiles; backends 2/3 reserved) | records 0-8 (6/7 tile laws, 8 flat field) + the token wire | v1.2 |
 
 All tile the image at 16×16 (row-major, partial edge tiles), rank up to 8
 candidates from the last-128-window atlas by structural signature
@@ -124,7 +126,7 @@ arms keep the synthetic corpus; photographic files still lose to WebP/JXL
   ([tests/differential.rs](tests/differential.rs)).
 - Resource bounds: checked decompression limit `3WH + 6N` enforced
   during expansion, per-tile minimum-stream gate before image
-  allocation, configurable [limits](`src/codec.rs` `DecodeLimits`).
+  allocation, configurable [limits](src/codec.rs) (`DecodeLimits`).
 - Fuzzed: mutation harness (scripts/fuzz.py) in CI — 300 trials per CI
   run across the 5 encoder arms, 1,500+ in full local gates, zero
   panics, corrupt streams rejected (checksummed: zlib Adler32,
@@ -229,5 +231,7 @@ MIT — see [LICENSE](LICENSE).
 | v1.11.0 | MNF8 FLAG_CHANNEL_DIFF: channel-difference residual organization (ADR-008; −12.3% corpus, 23/30 files) |
 | v1.12.0 | MNF8 REF field: the channel-diff reference selector G/R/B (ADR-008 generalized; −2,146 B corpus, REF dist 7/13/5/5) |
 | v1.13.0 | MNF8 backend 4: the dual-timescale mix coder (MNF13-R5; −16,398 B corpus = −1.97%, 20/30 mix picks, zero regressions) |
+| v1.14.0 | MNF8 backend 5: the R6-tuned mix coder joins the pick (MNF13-R6; corpus 812,180 = −4,161 B = −0.51%, 0 regressions) |
+| v1.15.0 | MNF8 backend 6: the R9 warm/refined mix coder — 20 contexts, prev3-split heavy band, cold-mix live-parent schedule (MNF13-R9-E; 810,816 = −0.17%, 14/0/16, mix6 15/30) |
 | — (research) | MNF14-CS1 coastline scaling: rule-codings constant-cost but fixture-only; boundary refinement = slowest honest growth (docs/mnf14-cs1-probe.md) |
 | — (research) | MNF11: channeldiff relabel −62,675 B/17-of-30 on shipped streams (ADR-008 PROPOSED); X369 grid: (1,1) = optimum; X1 program discovery honest-negative; G4/G5 shared-template + mask verdicts (docs/mnf10-g3-shared-model.md) |

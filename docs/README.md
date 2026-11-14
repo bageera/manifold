@@ -56,6 +56,14 @@ principles (information theory, coding theory, MDL) to the mechanisms.
 - [mnf13-r5.md](mnf13-r5.md) — the dual-timescale mix coder promoted
   (v1.13.0 backend 4): −1.80% corpus at the gate (−1.97% shipped),
   19/19 wins, zero transport; the R4 mechanism shipped.
+- [mnf13-r6.md](mnf13-r6.md) — adaptation & quantization ablation on the
+  shipped backend-4 coder's own wires (13 arms, representation frozen;
+  the byte-exact stream re-encode anchor passed BEFORE any arm number):
+  the 16-key context + FAST/SLOW caps grid winner promoted as v1.14.0
+  backend 5 (corpus 812,180 = −0.51%); surfaced the `--profile maximum`
+  silently-ignored CLI wart (closed by the Benchmark-integrity rule in
+  the same release). Instruments under `crates/mnf-mans/scripts/`,
+  gate/caps logs in-repo.
 - [mnf13-cf1-disposition.md](mnf13-cf1-disposition.md) — circular-field
   records: 95-99% wins on radial-structure fixtures but the corpus
   control rejects photos (CLOSED as an instrument).
@@ -218,6 +226,11 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   + memory columns reported separately. Backend 4/5 byte-frozen (knobs
   inert); new mix6 golden + generator; mix5 golden's pick claim
   recomputed. Version release pending review.
+- [mnf13-r9f-record.md](mnf13-r9f-record.md) — R9-F: the released pick's
+  external surface — hubble (1000×872) swept old (pre-backend-6 binary)
+  vs v1.15.0 across both profiles: backend 6 silent off-corpus
+  (byte-identical wires, +0 both profiles); the ID4 hubble anchor
+  reproduced byte-for-byte through the fresh old binary.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).
@@ -244,6 +257,11 @@ metadata counted and exact reconstruction asserted:
   flag candidate implemented and reverted at the 30/30 gate.
 - [ternary-residuals-probe.md](ternary-residuals-probe.md) — balanced-ternary
   digit splits on prediction residuals (first-cost analysis).
+- [g6-quaternary-probe.md](g6-quaternary-probe.md) — quaternary
+  nibble-split representation (DENIED: best split arm +27.3% vs the
+  plain_med aggregate, 2/25 class-local wins only on constant-plane
+  fixtures; the low nibble of natural content is near-random, so the
+  split destroys the correlation the strongest predictor feeds on).
 - [research-paper-validation.md](research-paper-validation.md) — published
   compression claims vs manifold measurements (per-claim verdicts).
 - [mnf8-riemann-conformal-probe.md](mnf8-riemann-conformal-probe.md) — conformal
