@@ -1,6 +1,8 @@
 stages:
   - test
 
+# CI runs THE gate (make gate) — the same steps as GitHub's CI; a
+# hand-rolled step list here drifts from the Makefile (v1.5 lesson).
 test:
   stage: test
   image: rust:1.91
@@ -12,11 +14,9 @@ test:
       - .cargo/
       - target/
   script:
-    - cargo fmt --all -- --check
-    - cargo clippy --all-targets -- -D warnings
-    - cargo test
+    - apt-get update -qq && apt-get install -y -qq make python3
+    - make gate
     - cargo build --release
-    - apt-get update -qq && apt-get install -y -qq python3
     - python3 scripts/fuzz.py --trials 300
     - ./target/release/manifold encode testdata/screenshot_640x400.png -o /tmp/s.mnf5
     - ./target/release/manifold verify testdata/screenshot_640x400.png /tmp/s.mnf5
