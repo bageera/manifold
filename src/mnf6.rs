@@ -62,10 +62,64 @@ pub fn compress_stream(coder: &Coder, buf: &[u8]) -> Vec<u8> {
 
 /// Local cost proxy used to rank candidates (not a global optimum).
 pub fn proxy_cost(coder: &Coder, buf: &[u8]) -> u64 {
+    // MNF15-P1-D D0 census (test builds only): total probes + distinct
+    // (FNV-1a 64 over (coder, body); no release overhead — cfg(test)).
+    #[cfg(test)]
+    {
+        crate::mnf6::mnf6_p1d_census::on_probe(coder, buf);
+    }
     match coder {
         Coder::Zlib => compress_stream(coder, buf).len() as u64,
         // probe at level 3 for speed; final stream uses level 19
         Coder::Zstd(_) => compress_stream(&Coder::Zstd(3), buf).len() as u64,
+    }
+}
+
+/// P1-D D0 census bookkeeping. FNV-1a 64 over the body bytes (collision
+/// odds ~n^2/2^65 — negligible at probe counts ~1e6; noted in the record).
+#[cfg(test)]
+pub(crate) mod mnf6_p1d_census {
+    use super::Coder;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::Mutex;
+
+    pub(crate) static PROBES: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static DISTINCT: Mutex<Option<std::collections::HashSet<u64>>> = Mutex::new(None);
+
+    pub(crate) fn reset() {
+        PROBES.store(0, Ordering::Relaxed);
+        DISTINCT.lock().unwrap().replace(Default::default());
+    }
+
+    pub(crate) fn on_probe(coder: &Coder, buf: &[u8]) {
+        PROBES.fetch_add(1, Ordering::Relaxed);
+        let mut h: u64 = match coder {
+            Coder::Zlib => 0x1,
+            Coder::Zstd(level) => 0x2 ^ (u64::from(*level as i64 as u32)) << 1,
+        };
+        for &b in buf {
+            h ^= u64::from(b);
+            h = h.wrapping_mul(0x0100_0000_01b3);
+        }
+        // lazy init: tests that never reset() still count safely
+        DISTINCT
+            .lock()
+            .unwrap()
+            .get_or_insert_with(Default::default)
+            .insert(h);
+    }
+
+    /// (probes, distinct)
+    pub(crate) fn read() -> (u64, u64) {
+        (
+            PROBES.load(Ordering::Relaxed),
+            DISTINCT
+                .lock()
+                .unwrap()
+                .as_ref()
+                .map(|s| s.len() as u64)
+                .unwrap_or(0),
+        )
     }
 }
 

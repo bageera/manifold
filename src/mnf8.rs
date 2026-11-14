@@ -2925,6 +2925,31 @@ mod channel_diff {
         }
     }
 
+    /// MNF15-P1-D D0 instrument: how many proxy-cost PROBES one pick
+    /// runs, and how many are byte-identical repeats (D1's exact-reuse
+    /// surface). FNV-1a 64 dedupe over (coder, body); multi-minute.
+    #[test]
+    #[ignore] // census for the record; run with -- --ignored --nocapture
+    fn p1d_probe_census() {
+        for name in [
+            "gradient_320x240.png",
+            "screenshot_640x400.png",
+            "heldout-photos/autumn_160x120_s3100006.png",
+        ] {
+            let (d, px) = load(name);
+            crate::mnf6::mnf6_p1d_census::reset();
+            let t0 = std::time::Instant::now();
+            let _ = encode_mnf8(&px, d, true, Profile::Maximum);
+            let (probes, distinct) = crate::mnf6::mnf6_p1d_census::read();
+            println!(
+                "P1D census {name}: probes={probes} distinct={distinct} \
+                 dup={:.1}% wall={:.1}s",
+                100.0 * (probes.saturating_sub(distinct)) as f64 / probes.max(1) as f64,
+                t0.elapsed().as_secs_f32()
+            );
+        }
+    }
+
     /// B5 attribution: construction vs coding split on gradient (one
     /// representative Maximum-profile pick). The P1-C construction set =
     /// 16 record sweeps (4 kinds × 2 layouts × 2 proxy classes) + 48
