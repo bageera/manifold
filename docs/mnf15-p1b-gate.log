@@ -1,0 +1,35 @@
+testdata/gradient_320x240.png                             254 B     41.2 s  RSS 100.6 MB (r9  87.4)  flags 0x20 b1  B4:IDENTICAL
+testdata/heldout-photos/autumn_160x120_s3100006.png     22368 B     12.6 s  RSS  86.9 MB (r9  84.6)  flags 0x51 b6  B4:IDENTICAL
+testdata/heldout-photos/dusk_160x120_s3100003.png       13808 B     13.3 s  RSS  86.9 MB (r9  85.3)  flags 0x10 b6  B4:IDENTICAL
+testdata/heldout-photos/dusk_224x160_s3100002.png       45436 B     23.6 s  RSS  87.5 MB (r9  85.9)  flags 0xd1 b6  B4:IDENTICAL
+testdata/heldout-photos/forest_192x144_s3100001.png     33516 B     18.9 s  RSS  87.0 MB (r9  85.1)  flags 0xa1 b5  B4:IDENTICAL
+testdata/heldout-photos/forest_224x160_s3100005.png     40720 B     23.6 s  RSS  87.5 MB (r9  85.5)  flags 0x61 b5  B4:IDENTICAL
+testdata/heldout-photos/forest_224x160_s3100008.png     23668 B     24.9 s  RSS  87.3 MB (r9  85.6)  flags 0x51 b5  B4:IDENTICAL
+testdata/heldout-photos/ocean_192x144_s3100007.png      32100 B     18.1 s  RSS  87.4 MB (r9  86.0)  flags 0x61 b5  B4:IDENTICAL
+testdata/heldout-photos/sand_192x144_s3100004.png       35200 B     18.0 s  RSS  87.4 MB (r9  85.6)  flags 0x51 b6  B4:IDENTICAL
+testdata/heldout-photos/slate_160x120_s3100009.png      21532 B     12.8 s  RSS  86.5 MB (r9  86.0)  flags 0xa1 b6  B4:IDENTICAL
+testdata/heldout-photos/terrain_160x120_s3100000.png    13496 B     13.2 s  RSS  86.8 MB (r9  85.7)  flags 0x10 b6  B4:IDENTICAL
+testdata/heldout/blob_224x160.png                        5986 B     22.7 s  RSS  87.4 MB (r9  85.3)  flags 0x21 b1  B4:IDENTICAL
+testdata/heldout/blocks_192x128.png                      1277 B     14.7 s  RSS  86.7 MB (r9  85.7)  flags 0xc b1  B4:IDENTICAL
+testdata/heldout/document_200x280.png                     540 B     24.3 s  RSS  87.8 MB (r9  86.5)  flags 0xe0 b6  B4:IDENTICAL
+testdata/heldout/plaid_192.png                          20677 B     25.4 s  RSS  87.9 MB (r9  86.2)  flags 0x11 b1  B4:IDENTICAL
+testdata/heldout/poster_208x144.png                      1141 B     17.3 s  RSS  87.3 MB (r9  85.5)  flags 0x60 b1  B4:IDENTICAL
+testdata/noise_256x256.png                             196912 B     42.4 s  RSS  97.8 MB (r9  96.1)  flags 0x0 b1  B4:IDENTICAL
+testdata/photos/autumn_192x144_s900001.png              18784 B     18.9 s  RSS  87.7 MB (r9  86.0)  flags 0x51 b6  B4:IDENTICAL
+testdata/photos/dusk_160x120_s900003.png                20744 B     12.8 s  RSS  87.2 MB (r9  85.7)  flags 0x51 b6  B4:IDENTICAL
+testdata/photos/forest_224x160_s900002.png              44384 B     23.1 s  RSS  87.7 MB (r9  86.4)  flags 0x51 b6  B4:IDENTICAL
+testdata/photos/ocean_192x144_s900007.png               33580 B     17.8 s  RSS  87.6 MB (r9  86.4)  flags 0x51 b6  B4:IDENTICAL
+testdata/photos/sand_160x120_s900000.png                24504 B     12.6 s  RSS  87.1 MB (r9  85.2)  flags 0x51 b6  B4:IDENTICAL
+testdata/photos/slate_192x144_s900004.png               35152 B     17.9 s  RSS  87.2 MB (r9  86.6)  flags 0x51 b6  B4:IDENTICAL
+testdata/photos/slate_224x160_s900008.png               48716 B     23.0 s  RSS  88.1 MB (r9  86.8)  flags 0x51 b6  B4:IDENTICAL
+testdata/photos/stone_160x120_s900006.png               12464 B     13.8 s  RSS  86.9 MB (r9  85.4)  flags 0xd1 b5  B4:IDENTICAL
+testdata/photos/terrain_160x120_s900009.png             23240 B     12.8 s  RSS  86.8 MB (r9  85.3)  flags 0x61 b6  B4:IDENTICAL
+testdata/photos/terrain_224x160_s900005.png             39792 B     23.8 s  RSS  87.4 MB (r9  86.5)  flags 0x61 b5  B4:IDENTICAL
+testdata/repeat_256x256.png                               301 B     33.6 s  RSS  88.1 MB (r9  86.7)  flags 0x21 b1  B4:IDENTICAL
+testdata/screenshot_640x400.png                           488 B    106.1 s  RSS  93.3 MB (r9  89.0)  flags 0xd0 b5  B4:IDENTICAL
+testdata/solid_256x256.png                                 36 B     27.0 s  RSS  87.5 MB (r9  85.4)  flags 0x0 b0  B4:IDENTICAL
+
+B4: 30/30 byte-identical (total 810816 = the v1.15.0 anchor)
+B6: 30/30 balanced byte-identical
+B5: maximum wall 710.2 s vs pre-refactor baseline 1127.9 s = -37.0%
+B6: max RSS 100.6 MB, worst delta vs r9e new_rss_mb +13.2 MB

@@ -238,6 +238,16 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   (Δmax 1.9 MB); decision table + gate log committed
   (mnf15-p1a-decision-table.csv, mnf15-p1a-gate.log); P1-B/C/D rungs
   assigned (record-stream identity proof first).
+- [mnf15-p1b-record.md](mnf15-p1b-record.md) — P1-B construction reuse
+  SHIPPED: builder/finisher split + representation-first pick with the
+  original-rank tie-break; B1 contract measured (stream = f(coder
+  proxy) only — 4 backends share one stream, zlib its own); Maximum
+  constructions 200→72 (−64%); gates green (committed candidate
+  manifest reproduced byte-exactly; 30/30 max + 30/30 balanced digests
+  identical, total 810,816 = the anchor; corpus wall 710.2 s = −37.0% vs
+  the 1,127.9 s same-machine baseline, above the 30% target; RSS
+  +4.7%; fuzz 525/0); B5 instrument retained (construction ≈ 64% of
+  Maximum search).
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).

@@ -129,6 +129,11 @@ pub enum Profile {
     Maximum,
 }
 
+/// One entropy-coder proxy class: the class key `(is_zlib, zstd_level)`
+/// plus the (bidx, backend) pairs that share the proxy — the B1
+/// record-stream sharing groups (docs/mnf15-p1b-record.md).
+type ProxyClass = ((bool, i32), Vec<(u32, u32)>);
+
 /// Backend candidates for the `maximum` profile, in measured-preference
 /// order. Backend 4 = the mix coder (MNF13-R5) — its payload container
 /// applies to any arm's payload; the pick measures it per file.
@@ -140,6 +145,31 @@ fn backend_candidates() -> Vec<(u32, Coder)> {
         (BACKEND_ZSTD19, Coder::Zstd(19)),
         (BACKEND_ZLIB, Coder::Zlib),
     ]
+}
+
+/// MNF15-P1-B: assembles the final MNF8 file from a compressed payload
+/// (the shared header shape of the record and token paths; header fields
+/// unchanged — magic, dims, tile count, payload length, flags, backend).
+fn assemble_mnf8(
+    payload: &[u8],
+    dims: Dims,
+    tile_count: u32,
+    flags: u32,
+    backend: u32,
+) -> Result<Vec<u8>> {
+    let payload_len =
+        u32::try_from(payload.len()).map_err(|_| Error::fmt_msg("payload exceeds u32"))?; // review: no lossy cast
+    let mut file = Vec::with_capacity(HEADER8 + payload.len());
+    file.extend_from_slice(b"MNF8");
+    file.extend_from_slice(&dims.width.to_le_bytes());
+    file.extend_from_slice(&dims.height.to_le_bytes());
+    file.extend_from_slice(&TILE_SIZE.to_le_bytes());
+    file.extend_from_slice(&tile_count.to_le_bytes());
+    file.extend_from_slice(&payload_len.to_le_bytes());
+    file.extend_from_slice(&flags.to_le_bytes());
+    file.extend_from_slice(&backend.to_le_bytes());
+    file.extend_from_slice(payload);
+    Ok(file)
 }
 
 fn backend_compress(backend: u32, buf: &[u8]) -> Result<Vec<u8>> {
@@ -233,7 +263,21 @@ pub fn encode_mnf8(
         Profile::Balanced => vec![(BACKEND_ZSTD19, Coder::Zstd(19))],
         Profile::Maximum => backend_candidates(),
     };
-    let mut best: Option<(Vec<u8>, u32, MnF6Stats, u32)> = None;
+    // MNF15-P1-B (docs/mnf15-p1b-record.md): representation-first pick.
+    // Every candidate record stream is constructed ONCE per (flags,
+    // coder-proxy) pair — four of the five Maximum-profile backends share
+    // the Coder::Zstd(19) stream, the zlib arm selects its own (the
+    // proxy drives every per-tile mode choice) — and every backend then
+    // compresses that shared stream. The token wire is fully
+    // backend-independent and is constructed once per (cap, reference).
+    // Selection identity: every candidate keeps its ORIGINAL enumeration
+    // rank (backend index of backend_candidates()*40 + arm index, token
+    // arms at 32..39) and the winner is min over (length, rank) — equal
+    // sizes keep the earlier original candidate, byte-exactly the old
+    // backend-outer loop's first-strictly-smaller semantics. Gates:
+    // p1b_candidate_identity (candidate + tie-rank digests B2/B3), the
+    // committed max/balanced pick digests (B4/B6), the corpus anchors.
+    let mut best: Option<(usize, u32, Vec<u8>, u32, MnF6Stats, u32)> = None;
     // ADR-004: the three literal-body predictors × (interleaved|planar)
     // as per-file arms, each measured under every backend candidate,
     // complete serialized cost. (PLANAR's own measured value is real:
@@ -244,47 +288,102 @@ pub fn encode_mnf8(
         PredKind::Plane,
         PredKind::Left,
     ];
-    for (backend, coder) in candidates {
-        for kind in pred_arms {
-            for planar in [false, true] {
-                let med = kind == PredKind::Med;
-                // ADR-008 (v1.12): the reference-channel field 0..3 — none,
-                // G (v1.11's bit-6 semantic), R, B — per-file at complete
-                // serialized cost (the C2 gate's table).
-                for reference in 0u8..=3 {
-                    let flags = kind.flag_bit()
-                        | if planar { FLAG_PLANAR } else { 0 }
-                        | (u32::from(reference) << 6);
-                    let (file, st) = encode_stream_coder(
-                        pixels, dims, true, use_geom, flags, planar, med, kind, &coder, backend,
-                        reference,
+    // proxy classes, first-seen order preserved:
+    // (is_zlib, zstd-level) -> [(bidx, backend)] over backend_candidates().
+    // two proxy classes exist today (Zstd(19) and Zlib); a third proxy
+    // class re-opens the B1 identity contract.
+    let mut classes: Vec<ProxyClass> = Vec::new();
+    for (bidx, (backend, coder)) in candidates.iter().enumerate() {
+        let key = match coder {
+            Coder::Zlib => (true, 0),
+            Coder::Zstd(level) => (false, *level),
+        };
+        match classes.iter_mut().find(|(k, _)| *k == key) {
+            Some((_, group)) => group.push((bidx as u32, *backend)),
+            None => classes.push((key, vec![(bidx as u32, *backend)])),
+        }
+    }
+    for (kidx, kind) in pred_arms.iter().enumerate() {
+        for (pidx, planar) in [false, true].iter().enumerate() {
+            let med = *kind == PredKind::Med;
+            // ADR-008 (v1.12): the reference-channel field 0..3 — none,
+            // G (v1.11's bit-6 semantic), R, B — per-file at complete
+            // serialized cost (the C2 gate's table).
+            for reference in 0u8..=3 {
+                let flags = kind.flag_bit()
+                    | if *planar { FLAG_PLANAR } else { 0 }
+                    | (u32::from(reference) << 6);
+                let arm = (kidx * 8 + pidx * 4) as u32 + u32::from(reference);
+                for (class, group) in &classes {
+                    let coder = match class {
+                        (true, _) => Coder::Zlib,
+                        (false, level) => Coder::Zstd(*level),
+                    };
+                    // B1: one construction per (flags, proxy class).
+                    let (raw, st) = build_record_stream(
+                        pixels, dims, true, use_geom, *planar, med, *kind, &coder, reference,
                     )
                     .expect("encoding an in-memory image cannot fail");
-                    let size = file.len();
-                    if best.as_ref().is_none_or(|b| size < b.0.len()) {
-                        best = Some((file, flags, st, backend));
+                    for &(bidx, backend) in group {
+                        let rank = bidx * 40 + arm;
+                        let payload = backend_compress(backend, &raw)
+                            .expect("encoding an in-memory image cannot fail");
+                        let tile_count = u32::try_from(st.modes.len())
+                            .map_err(|_| Error::fmt_msg("too many tiles"))
+                            .expect("encoding an in-memory image cannot fail");
+                        let file = assemble_mnf8(&payload, dims, tile_count, flags, backend)
+                            .expect("encoding an in-memory image cannot fail");
+                        let size = file.len();
+                        let better = match &best {
+                            None => true,
+                            Some((bsize, brank, ..)) => (size, rank) < (*bsize, *brank),
+                        };
+                        if better {
+                            best = Some((size, rank, file, flags, st.clone(), backend));
+                        }
                     }
                 }
             }
         }
-        // ADR-003 token arm: tokens over the MED plane, same backend (the
-        // token grammar's predictor is fixed = MED; ADR-004 composes with
-        // the record arms only). Rate-aware by construction.
-        let base = FLAG_PRED_MED | FLAG_TOKENS;
-        for cap in [16, tokens::MAX_CANDIDATES] {
-            for reference in 0u8..=3 {
-                let flags = base | (u32::from(reference) << 6);
-                let (file, st) =
-                    encode_tokens_coder_cap(pixels, dims, backend, flags, cap, reference)
-                        .expect("encoding an in-memory image cannot fail");
+    }
+    // ADR-003 token arm: tokens over the MED plane (the token grammar's
+    // predictor is fixed = MED; ADR-004 composes with the record arms
+    // only). Rate-aware by construction; the wire is backend-independent.
+    for (cidx, cap) in [16, tokens::MAX_CANDIDATES].iter().enumerate() {
+        for reference in 0u8..=3 {
+            let flags = FLAG_PRED_MED | FLAG_TOKENS | (u32::from(reference) << 6);
+            let arm = 32 + (cidx as u32) * 4 + u32::from(reference);
+            let (wire, ts) = build_token_wire(pixels, dims, *cap, reference)
+                .expect("encoding an in-memory image cannot fail");
+            for (bidx, (backend, _coder)) in candidates.iter().enumerate() {
+                let rank = (bidx as u32) * 40 + arm;
+                let payload = backend_compress(*backend, &wire)
+                    .expect("encoding an in-memory image cannot fail");
+                let cols = div_ceil(dims.width, TILE_SIZE);
+                let rows = div_ceil(dims.height, TILE_SIZE);
+                let tile_count: u32 = cols
+                    .checked_mul(rows)
+                    .ok_or_else(|| Error::fmt_msg("too many tiles"))
+                    .expect("encoding an in-memory image cannot fail");
+                let file = assemble_mnf8(&payload, dims, tile_count, flags, *backend)
+                    .expect("encoding an in-memory image cannot fail");
+                let st = MnF6Stats {
+                    literal: u32::try_from(ts.literals).unwrap_or(u32::MAX),
+                    ref_exact: u32::try_from(ts.matches).unwrap_or(u32::MAX),
+                    ..MnF6Stats::default()
+                };
                 let size = file.len();
-                if best.as_ref().is_none_or(|b| size < b.0.len()) {
-                    best = Some((file, flags, st, backend));
+                let better = match &best {
+                    None => true,
+                    Some((bsize, brank, ..)) => (size, rank) < (*bsize, *brank),
+                };
+                if better {
+                    best = Some((size, rank, file, flags, st, *backend));
                 }
             }
         }
     }
-    let (file, flags, mut st, backend) = best.expect("at least one candidate");
+    let (_size, _rank, file, flags, mut st, backend) = best.expect("at least one candidate");
     st.chosen_flags = flags;
     (file, st, backend)
 }
@@ -906,6 +1005,10 @@ fn channel_diff_unrelabel(
 /// measures the v1.7 shallow arm AND the deep-chain arm; the pick
 /// absorbs the choice). ADR-008: when `cd`, tag-0 literals carry the
 /// channel-diff relabel (applied before compression).
+// P1-B: the pick builds + assembles inline (build_token_wire +
+// assemble_mnf8); this per-candidate form remains as the B2/B4 test
+// instrument (byte-identical candidate path, no cache).
+#[cfg(test)]
 fn encode_tokens_coder_cap(
     pixels: &[u8],
     dims: Dims,
@@ -914,6 +1017,31 @@ fn encode_tokens_coder_cap(
     cap: usize,
     reference: u8,
 ) -> Result<(Vec<u8>, MnF6Stats)> {
+    let (wire, ts) = build_token_wire(pixels, dims, cap, reference)?;
+    let payload = backend_compress(backend, &wire)?;
+    let cols = div_ceil(dims.width, TILE_SIZE);
+    let rows = div_ceil(dims.height, TILE_SIZE);
+    let tile_count: u32 = cols
+        .checked_mul(rows)
+        .ok_or_else(|| Error::fmt_msg("too many tiles"))?;
+    let file = assemble_mnf8(&payload, dims, tile_count, flags, backend)?;
+    let st = MnF6Stats {
+        literal: u32::try_from(ts.literals).unwrap_or(u32::MAX),
+        ref_exact: u32::try_from(ts.matches).unwrap_or(u32::MAX),
+        ..MnF6Stats::default()
+    };
+    Ok((file, st))
+}
+
+/// The token wire is FULLY backend-independent (no proxy cost enters the
+/// token builder): MED residual plane -> token wire -> the ADR-008 REF
+/// relabel. Built once per (cap, reference) in the P1-B pick (B1).
+fn build_token_wire(
+    pixels: &[u8],
+    dims: Dims,
+    cap: usize,
+    reference: u8,
+) -> Result<(Vec<u8>, tokens::TokenStats)> {
     let med_pred = med_predict(pixels, dims.width as usize, dims.height as usize);
     let res: Vec<u8> = pixels
         .iter()
@@ -928,34 +1056,16 @@ fn encode_tokens_coder_cap(
     } else {
         wire
     };
-    let payload = backend_compress(backend, &wire)?;
-    let payload_len =
-        u32::try_from(payload.len()).map_err(|_| Error::fmt_msg("payload exceeds u32"))?;
-    let mut file = Vec::with_capacity(HEADER8 + payload.len());
-    file.extend_from_slice(b"MNF8");
-    file.extend_from_slice(&dims.width.to_le_bytes());
-    file.extend_from_slice(&dims.height.to_le_bytes());
-    file.extend_from_slice(&TILE_SIZE.to_le_bytes());
-    let cols = div_ceil(dims.width, TILE_SIZE);
-    let rows = div_ceil(dims.height, TILE_SIZE);
-    let tile_count: u32 = cols
-        .checked_mul(rows)
-        .ok_or_else(|| Error::fmt_msg("too many tiles"))?;
-    file.extend_from_slice(&tile_count.to_le_bytes());
-    file.extend_from_slice(&payload_len.to_le_bytes());
-    file.extend_from_slice(&flags.to_le_bytes());
-    file.extend_from_slice(&backend.to_le_bytes());
-    file.extend_from_slice(&payload);
-    let st = MnF6Stats {
-        literal: u32::try_from(ts.literals).unwrap_or(u32::MAX),
-        ref_exact: u32::try_from(ts.matches).unwrap_or(u32::MAX),
-        ..MnF6Stats::default()
-    };
-    Ok((file, st))
+    Ok((wire, ts))
 }
-
-/// One tile-stream encoder, parameterized by coder + backend — THE selection
-/// loop for MNF8 (no per-variant duplicates of this function).
+/// Builds the backend-independent record stream (`raw`, ADR-008
+/// relabeled) plus the per-tile selection stats. B1 contract
+/// (docs/mnf15-p1b-record.md): at fixed (predictor, layout, reference)
+/// the stream depends ONLY on the coder PROXY — proxy_cost drives every
+/// per-tile mode choice — so four of the five Maximum-profile backends
+/// share Coder::Zstd(19)'s stream byte-for-byte and the zlib arm
+/// (Coder::Zlib proxy) selects its own. No backend id enters this
+/// function.
 ///
 /// Arm controls (both default true, plumbable for ablation):
 /// - `use_atlas`: candidate references at all (false = pure prediction arm)
@@ -965,17 +1075,15 @@ fn encode_tokens_coder_cap(
 ///
 /// Shared YCoCg (mode 3) and planar layout stay ON in both arms (ADR-002).
 #[allow(clippy::too_many_arguments)]
-fn encode_stream_coder(
+fn build_record_stream(
     pixels: &[u8],
     dims: Dims,
     use_atlas: bool,
     use_geom: bool,
-    flags: u32,
     planar: bool,
     med: bool,
     kind: PredKind,
     coder: &Coder,
-    backend: u32,
     reference: u8,
 ) -> Result<(Vec<u8>, MnF6Stats)> {
     // ADR-004: Plane/Left are PURE prediction arms (the measured gate's
@@ -1299,20 +1407,43 @@ fn encode_stream_coder(
     } else {
         raw
     };
+    Ok((raw, stats))
+}
+
+/// One tile-stream encoder, parameterized by coder + backend — THE selection
+/// entry for MNF8 candidates (builds the record stream ONCE via
+/// build_record_stream, then compresses it under the requested backend —
+/// MNF15-P1-B's B1 split; the no-per-variant-duplicates rule unchanged).
+///
+/// Arm controls (both default true, plumbable for ablation):
+/// - `use_atlas`: candidate references at all (false = pure prediction arm)
+/// - `use_geom`: D8 transforms on top of exact references (false = t=0 only,
+///   the v0.5 exact-reference semantics — codec.rs pins t=0 for this case
+///   and MNF8 must match it)
+///
+/// Shared YCoCg (mode 3) and planar layout stay ON in both arms (ADR-002).
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
+fn encode_stream_coder(
+    pixels: &[u8],
+    dims: Dims,
+    use_atlas: bool,
+    use_geom: bool,
+    flags: u32,
+    planar: bool,
+    med: bool,
+    kind: PredKind,
+    coder: &Coder,
+    backend: u32,
+    reference: u8,
+) -> Result<(Vec<u8>, MnF6Stats)> {
+    let (raw, stats) = build_record_stream(
+        pixels, dims, use_atlas, use_geom, planar, med, kind, coder, reference,
+    )?;
     let payload = backend_compress(backend, &raw)?;
-    let payload_len =
-        u32::try_from(payload.len()).map_err(|_| Error::fmt_msg("payload exceeds u32"))?; // review: no lossy cast
-    let mut file = Vec::with_capacity(HEADER8 + payload.len());
-    file.extend_from_slice(b"MNF8");
-    file.extend_from_slice(&dims.width.to_le_bytes());
-    file.extend_from_slice(&dims.height.to_le_bytes());
-    file.extend_from_slice(&TILE_SIZE.to_le_bytes());
-    let tile_count = u32::try_from(tiles.len()).map_err(|_| Error::fmt_msg("too many tiles"))?;
-    file.extend_from_slice(&tile_count.to_le_bytes());
-    file.extend_from_slice(&payload_len.to_le_bytes());
-    file.extend_from_slice(&flags.to_le_bytes());
-    file.extend_from_slice(&backend.to_le_bytes());
-    file.extend_from_slice(&payload);
+    let tile_count =
+        u32::try_from(stats.modes.len()).map_err(|_| Error::fmt_msg("too many tiles"))?;
+    let file = assemble_mnf8(&payload, dims, tile_count, flags, backend)?;
     Ok((file, stats))
 }
 
@@ -2656,5 +2787,164 @@ mod channel_diff {
         t[last] = t[last].wrapping_add(1);
         let _ = decode_mnf8(&t); // must not panic; result = Err or valid
                                  // diff-file class on the container checksum
+    }
+
+    // --- MNF15-P1-B: candidate identity gate (B2/B3) --------------------
+    // Enumerates EVERY Maximum-profile candidate in the pre-P1-B
+    // encode_mnf8 enumeration order (backend-outer; per backend: 32 record
+    // arms then 8 token arms; rank = backend_idx*40 + arm_idx, token arms
+    // at 32..39 per backend), hashes each with FNV-1a 64 (rustc-stable),
+    // and appends the whole-pick hash. The committed manifest
+    // docs/mnf15-p1b-candidates.sha is GENERATED at the pre-refactor
+    // vintage (run with P1B_UPDATE=1) and every later run must reproduce
+    // it byte-exactly: the P1-B reuse refactor reorders the pick loop, so
+    // this gate pins candidate bytes AND tie-rank precedence across the
+    // reorder. Rerun generation only for deliberate wire/format changes.
+    fn fnv1a64(data: &[u8]) -> u64 {
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for &b in data {
+            h ^= u64::from(b);
+            h = h.wrapping_mul(0x0100_0000_01b3);
+        }
+        h
+    }
+
+    #[test]
+    #[ignore] // multi-minute: 3 corpus files x 200 candidates; run -- --ignored
+    fn p1b_candidate_identity() {
+        let files = [
+            "gradient_320x240.png",
+            "heldout/document_200x280.png",
+            "heldout-photos/autumn_160x120_s3100006.png",
+        ];
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/mnf15-p1b-candidates.sha");
+        let mut want = String::new();
+        for name in files {
+            let (d, px) = load(name);
+            let mut lines: Vec<String> = Vec::new();
+            let mut rank: u32 = 0;
+            for (bidx, entry) in backend_candidates().iter().enumerate() {
+                let (backend, coder) = entry;
+                for &kind in &[
+                    PredKind::None,
+                    PredKind::Med,
+                    PredKind::Plane,
+                    PredKind::Left,
+                ] {
+                    for planar in [false, true] {
+                        for reference in 0u8..=3 {
+                            let flags = kind.flag_bit()
+                                | if planar { FLAG_PLANAR } else { 0 }
+                                | (u32::from(reference) << 6);
+                            let (f, _) = encode_stream_coder(
+                                &px,
+                                d,
+                                true,
+                                true,
+                                flags,
+                                planar,
+                                kind == PredKind::Med,
+                                kind,
+                                coder,
+                                *backend,
+                                reference,
+                            )
+                            .expect("in-memory encode");
+                            lines.push(format!("b{bidx} r{rank} {:016x} {}", fnv1a64(&f), f.len()));
+                            rank += 1;
+                        }
+                    }
+                }
+                let base = FLAG_PRED_MED | FLAG_TOKENS;
+                for &cap in &[16usize, tokens::MAX_CANDIDATES] {
+                    for reference in 0u8..=3 {
+                        let flags = base | (u32::from(reference) << 6);
+                        let (f, _) =
+                            encode_tokens_coder_cap(&px, d, *backend, flags, cap, reference)
+                                .expect("in-memory encode");
+                        lines.push(format!("b{bidx} r{rank} {:016x} {}", fnv1a64(&f), f.len()));
+                        rank += 1;
+                    }
+                }
+            }
+            let (pick, _, _) = encode_mnf8(&px, d, true, Profile::Maximum);
+            lines.push(format!("pick {:016x} {}", fnv1a64(&pick), pick.len()));
+            want.push_str(&format!("# {}\n", name));
+            for l in &lines {
+                want.push_str(l);
+                want.push('\n');
+            }
+        }
+        if std::env::var("P1B_UPDATE").is_ok() {
+            std::fs::write(&manifest, want).expect("write P1B manifest");
+            println!("P1B manifest written: {}", manifest.display());
+        } else {
+            let have = std::fs::read_to_string(&manifest).unwrap_or_else(|e| {
+                panic!(
+                    "P1B manifest missing ({}); the pre-refactor vintage must generate it with P1B_UPDATE=1",
+                    e
+                )
+            });
+            assert!(have == want, "P1B candidate manifest drift: {}", {
+                let mut d = String::new();
+                for (i, (a, b)) in have.lines().zip(want.lines()).enumerate() {
+                    if a != b {
+                        d.push_str(&format!("\nline {i}\n got: {a}\n exp: {b}"));
+                    }
+                }
+                d
+            });
+        }
+    }
+
+    /// B5 attribution: construction vs coding split on gradient (one
+    /// representative Maximum-profile pick; the construction set = 64
+    /// record streams (32 Zstd-proxy + 32 zlib-proxy) + 8 token wires).
+    #[test]
+    #[ignore] // timing instrument; run with -- --ignored
+    fn p1b_build_code_split() {
+        let (d, px) = load("gradient_320x240.png");
+        let t0 = std::time::Instant::now();
+        let mut build_count = 0u32;
+        for &kind in &[
+            PredKind::None,
+            PredKind::Med,
+            PredKind::Plane,
+            PredKind::Left,
+        ] {
+            for planar in [false, true] {
+                for reference in 0u8..=3 {
+                    for coder in [&Coder::Zstd(19), &Coder::Zlib] {
+                        let _ = build_record_stream(
+                            &px,
+                            d,
+                            true,
+                            true,
+                            planar,
+                            kind == PredKind::Med,
+                            kind,
+                            coder,
+                            reference,
+                        )
+                        .expect("in-memory build");
+                        build_count += 1;
+                    }
+                }
+            }
+        }
+        for &cap in &[16usize, tokens::MAX_CANDIDATES] {
+            for reference in 0u8..=3 {
+                let _ = build_token_wire(&px, d, cap, reference).expect("wire");
+                build_count += 1;
+            }
+        }
+        let build_s = t0.elapsed().as_secs_f32();
+        let t1 = std::time::Instant::now();
+        let _ = encode_mnf8(&px, d, true, Profile::Maximum);
+        let full_s = t1.elapsed().as_secs_f32();
+        println!(
+            "P1B split: {build_count} constructions in {build_s:.2}s; full pick {full_s:.2}s; construction share {:.0}%",
+            build_s / full_s * 100.0
+        );
     }
 }

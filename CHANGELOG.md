@@ -20,6 +20,25 @@ Next rung: P1-B's record-stream identity proof (`encode_stream_coder`'s
 `buf` feeds all five backends; 4 of 5 rebuilds are candidate waste if
 identity holds); heuristic pruning stays a separate profile.
 
+## Research — MNF15-P1-B: record-stream construction reuse shipped, corpus byte-identical (2026-11-14, not a release)
+
+The P1-B "exact portfolio search optimization" lands
+(`src/mnf8.rs`: `build_record_stream` + `build_token_wire` +
+`assemble_mnf8` splits; representation-first pick with the ORIGINAL-rank
+tie-break; [docs/mnf15-p1b-record.md](docs/mnf15-p1b-record.md)). B1's
+measured contract: the record stream depends only on the coder PROXY —
+four backends share Coder::Zstd(19)'s stream, zlib selects its own;
+token wires carry no proxy. Constructions per Maximum encode drop
+**200 → 72 (−64%)** with every candidate byte identical. Gates: the
+committed 200-candidate manifest reproduced byte-exactly (B2/B3, 0
+regenerated); 30/30 Maximum digests identical, total 810,816 = the
+anchor (B4); 30/30 balanced digests identical (B6); corpus wall
+**710.2 s vs 1,127.9 s = −37.0%** (B5, matched-environment; −38% vs the
+recorded 1,145.3) — above the 30% target; RSS peak 100.6 MB (+4.7% = no
+material regression); fuzz 525 trials 0 panics. B5 instrument (retained):
+construction share ≈ 64% of Maximum search — the mechanism is the
+construction, not the coding. Wire, decoder, backend ids untouched.
+
 ## v1.15.0 — Backend 6: the R9 warm/refined mix coder joins the pick (MNF13-R9-E promoted; 2026-11-04)
 
 The R9-C/D composition ships as **backend id 6** (backends 4/5's decode
