@@ -231,6 +231,13 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   vs v1.15.0 across both profiles: backend 6 silent off-corpus
   (byte-identical wires, +0 both profiles); the ID4 hubble anchor
   reproduced byte-for-byte through the fresh old binary.
+- [mnf15-p1a-record.md](mnf15-p1a-record.md) — P1-A encoder search-cost
+  attribution (recorded inputs, anchors asserted): 62.0% of the added
+  Maximum-profile time (+275.1 s) lands on mix6-lost files for 0 B;
+  added time pixel-scaled (~219 s/Mpx, corr 0.97); RSS not a bottleneck
+  (Δmax 1.9 MB); decision table + gate log committed
+  (mnf15-p1a-decision-table.csv, mnf15-p1a-gate.log); P1-B/C/D rungs
+  assigned (record-stream identity proof first).
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).

@@ -1,5 +1,25 @@
 # Changelog
 
+## Research — MNF15-P1-A: per-file encoder search-cost attribution (2026-11-14, not a release)
+
+The P1 work order ("exact portfolio search optimization": same pick, same
+bytes, less work) opens with the recorded-inputs join
+(`crates/mnf-mans/scripts/mnf15_p1a_join.py` over `.research/r9/r9e_rows.csv`,
+anchors asserted, nothing re-run;
+[docs/mnf15-p1a-record.md](docs/mnf15-p1a-record.md), decision table +
+gate log in `docs/`). Headline: **62.0% of the added v1.15 Maximum-search
+time (+275.1 s) lands on the 15 files where backend 6 is evaluated and
+declines — +170.6 s for 0 B — while the 15 mix6-won files pay +104.5 s for
+the whole −1,364 B.** Added time is pixel-scaled (corr 0.97, ≈219 s per
+megapixel — the arms are evaluated whether or not they win), R9-F's hubble
+matches (−0 B, ~950 s), and memory is measured-absent on the corpus (RSS
+max 95.5 → 96.1 MB, Δmax 1.9 MB). Candidate matrix verified in source
+(40 arms/backend; Maximum 160 → 200). The corrected aggregate constant is
+206.5 s per kB saved (the proposal's 202 divided 1,364 B as 1.364 kB).
+Next rung: P1-B's record-stream identity proof (`encode_stream_coder`'s
+`buf` feeds all five backends; 4 of 5 rebuilds are candidate waste if
+identity holds); heuristic pruning stays a separate profile.
+
 ## v1.15.0 — Backend 6: the R9 warm/refined mix coder joins the pick (MNF13-R9-E promoted; 2026-11-04)
 
 The R9-C/D composition ships as **backend id 6** (backends 4/5's decode

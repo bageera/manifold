@@ -1,0 +1,22 @@
+files: 30 (asserted 30)
+sizes: 812180 -> 810816 dB -1364 (asserted)
+time s: 870.2 -> 1145.3  d 275.1 +31.6%
+s per kB saved (corpus): 206.5
+medians s: 22.8 -> 30.1
+mix6-won files: 15  dtime 104.5 s  dbytes -1364
+mix6-lost files: 15  dtime 170.6 s  dbytes 0
+lost-share of added time: 62.0%
+won-side s/kB: 78.5
+corr(pixels, dtime) = 0.97 (n=29, dims-less row: plaid)
+dtime per Mpixel: 219.1 s
+backend wins: {'0': 1, '1': 7, '5': 7, '6': 15}
+RSS max: 95.5 -> 96.1 MB, per-file dmax 1.9
+top time penalties:
+  screenshot_640x400.png                       b5 dbytes     +0 ds   +42.5s s/kB 
+  noise_256x256.png                            b1 dbytes     +0 ds   +16.5s s/kB 
+  repeat_256x256.png                           b1 dbytes     +0 ds   +14.1s s/kB 
+  solid_256x256.png                            b0 dbytes     +0 ds   +10.5s s/kB 
+  plaid_192.png                                b1 dbytes     +0 ds    +9.9s s/kB 
+  dusk_224x160_s3100002.png                    b6 dbytes   -288 ds    +9.5s s/kB 33.7
+  forest_224x160_s3100005.png                  b5 dbytes     +0 ds    +9.5s s/kB 
+  document_200x280.png                         b6 dbytes    -12 ds    +9.4s s/kB 799.1
