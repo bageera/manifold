@@ -285,6 +285,13 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   8-px cross-scale gradient G8 = +0.92 bits/sym prequentially beyond a
   16-bin prev-symbol context (26 files / 2.535M symbols); stage 2 =
   exact production-context measurement through the Rust bridge.
+- [mnf16-s2-record.md](mnf16-s2-record.md) — MNF16-S2 stage 2
+  production conditional attribution through the R9 bridge (measurement
+  only): three gates measured (production identity PASS; decoder
+  causality PASS; information: G8 +18.5 kB prequential over the
+  production C6, heavy-band split positive on every backend-6 file,
+  disagreement prequential-NEGATIVE = already captured, shuffled control
+  negative); G8 advances to the coder-level arm; no wire changes.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).

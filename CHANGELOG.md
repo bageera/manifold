@@ -158,6 +158,20 @@ production-context measurement through the Rust bridge) and do NOT
 propose any wire change; the monotonicity caveat (weak-C upper bound)
 is stated in the record.
 
+### MNF16-S1 Stage 2 — production conditional attribution (2026-11-15, not a release)
+
+S2 through the R9 bridge with the shipped backend-6 schedule
+([scripts/mnf16_s2_bridge.py](scripts/mnf16_s2_bridge.py),
+record [docs/mnf16-s2-record.md](docs/mnf16-s2-record.md)): 2,539,584
+production symbols audited with S2-0 production identity PASS (rANS
+overhead 1.1-7.3 B), decoder causality PASS, and: G8 cross-scale
+gradient **+18,460 B prequential** over production C6 (its stable
+heavy-band-split form positive on every backend-6 file); predictor
+disagreement **prequential-negative** (already captured by C6 — honest
+negative recorded); joint double-fragmentation negative; shuffled
+control negative. G8 advances to the coder-level prequential arm; no
+wire changes, no new backends, production anchors untouched.
+
 ## v1.16.0 — Encoder performance release (P1: same compression, same wire, faster encoding; 2026-11-14)
 
 Same compressed output, same wire format, same decoding compatibility —
