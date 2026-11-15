@@ -173,6 +173,24 @@ Mechanisms shipped (full records in docs/):
 P1-B's purpose and this release's: eliminate redundant computation, not
 reduce the search space.
 
+PUBLISHED: manifold-codec 1.16.0 + manifold-codec-capi 1.16.0 on
+crates.io at the release vintage (tag v1.16.0 = a963a46, GL v1.16.0-gl
+= 5a84e51, patch-id twins 9575712ef2b15ef0 / 02d1bec257adec23; delivery
+sync GH c376872..a963a46, GL ..5a84e51). Verification at the vintage:
+R1-R12 green — versions+lockfile (R1), CHANGELOG/README consolidation
+(R2), research-instrument isolation audit with the arm allocator now
+cfg(test)-only (R3), fmt/clippy/rustdoc (R4), workspace release suite
+(R5, capi+subspace+mnf-mans included), 200-candidate manifest
+byte-exact (R6), 60/60 corpus digests at 810,816 (R7), Hubble
+byte-identical at 373.0 s (R8), cross-version decode both directions
+with the v1.15.0-tag binary and byte-identical encodes (R9), cargo
+package + publish dry-run (R10), capi packaged+published (R11),
+registry read-back both crates 1.16.0 (R12) + registry-consumer
+roundtrip exact (encoded 75 B, decoded identical, backend 1) + fuzz
+525/0 + GH Release with both .crate assets. Release-prep commits:
+0c7a753 (versions+isolation+docs), a963a46 (corpus gate log refresh);
+publication commits and docs follow below if any.
+
 ## v1.15.0 — Backend 6: the R9 warm/refined mix coder joins the pick (MNF13-R9-E promoted; 2026-11-04)
 
 The R9-C/D composition ships as **backend id 6** (backends 4/5's decode
