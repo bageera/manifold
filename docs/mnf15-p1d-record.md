@@ -52,13 +52,16 @@ price is measured above (roughly +1 MB RSS per +1 MiB budget). The
 8+8 MiB split kept the RSS delta to +11.7 MB while capturing the
 laws-lattice mass outright.
 
-## Next
+## Next (D2 has since landed — see [mnf15-p1d2-gate.log](mnf15-p1d2-gate.log))
 
-- D2 (compressor workspace reuse: fresh zlib/zstd-3 context per probe →
-  reused-reset contexts, equivalence-tested per Jon's spec) is authorized
-  pending D1 and measures against THIS baseline. The probe body of work
-  above makes D2's surface smaller (only misses compress); its fresh-vs-
-  reused equivalence test still must cover empty/incompressible inputs
-  and level alternation.
-- The rANS/mix entropy backends' own execution cost remains P1-D2/D4's
-  remaining surface after the probes.
+D2 shipped the same day: the zstd-3 probe context is reused across a
+pick's misses (`SessionOnly` reset per body — the zio writer's own
+concatenated-frame directive — via `raw::Encoder::with_context`), zlib
+probes stayed FRESH after the attribution instrument measured reuse
+neutral (~0.99x). Gates: parity over the adversarial sequence (the gate
+caught and fixed a recycled-sink append bug), manifest byte-exact,
+corpus 30/30 both profiles, hubble byte-identical at 363.3 s (-5.2%,
+reversing D1's open +1.7% with matched evidence), fuzz 525/0. Measured:
+Maximum 428.3 -> 414.5 s (-3.2%); cumulative **1,127.9 -> 414.5 s =
+-63.2% (2.72x)**; Balanced 39.87 -> 28.92 s (-27.4%); cumulative
+**-82.6% (5.74x)**; RSS 108.6 MB (+0.7).

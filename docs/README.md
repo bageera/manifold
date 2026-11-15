@@ -265,6 +265,12 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   cumulative (2.63×), Balanced 39.87 s (−76.0% cumulative, 4.16×);
   executions −64.2% on screenshot; RSS 107.9 MB = the 16 MiB budget's
   price with the 40 MB D0-ceiling knob documented (mnf15-p1d-gate.log).
+  D2 workspace reuse SHIPPED (zstd-3 context recycled via the library's
+  own SessionOnly reset; zlib measured reuse-neutral and stays fresh):
+  Maximum 414.5 s (−63.2% cumulative, 2.72×), Balanced 28.92 s (−82.6%
+  cumulative, 5.74×), hubble 363.3 s byte-identical (-5.2%, reversing
+  D1's open +1.7%), zstd probe 2.95×/miss, RSS 108.6 MB
+  (mnf15-p1d2-gate.log).
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).

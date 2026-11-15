@@ -1172,11 +1172,7 @@ fn build_record_stream(
     // the bucket. Equal inputs are the same mathematical cost, so reuse
     // can never change a selection.
     let probe_kind = crate::mnf6::ProbeKind::from_coder(coder);
-    let probe = |b: &[u8]| {
-        u64::from(cache.probe(probe_kind, b, |b2| {
-            crate::mnf6::probe_cost_raw(probe_kind, b2)
-        }))
-    };
+    let probe = |b: &[u8]| u64::from(cache.probe(probe_kind, b));
 
     for (idx, tile) in tiles.iter().enumerate() {
         let n = tile.nbytes();

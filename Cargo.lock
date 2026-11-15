@@ -407,6 +407,7 @@ dependencies = [
  "image",
  "png 0.17.16",
  "zstd",
+ "zstd-safe",
 ]
 
 [[package]]

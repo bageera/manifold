@@ -84,6 +84,27 @@ executions −64.2% on the screenshot fixture, RSS peak 107.9 MB (+11.7 =
 the conservative 16 MiB budget; the D0 9.82× ceiling needs ~40 MB and
 stays a documented knob). Search space untouched.
 
+## Research — MNF15-P1-D D2: compressor workspace reuse shipped, corpus byte-identical, max wall -63.2% cumulative (2026-11-14, not a release)
+
+D2 ships one workspace (zstd-3 only): the pick's misses reuse a single
+`CCtx` — parameters (level 3 + frame checksum) set once, per-probe
+`ZSTD_reset_session_only` (the zio writer's own concatenated-frame
+directive) and the same `zio::Writer` driver the fresh path uses, so
+parity is the library's own reset semantics plus a gate: the D2.1
+sequence test initially FAILED on a recycled-sink append bug and was
+fixed — the parity proof is real. The zlib class measured REUSE-NEUTRAL
+(~0.99×, attribution instrument) and stays on the fresh path.
+([docs/mnf15-p1d-record.md](docs/mnf15-p1d-record.md)). Gates: D2.2-D2.4
+state/config/reset isolation across empty/incompressible/large bodies;
+manifest byte-exact (D2.5); 30/30 max + bal digests, 810,816 = the anchor
+(D2.6); hubble byte-identical at 363.3 s (D2.7 — with matched evidence,
+reversing D1's open +1.7%); fuzz 525/0 (D2.9). Measured: zstd probe
+1.4 µs vs 4.0 µs fresh = **2.95× per miss** (D2.8); Maximum corpus wall
+**414.5 s (−3.2%; cumulative 1,127.9 → 414.5 = −63.2%, 2.72×)**; Balanced
+**28.92 s (−27.4%; cumulative −82.6%, 5.74×)**; RSS 108.6 MB (+0.7 — the
+workspace is one fixed context + a recycled buffer). Hit/miss behavior
+unchanged by construction: D2 only cheapens executing a cache miss.
+
 ## v1.15.0 — Backend 6: the R9 warm/refined mix coder joins the pick (MNF13-R9-E promoted; 2026-11-04)
 
 The R9-C/D composition ships as **backend id 6** (backends 4/5's decode

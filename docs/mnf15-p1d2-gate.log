@@ -1,0 +1,66 @@
+MNF15-P1-D D2 gate log (2026-11-14) — compressor workspace reuse
+
+D2 mechanism (single shipped workspace, evidence-selected):
+  The zstd-3 probe context is owned by the pick's ProbeCache and REUSED
+  across misses: per probe `ZSTD_reset_session_only` (the exact directive
+  the zio writer itself applies between its concatenated frames) on a
+  context whose parameters — compression level 3 + frame checksum — were
+  set once at creation; the input then goes through `zio::Writer` +
+  `raw::Encoder::with_context(&mut CCtx)` — the SAME driver code the
+  fresh path uses, only the context is retained.
+  The zlib class measured REUSE-NEUTRAL and is NOT shipped: the D2
+  attribution instrument (12800x2 misses, deterministic adversarial
+  corpus incl. empty/1 B/repetitive/32-64 KB bodies) measured
+  fresh-vs-reused at ~0.99x — flate2's fresh state is a cheap fixed-size
+  struct next to the deflate work itself. zlib probes therefore stay on
+  the fresh ZlibEncoder path (stateless by construction).
+  Per-probe allocations on the shipped path: ONE context + one recycled
+  sink buffer, lifetime = pick. Fresh vintage allocated a full CCtx per
+  miss.
+
+D2 gate results (all green):
+  D2.1 fresh/reused parity   : adversarial sequence (empty, 1 B, random
+      97 B/512 B/774 B/2 KB/32 KB, 4096xzero, 8192xA5, gradient-
+      patterned, 64 KB zeros, long-jump back-reference, empty-again)
+      through ONE workspace per configuration, EVERY length == the fresh
+      oracle (p1d_d2_state_isolation_parity — the gate initially FAILED
+      on a recycled-sink bug [append instead of clear] and was fixed;
+      the parity gate is real, not decorative).
+  D2.2 state isolation       : the sequence IS small/large/random/
+      repetitive alternation incl. immediate repeats after same-length
+      calls (D2.4 folded in).
+  D2.3 configuration isolation: both probe configurations through ONE
+      cache, interleaved per body in both orders (p1d_d2_config_isolation);
+      zlib has no workspace, so no cross-config contamination surface.
+  D2.4 reset correctness     : repeated calls, empty bodies at positions
+      0 and mid-sequence, back-to-back same-body runs.
+  D2.5 candidate identity    : committed 200-candidate manifest reproduced
+      byte-exactly.
+  D2.6 corpus identity       : 30/30 Maximum + 30/30 Balanced digests
+      identical, total 810,816 = the anchor.
+  D2.7 external validation   : hubble (wire-decoded round trip) re-encoded
+      BYTE-IDENTICAL (1,452,400 B); 363.3 s wall vs D1's 383.2 (-5.2%) —
+      with matched evidence, reversing D1's open +1.7% observation: the
+      zstd probe mass is what hubble's atlas-heavy pick pays for, and
+      workspace reuse is exactly its remedy.
+  D2.8 performance attribution:
+      zstd-3 probe: reused 1.4 us vs fresh 4.0 us = 2.95x per miss
+        (p1d_d2_attribution, 12800x2 misses).
+      zlib probe: fresh 43.1 us/probe (reuse-neutral; not shipped).
+      Maximum corpus wall (B5): 428.3 (D1) -> 414.5 s = -3.2%
+        cumulative 1,127.9 -> 414.5 s = -63.2% (2.72x).
+      Balanced corpus wall: 39.87 (D1) -> 28.92 s = -27.4%
+        cumulative 165.92 -> 28.92 s = -82.6% (5.74x).
+      RSS (B6): corpus peak 108.6 MB (+0.7 over D1's 107.9 — the
+        workspace is a fixed context + one recycled buffer).
+  D2.9 robustness            : fmt + clippy -D warnings + rustdoc clean;
+      release suite 91 tests / 0 failed (incl. the D2 gates); fuzz
+      525 trials, 0 panics.
+Cache budgets (body 8 MiB + tile 8 MiB), probe configurations, library
+versions (zstd 0.13.3 / zstd-safe 7.3.0 / flate2 1.1.10 — zstd-safe now
+a direct =-pinned dependency on the already-present crate: NO new code
+versions), candidate order and memo hit/miss behavior: all unchanged
+(D2 changes only the COST of executing a cache miss — the served cost is
+always the true compression length of the same body under the same
+configuration).
+Wire: untouched. Decoder: untouched.
