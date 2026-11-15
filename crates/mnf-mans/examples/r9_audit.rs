@@ -215,6 +215,12 @@ struct Cfg {
     warm: Warm,
     refine: Refine,
     share: bool,
+    /// MNF16-S3: feature-conditioned G8 children splice onto the heavy
+    /// band (child = 20 + (k-16)*8 + feat_byte, context space 36). The
+    /// heavy parents idle; children are plain fresh models (no parent),
+    /// replicating the S2-5 static form exactly. Additive research mode:
+    /// S3-0 (any mode without this token) is untouched.
+    feat_ctx: bool,
 }
 
 /// R9-D refinement scope (the registered arms). Base backend-5 key =
@@ -248,6 +254,7 @@ fn parse_mode(mode: &str) -> Cfg {
         warm: Warm::None,
         refine: Refine::None,
         share: false,
+        feat_ctx: false,
     };
     for tok in mode.split('-') {
         if let Some(rest) = tok.strip_prefix("mix") {
@@ -285,6 +292,9 @@ fn parse_mode(mode: &str) -> Cfg {
                 }
                 _ => {}
             }
+        } else if tok == "g8child" {
+            c.feat_ctx = true;
+            c.nctx = 52;
         } else if tok == "share" {
             // ancestor liveness: the chain's parent model also gets the
             // symbol's update (child -> base heavy key -> [R5 bucket]).
@@ -335,6 +345,18 @@ fn key_of(cfg: Cfg, prev: u8, prev2: u8, prev3: u8) -> usize {
     }
 }
 
+/// MNF16-S3 g8child splice: under `feat_ctx`, the refine-selected heavy
+/// children (16..19) further condition on the per-symbol G8 feature
+/// bucket (frozen edges; ids 20..51, context space 52 — S2-5 spec).
+fn feat_key(cfg: Cfg, prev: u8, prev2: u8, prev3: u8, feat: u8) -> usize {
+    let k = key_of(cfg, prev, prev2, prev3);
+    if cfg.feat_ctx && (16..=19).contains(&k) {
+        20 + (k - 16) * 8 + feat as usize
+    } else {
+        k
+    }
+}
+
 fn main() {
     let cmd = std::env::args().nth(1).unwrap_or_else(|| "e".into());
     let mode = std::env::args().nth(2).unwrap_or_else(|| {
@@ -382,6 +404,11 @@ fn main() {
             models[18].parent = 15;
             models[19].parent = 15;
         }
+        if cfg.feat_ctx && cfg.nctx >= 52 {
+            for m in models.iter_mut().skip(20).take(32) {
+                m.parent = 0xFF;
+            }
+        }
     };
     // R9-D `share`: also step the ancestor chain's model with the same
     // symbol (child -> its parent; one chain level). The ancestor then
@@ -396,10 +423,35 @@ fn main() {
         }
     };
 
+    // MNF16-S3 g8child: 'p' decode under feat_ctx consumes the same
+    // feature-byte array (n bytes) after the payload.
+    let feats_for_p: Vec<u8> = if cmd == "p" && cfg.feat_ctx {
+        let f = body[body.len().saturating_sub(n)..].to_vec();
+        if f.len() != n {
+            eprintln!("ERR feat bytes (p) {} != n {}", f.len(), n);
+            std::process::exit(2);
+        }
+        f
+    } else {
+        vec![
+            0u8;
+            if cmd == "p" {
+                u32::from_le_bytes(body[..4].try_into().unwrap_or([0; 4])) as usize
+            } else {
+                0
+            }
+        ]
+    };
     if cmd == "p" {
         // payload decode: full tree + seeding parity with the encoder
+        let pay_end = if cfg.feat_ctx {
+            body.len() - n
+        } else {
+            body.len()
+        };
+        let paybody = &body[..pay_end];
         let mut words = Vec::new();
-        let (chunks, _) = body[4..].as_chunks::<4>();
+        let (chunks, _) = paybody[4..].as_chunks::<4>();
         for chunk in chunks {
             words.push(u32::from_le_bytes(*chunk));
         }
@@ -423,8 +475,8 @@ fn main() {
         let mut prev2 = 0u8;
         let mut prev3 = 0u8;
         let mut back: Vec<u8> = Vec::with_capacity(stream_len);
-        for _ in 0..stream_len {
-            let k = key_of(cfg, prev, prev2, prev3);
+        for (i, _) in (0..stream_len).enumerate() {
+            let k = feat_key(cfg, prev, prev2, prev3, feats_for_p[i]);
             if cfg.warm == Warm::Init && dmodels[k].nlocal == 0 && dmodels[k].parent != 0xFF {
                 let p = dmodels[k].parent as usize;
                 dmodels[k].fast = dmodels[p].fast.clone();
@@ -462,6 +514,16 @@ fn main() {
     }
 
     let syms: Vec<u8> = body[..n].to_vec();
+    let feats: Vec<u8> = if cfg.feat_ctx {
+        let f = body[n..].to_vec();
+        if f.len() != n {
+            eprintln!("ERR feat bytes {} != n {}", f.len(), n);
+            std::process::exit(2);
+        }
+        f
+    } else {
+        vec![0u8; n]
+    };
     let mut models: Vec<Dual> = (0..cfg.nctx)
         .map(|_| Dual::new(cfg.cap_f, cfg.cap_s, cfg.lr, cfg.inc))
         .collect();
@@ -471,8 +533,8 @@ fn main() {
     let mut prev = 0u8;
     let mut prev2 = 0u8;
     let mut prev3 = 0u8;
-    for &b in &syms {
-        let k = key_of(cfg, prev, prev2, prev3);
+    for (i, &b) in syms.iter().enumerate() {
+        let k = feat_key(cfg, prev, prev2, prev3, feats[i]);
         // C1 Init seeding BEFORE the model build (the decode side seeds
         // before its build; an encode-after-seed order made the first
         // symbol of a fresh context use different models and the
@@ -530,8 +592,8 @@ fn main() {
     let mut prev = 0u8;
     let mut prev2 = 0u8;
     let mut prev3 = 0u8;
-    for _ in 0..n {
-        let k = key_of(cfg, prev, prev2, prev3);
+    for (i, _) in (0..n).enumerate() {
+        let k = feat_key(cfg, prev, prev2, prev3, feats[i]);
         if cfg.warm == Warm::Init && dmodels[k].nlocal == 0 && dmodels[k].parent != 0xFF {
             let p = dmodels[k].parent as usize;
             dmodels[k].fast = dmodels[p].fast.clone();

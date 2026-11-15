@@ -172,6 +172,22 @@ negative recorded); joint double-fragmentation negative; shuffled
 control negative. G8 advances to the coder-level prequential arm; no
 wire changes, no new backends, production anchors untouched.
 
+### MNF16-S1 Stage 3 — coder-level adaptive experiment on G8 (2026-11-15, not a release)
+
+Additive r9_audit `g8child` ([crates/mnf-mans/examples/r9_audit.rs]
+(crates/mnf-mans/examples/r9_audit.rs), harness
+[scripts/mnf16_s3_coder.py](scripts/mnf16_s3_coder.py), record
+[docs/mnf16-s3-record.md](docs/mnf16-s3-record.md)) with the frozen S2-5
+spec (frozen edges; children 20+(k-16)*8+g; fresh children; shipped
+updates): corpus gain **+5,475 B** model cost across 22 mix-payload
+files (21/22 positive; shuffled negative everywhere; entropy-wire tracks
+the model gain); Hubble holdout single shot **+14,355 B** (~1.0%) with
+the refine-package/children accounting decomposition showing
+**+15,788 B children-specific** (plain prev3-band refinement regresses
+−1,433 B alone on Hubble). Feature causality proof + adaptive parity +
+per-child accounting recorded. S4/S5 conditional; no wire changes, no
+new backend identifiers; the 810,816-byte anchor stands.
+
 ## v1.16.0 — Encoder performance release (P1: same compression, same wire, faster encoding; 2026-11-14)
 
 Same compressed output, same wire format, same decoding compatibility —

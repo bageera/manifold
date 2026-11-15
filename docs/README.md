@@ -292,6 +292,14 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   production C6, heavy-band split positive on every backend-6 file,
   disagreement prequential-NEGATIVE = already captured, shuffled control
   negative); G8 advances to the coder-level arm; no wire changes.
+- [mnf16-s3-record.md](mnf16-s3-record.md) — MNF16-S3 coder-level
+  adaptive experiment (additive r9_audit `g8child`; frozen spec before
+  the holdout): corpus +5,475 B prequential across 22 mix files (21/22
+  gain, shuffled control negative everywhere), Hubble holdout single
+  shot +14,355 B with the accounting decomposition separating the G8
+  children (+15,788 B children-specific) from the refine package
+  (−1,433 B alone); feature-causality proof, adaptive parity, per-child
+  accounting recorded; S4/S5 conditional, no backend, anchors untouched.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).
