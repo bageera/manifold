@@ -258,6 +258,13 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   481.1 s = −57.3% cumulative vs the pre-P1 baseline (2.34×), Balanced
   56.38 s (−65.7%), RSS 96.2 MB; construction share 31% → P1-D's probe
   surface quantified (mnf15-p1c-gate.log).
+- [mnf15-p1d-record.md](mnf15-p1d-record.md) — P1-D D1 exact probe memo
+  SHIPPED: memcmp-decided (config, body) identity + the tile-granularity
+  laws-lattice memo (pure in tile bytes/planar/proxy — ties verbatim);
+  corpus + hubble byte-identical; Maximum wall 428.3 s = −62.0%
+  cumulative (2.63×), Balanced 39.87 s (−76.0% cumulative, 4.16×);
+  executions −64.2% on screenshot; RSS 107.9 MB = the 16 MiB budget's
+  price with the 40 MB D0-ceiling knob documented (mnf15-p1d-gate.log).
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).

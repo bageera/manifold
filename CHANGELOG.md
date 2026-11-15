@@ -64,6 +64,26 @@ construction share now 31% (was 64%) — the residual surface is the 16
 genuine sweeps and the coding side (P1-D quantified the probe: zlib
 bodies probe an actual zlib compress; zstd bodies probe level 3).
 
+## Research — MNF15-P1-D D1: exact probe-result memoization shipped, corpus byte-identical, max wall -62.0% cumulative (2026-11-14, not a release)
+
+D1 lands two exact memo layers with one contract — identity is
+(probe configuration, full input bytes) decided by **memcmp**, the hash
+only locates the bucket ([docs/mnf15-p1d-record.md](docs/mnf15-p1d-record.md)):
+D1a memoizes every sweep probe by body (8 MiB budget), D1b memoizes the
+laws+flat lattice outcome at tile granularity (8 MiB) — the segment is
+pure in (tile bytes, planar, probe config), kind- and position-free
+(the P1-C argument again), so one ~1.7 KB entry skips ~103 probes for
+every sharing sweep and its winner re-enters the original strict-less
+order (ties verbatim). Gates: the committed 200-candidate manifest
+reproduced byte-exactly; 30/30 max + 30/30 balanced digests identical,
+810,816 = the anchor; hubble byte-identical; fuzz 525/0; forced-collision
+/ θ-separation / budget-exhaustion unit gates green. Measured: Maximum
+corpus wall **428.3 s (−11.0% vs P1-C; cumulative −62.0%, 2.63×)**,
+Balanced **39.87 s (−29.3%; cumulative −76.0%, 4.16×)**, compressor
+executions −64.2% on the screenshot fixture, RSS peak 107.9 MB (+11.7 =
+the conservative 16 MiB budget; the D0 9.82× ceiling needs ~40 MB and
+stays a documented knob). Search space untouched.
+
 ## v1.15.0 — Backend 6: the R9 warm/refined mix coder joins the pick (MNF13-R9-E promoted; 2026-11-04)
 
 The R9-C/D composition ships as **backend id 6** (backends 4/5's decode

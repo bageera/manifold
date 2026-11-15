@@ -1,0 +1,67 @@
+MNF15-P1-D D1 gate log (2026-11-14) — exact probe-result memoization
+
+D1 mechanism (two exact layers, same contract):
+  D1a body memo : (probe configuration, FULL body bytes) -> compressed
+    length. Identity decided by memcmp on the full body; the FNV-1a 64
+    hash only locates the bucket. Per-pick lifetime; body-byte budget 8
+    MiB (48 B/entry conservative charge); exhaustion falls back to the
+    ordinary (uncached) probe — correct by construction.
+  D1b tile memo : the laws+flat segment (modes 6|7|8 lattice) is a PURE
+    function of (tile.data, planar, probe configuration) — no predictor
+    residual (it consumes tile.data, not the med/med_pred body), no tile
+    position, KIND-independent (the four predictor sweeps share every
+    key) — so one ~1.7 KB entry replaces ~103 stored probe bodies
+    (~84 KB at body budget) per sharing sweep. Same memcmp/budget
+    contract; 8 MiB tile budget.
+
+D1 gate tests (all green, src/mnf6.rs tests::p1d_d1_gates):
+  p1d_forced_collision        : a collision-shaped multi-entry bucket
+    planted with a NON-matching earlier entry — the memcmp skips it and
+    resolves b to its own cost; a correctly misses, stores, hits.
+  p1d_same_body_different_theta: the same body under Zlib-vs-Zstd3 probe
+    configurations stays two identities (2 misses, 2 hits, no aliasing).
+  p1d_budget_exhaustion       : budget 600 B — exactly 2 entries stored,
+    the other 5 probes run uncached, EVERY cost equals the true
+    compression length, `charged` accounts 2x248 exactly.
+  Release suite: 91 tests / 0 failed (65 lib incl. the 3 D1 gates);
+    fmt + clippy -D warnings + rustdoc clean.
+
+Exactness gates:
+  C1  200-candidate identity manifest reproduced BYTE-EXACTLY (278.9 s;
+      cached pick vs the committed pre-both-refactors digests).
+  C2  corpus: 30/30 Maximum + 30/30 Balanced digests identical, total
+      810,816 = the anchor (docs/mnf15-p1b-gate.log rows, rerun).
+  C3  fuzz: 525 trials, 0 panics, 1 accepted mutation = recorded benign.
+  C4  hubble (lossless wire round trip): BYTE-IDENTICAL (1,452,400 B,
+      sha 27f7d222...), 383.2 s wall.
+
+Performance (matched environment, idle machine, same harness):
+  Maximum corpus wall (B5): 481.1 (P1-C) -> 428.3 s = -11.0%
+    cumulative 1,127.9 -> 428.3 = -62.0% (2.63x).
+  Balanced corpus wall: 56.38 (P1-C) -> 39.87 s = -29.3%
+    cumulative 165.92 -> 39.87 = -76.0% (4.16x).
+  Census telemetry (p1d_probe_census, one representative run):
+    screenshot: compressor executions 1,891,392 -> 676,570 (-64.2%);
+      body hits 410,070; tile hits 7,592/8,000 law-segment runs
+      (408 distinct tiles); wall 83.9 -> 73.0 s (-13.0%).
+    gradient: executions 564,192 -> 398,276 (-29.3%); tile hits 1,200 =
+      ALL cross-kind sharing (1,200 distinct keys x 2 sharing sweeps,
+      tile_misses 0); wall 31.0 -> 30.1 s.
+    autumn: executions 139,648 -> 117,283 (-28.5%); wall 10.1 -> 9.2 s.
+  RSS (B6): corpus peak 107.9 MB vs the 96.2 P1-C vintage (+11.7 MB = the
+    16 MiB combined budget, conservatively charged 8+8); balanced peak
+    106.3 MB. Hubble wall 383.2 s vs 376.9 (+1.7%, within cold-cache run
+    noise — recorded, not explained away).
+
+Budget-exhaustion telemetry (the honest ceiling report):
+  The D0 aggregate ceiling (9.82x compressor-call reduction) assumes the
+  FULL distinct-body sets stay cached: ~55k bodies on screenshot alone
+  (~36-40 MB body-mem) — a knob Jon reserved, not a law. Within the
+  16 MiB budget the body memo reaches D0's screenshot mass only through
+  the tile layer; the residual executing mass is atlas-derived bodies
+  (~560k of 676k executions on screenshot) whose full coverage needs the
+  larger budget. `exhausted` counters in the census quantify the gap; the
+  budget is a constant, trivially tunable if Jon rules +RSS acceptable.
+
+Wire: untouched. Decoder: untouched. Candidates/ranks/ties: untouched
+  (the memo returns the true cost of the same mathematical input).

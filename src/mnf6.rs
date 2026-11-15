@@ -75,6 +75,243 @@ pub fn proxy_cost(coder: &Coder, buf: &[u8]) -> u64 {
     }
 }
 
+/// The PROBE configurations D1 memoizes: zlib's own, and the zstd-3
+/// stand-in every `Coder::Zstd(_)` level ranks candidates with (the
+/// shipped 19-level container never probes; it compresses once).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ProbeKind {
+    Zlib,
+    Zstd3,
+}
+
+impl ProbeKind {
+    pub(crate) fn from_coder(coder: &Coder) -> Self {
+        match coder {
+            Coder::Zlib => ProbeKind::Zlib,
+            Coder::Zstd(_) => ProbeKind::Zstd3,
+        }
+    }
+
+    fn discriminant(self) -> u64 {
+        match self {
+            ProbeKind::Zlib => 0x5a_4c_49_42,     // "ZLIB"-ish constant
+            ProbeKind::Zstd3 => 0x5a_53_54_44_33, // "ZSTD3"
+        }
+    }
+}
+
+/// D1: exact memo for the sweep's compression-cost probes.
+///
+/// Identity = (probe configuration, FULL input bytes): the u64 hash only
+/// picks a bucket; a hit is decided by memcmp against the stored body —
+/// collisions and lookalike bodies can never alias a wrong cost. The
+/// cache is per pick (`encode_mnf8` owns one), single-threaded, and
+/// bounded by an explicit body-byte budget with conservative per-entry
+/// accounting; when the budget is exhausted new bodies stop being stored
+/// and their probes run uncached (correct, just slower) — the search
+/// space, tie-breaking and output are unaffected either way because the
+/// returned cost is ALWAYS the true compression length of that body
+/// under that configuration.
+pub(crate) struct ProbeCache {
+    budget: usize,
+    used: std::cell::Cell<usize>,
+    map: std::cell::RefCell<ProbeMap>,
+    tile_map: std::cell::RefCell<TileMap>,
+    tile_used: std::cell::Cell<usize>,
+    pub(crate) tile_hits: std::cell::Cell<u64>,
+    pub(crate) tile_misses: std::cell::Cell<u64>,
+    pub(crate) tile_stored: std::cell::Cell<u64>,
+    pub(crate) tile_exhausted: std::cell::Cell<u64>,
+    pub(crate) hits: std::cell::Cell<u64>,
+    pub(crate) misses: std::cell::Cell<u64>,
+    pub(crate) stored: std::cell::Cell<u64>,
+    pub(crate) exhausted_bodies: std::cell::Cell<u64>,
+}
+
+/// D1 cache map: hash-keyed buckets of exact (body, cost) pairs.
+type ProbeMap = std::collections::HashMap<u64, Vec<(Box<[u8]>, u32)>>;
+
+/// D1b tile-memo map: (tile bytes) -> the LAWS+FLAT segment outcome
+/// (best complete-record cost, mode 6|7|8, wire body). The segment is a
+/// pure function of (tile bytes, planar, probe configuration) — no
+/// predictor residual, no tile position — so one entry serves every
+/// sweep that shares those three, and one hit skips the whole ~103-probe
+/// quantized-lattice search.
+type TileMap = std::collections::HashMap<u64, Vec<(Box<[u8]>, (u64, u8, Box<[u8]>))>>;
+
+/// D1 gate readout: per-pick cache behavior (the D1 acceptance numbers).
+/// Only the gate tests read these fields; the production pick drops them.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) struct ProbeMetrics {
+    pub(crate) hits: u64,
+    pub(crate) misses: u64,
+    pub(crate) stored: u64,
+    pub(crate) exhausted_bodies: u64,
+    pub(crate) charged_bytes: usize,
+    pub(crate) tile_hits: u64,
+    pub(crate) tile_misses: u64,
+    pub(crate) tile_stored: u64,
+    pub(crate) tile_exhausted: u64,
+}
+
+/// Conservative per-entry overhead charged against the budget: the u64
+/// key's hash-table share, the (Box<[u8]>, u32) pair's slot, allocator
+/// rounding on the Vec/bucket and the small-Vec growth headroom.
+pub(crate) const PROBE_CACHE_ENTRY_OVERHEAD: usize = 48;
+
+/// Per-pick body-byte budget. The census (D0) measured ~55k distinct
+/// bodies on the screenshot fixture (~36 body MB); 16 MiB covers the hot
+/// prefix of that set while keeping the peak-RSS regression small. The
+/// gate test p1d_metrics reports budget exhaustion so a tuned value has
+/// its own evidence.
+pub(crate) const PROBE_CACHE_BUDGET_BYTES: usize = 8 * 1024 * 1024;
+
+/// Tile-memo budget (D1b): the laws+flat outcome entries. One entry is
+/// ~1.7 KB (tile bytes + wire body) and replaces ~103 stored probe bodies
+/// (~84 KB at the body budget) for every sweep sharing the key, so 8 MiB
+/// reaches deep into the hot-tile sets the body budget cannot.
+pub(crate) const TILE_MEMO_BUDGET_BYTES: usize = 8 * 1024 * 1024;
+
+impl ProbeCache {
+    pub(crate) fn new(budget: usize) -> Self {
+        Self {
+            budget,
+            used: std::cell::Cell::new(0),
+            map: std::cell::RefCell::new(std::collections::HashMap::new()),
+            tile_map: std::cell::RefCell::new(std::collections::HashMap::new()),
+            tile_used: std::cell::Cell::new(0),
+            tile_hits: std::cell::Cell::new(0),
+            tile_misses: std::cell::Cell::new(0),
+            tile_stored: std::cell::Cell::new(0),
+            tile_exhausted: std::cell::Cell::new(0),
+            hits: std::cell::Cell::new(0),
+            misses: std::cell::Cell::new(0),
+            stored: std::cell::Cell::new(0),
+            exhausted_bodies: std::cell::Cell::new(0),
+        }
+    }
+
+    /// A cost-only cache: correct on any budget (0 = pure passthrough).
+    /// Test paths (the byte-identity instrument) run uncached so the
+    /// committed manifest keeps comparing against probe-free digests.
+    #[cfg(test)]
+    pub(crate) fn disabled() -> Self {
+        Self::new(0)
+    }
+
+    /// Bytes charged to the budget (body + per-entry overhead).
+    pub(crate) fn charged(&self) -> usize {
+        self.used.get()
+    }
+
+    /// The one entry point the sweep calls. `probe_cost` must be the raw
+    /// uncompressed-identity cost for `kind` (zlib or zstd-3); it runs on
+    /// misses and on budget-exhausted bodies. NEVER a heuristic.
+    pub(crate) fn probe(
+        &self,
+        kind: ProbeKind,
+        body: &[u8],
+        probe_cost: impl FnOnce(&[u8]) -> u32,
+    ) -> u32 {
+        let key = kind.discriminant() ^ {
+            let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+            for &b in body {
+                h ^= u64::from(b);
+                h = h.wrapping_mul(0x0100_0000_01b3);
+            }
+            h
+        };
+        if let Some(bucket) = self.map.borrow().get(&key) {
+            for (seen, cost) in bucket {
+                // D1 contract: the memcmp DECIDES identity; the hash
+                // only short-lists candidates.
+                if seen.as_ref() == body {
+                    self.hits.set(self.hits.get() + 1);
+                    return *cost;
+                }
+            }
+        }
+        let cost = probe_cost(body);
+        self.misses.set(self.misses.get() + 1);
+        // census keeps counting EXECUTED compressions (misses only)
+        #[cfg(test)]
+        {
+            let mut h: u64 = kind.discriminant();
+            for &b in body {
+                h ^= u64::from(b);
+                h = h.wrapping_mul(0x0100_0000_01b3);
+            }
+            crate::mnf6::mnf6_p1d_census::note_miss(h);
+        }
+        let charge = body.len() + PROBE_CACHE_ENTRY_OVERHEAD;
+        if self.used.get() + charge > self.budget {
+            self.exhausted_bodies.set(self.exhausted_bodies.get() + 1);
+            return cost;
+        }
+        self.used.set(self.used.get() + charge);
+        self.map
+            .borrow_mut()
+            .entry(key)
+            .or_default()
+            .push((body.into(), cost));
+        self.stored.set(self.stored.get() + 1);
+        cost
+    }
+    /// D1b: the laws+flat segment outcome for a tile, if memoized.
+    /// Identity decided by memcmp on the FULL tile bytes; the hash only
+    /// locates the bucket (same discipline as `probe`).
+    pub(crate) fn tile_outcome(&self, key: u64, tile_data: &[u8]) -> Option<(u64, u8, Box<[u8]>)> {
+        let bucket = self.tile_map.borrow().get(&key)?.clone();
+        for (seen, outcome) in bucket {
+            if seen.as_ref() == tile_data {
+                self.tile_hits.set(self.tile_hits.get() + 1);
+                return Some(outcome);
+            }
+        }
+        self.tile_misses.set(self.tile_misses.get() + 1);
+        None
+    }
+
+    /// D1b: store a computed outcome under the tile's exact identity.
+    /// Budget-exhausted tiles simply stay uncached (recomputed every
+    /// time, correct either way).
+    pub(crate) fn tile_store(&self, key: u64, tile_data: &[u8], outcome: &(u64, u8, &[u8])) {
+        let charge = tile_data.len() + outcome.2.len() + 64;
+        if self.tile_used.get() + charge > TILE_MEMO_BUDGET_BYTES {
+            self.tile_exhausted.set(self.tile_exhausted.get() + 1);
+            return;
+        }
+        self.tile_used.set(self.tile_used.get() + charge);
+        self.tile_map
+            .borrow_mut()
+            .entry(key)
+            .or_default()
+            .push((tile_data.into(), (outcome.0, outcome.1, outcome.2.into())));
+        self.tile_stored.set(self.tile_stored.get() + 1);
+    }
+
+    /// The laws+flat memo bucket key: (probe configuration, planar,
+    /// exact tile bytes). Position-free and predictor-free by the same
+    /// argument P1-C used for the REF field.
+    pub(crate) fn tile_key(kind: ProbeKind, planar: bool, tile_data: &[u8]) -> u64 {
+        let mut h: u64 = kind.discriminant() ^ u64::from(planar as u64 as usize as u8);
+        for &b in tile_data {
+            h ^= u64::from(b);
+            h = h.wrapping_mul(0x0100_0000_01b3);
+        }
+        h ^ (tile_data.len() as u64).wrapping_mul(0x517c_c1b7_2722_0a95)
+    }
+}
+
+/// The raw probe cost for a configuration (the exact computation D1
+/// memoizes): zlib's own compression length, or the zstd-3 stand-in.
+pub(crate) fn probe_cost_raw(kind: ProbeKind, buf: &[u8]) -> u32 {
+    match kind {
+        ProbeKind::Zlib => compress_stream(&Coder::Zlib, buf).len() as u32,
+        ProbeKind::Zstd3 => compress_stream(&Coder::Zstd(3), buf).len() as u32,
+    }
+}
+
 /// P1-D D0 census bookkeeping. FNV-1a 64 over the body bytes (collision
 /// odds ~n^2/2^65 — negligible at probe counts ~1e6; noted in the record).
 #[cfg(test)]
@@ -92,7 +329,6 @@ pub(crate) mod mnf6_p1d_census {
     }
 
     pub(crate) fn on_probe(coder: &Coder, buf: &[u8]) {
-        PROBES.fetch_add(1, Ordering::Relaxed);
         let mut h: u64 = match coder {
             Coder::Zlib => 0x1,
             Coder::Zstd(level) => 0x2 ^ (u64::from(*level as i64 as u32)) << 1,
@@ -101,12 +337,20 @@ pub(crate) mod mnf6_p1d_census {
             h ^= u64::from(b);
             h = h.wrapping_mul(0x0100_0000_01b3);
         }
+        note_miss(h);
+    }
+
+    /// Executed-compression accounting for the D1 cache: only misses
+    /// (real compressor runs) count as probes; hits are free and recorded
+    /// by ProbeCache's own counters.
+    pub(crate) fn note_miss(distinct_hint: u64) {
+        PROBES.fetch_add(1, Ordering::Relaxed);
         // lazy init: tests that never reset() still count safely
         DISTINCT
             .lock()
             .unwrap()
             .get_or_insert_with(Default::default)
-            .insert(h);
+            .insert(distinct_hint);
     }
 
     /// (probes, distinct)
@@ -1245,5 +1489,92 @@ mod tests {
         assert_eq!((dims.width, dims.height), (w, h * 8));
         assert_eq!(out, stacked, "MNF7 D8 atlas roundtrip");
         // MNF7 decodes exact; also cross-check the file through the standalone CLI path in differential tests
+    }
+
+    // --- MNF15-P1-D D1 gates: the memo's exactness contract ----------------
+
+    #[cfg(test)]
+    mod p1d_d1_gates {
+        use super::*;
+
+        /// Forced hash-collision handling (#D1 gate): two DIFFERENT bodies
+        /// planted under the SAME bucket key must each resolve to their OWN
+        /// cost — the memcmp decides, the hash only short-lists.
+        #[test]
+        fn p1d_forced_collision() {
+            let cache = ProbeCache::new(1 << 20);
+            let kind = ProbeKind::Zstd3;
+            let a = vec![0u8; 96];
+            let b = vec![7u8; 96];
+            let cost_a = probe_cost_raw(kind, &a);
+            let cost_b = probe_cost_raw(kind, &b);
+            // Plant BOTH bodies under b's REAL probe key: a
+            // collision-shaped multi-entry bucket with a NON-matching
+            // earlier entry. b can only resolve by the memcmp deciding;
+            // a must not steal b's hit.
+            let key_b = kind.discriminant() ^ {
+                let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+                for &x in &b {
+                    h ^= u64::from(x);
+                    h = h.wrapping_mul(0x0100_0000_01b3);
+                }
+                h
+            };
+            cache.map.borrow_mut().insert(
+                key_b,
+                vec![(a.clone().into(), cost_a), (b.clone().into(), cost_b)],
+            );
+            assert_eq!(cache.probe(kind, &b, |x| probe_cost_raw(kind, x)), cost_b);
+            assert_eq!(cache.hits.get(), 1, "b's hit skipped a via memcmp");
+            assert_eq!(cache.misses.get(), 0);
+            // a is not present under its own key: probe(a) misses, runs
+            // the real compressor, stores, then hits on the repeat.
+            assert_eq!(cache.probe(kind, &a, |x| probe_cost_raw(kind, x)), cost_a);
+            assert_eq!(cache.probe(kind, &a, |x| probe_cost_raw(kind, x)), cost_a);
+            assert_eq!(cache.hits.get(), 2);
+            assert_eq!(cache.misses.get(), 1);
+        }
+
+        /// Same body, different probe configuration (#D1 gate): distinct
+        /// identity — both cached separately, never cross-aliased.
+        #[test]
+        fn p1d_same_body_different_theta() {
+            let cache = ProbeCache::new(1 << 20);
+            let body = vec![13u8; 300];
+            let z = probe_cost_raw(ProbeKind::Zstd3, &body);
+            let q = probe_cost_raw(ProbeKind::Zlib, &body);
+            let gz = ProbeKind::Zstd3;
+            let gq = ProbeKind::Zlib;
+            assert_eq!(cache.probe(gz, &body, |x| probe_cost_raw(gz, x)), z);
+            assert_eq!(cache.probe(gz, &body, |x| probe_cost_raw(gz, x)), z);
+            assert_eq!(cache.probe(gq, &body, |x| probe_cost_raw(gq, x)), q);
+            assert_eq!(cache.probe(gq, &body, |x| probe_cost_raw(gq, x)), q);
+            assert_eq!(
+                cache.misses.get(),
+                2,
+                "one real compression per configuration"
+            );
+            assert_eq!(cache.hits.get(), 2);
+            assert_eq!(cache.stored.get(), 2);
+        }
+
+        /// Budget exhaustion (#D1 gate): storage stops, correctness never
+        /// does — every post-exhaustion probe still returns the true cost.
+        #[test]
+        fn p1d_budget_exhaustion() {
+            let cache = ProbeCache::new(600); // room for ~1 small body
+            let g = ProbeKind::Zlib;
+            for n in 1..8u32 {
+                let body = vec![n as u8; 200];
+                let want = probe_cost_raw(g, &body);
+                let got = cache.probe(g, &body, |x| probe_cost_raw(g, x));
+                assert_eq!(got, want, "budget exhaustion must never change a cost");
+            }
+            // budget 600, charge 248/body(200 B)+overhead → exactly 2 fit
+            assert_eq!(cache.stored.get(), 2);
+            assert_eq!(cache.charged(), 2 * 248);
+            assert_eq!(cache.exhausted_bodies.get(), 5);
+            assert_eq!(cache.misses.get(), 7);
+        }
     }
 }

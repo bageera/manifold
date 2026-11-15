@@ -50,7 +50,7 @@ use crate::codec::{apply_transform, div_ceil, split_tiles, tile_sig, Atlas, Dims
 use crate::error::{Error, Result};
 use crate::mnf6::{
     compress_stream, decode_record_walk, med_predict, modcolor_forward_iter, pack9, planar_pack,
-    proxy_cost, ycocg_forward, Coder, MnF6Stats, FLAG_PLANAR,
+    ycocg_forward, Coder, MnF6Stats, FLAG_PLANAR,
 };
 use crate::tokens;
 
@@ -259,6 +259,19 @@ pub fn encode_mnf8(
     use_geom: bool,
     profile: Profile,
 ) -> (Vec<u8>, MnF6Stats, u32) {
+    encode_mnf8_metrics(pixels, dims, use_geom, profile).0
+}
+
+/// The pick with its per-pick D1 probe-cache metrics (hits/misses/
+/// stored/exhausted/charged bytes). Production callers use
+/// `encode_mnf8`; the metrics form exists so the D1 gate can report
+/// measured cache behavior without exposing library state.
+pub(crate) fn encode_mnf8_metrics(
+    pixels: &[u8],
+    dims: Dims,
+    use_geom: bool,
+    profile: Profile,
+) -> ((Vec<u8>, MnF6Stats, u32), crate::mnf6::ProbeMetrics) {
     let candidates: Vec<(u32, Coder)> = match profile {
         Profile::Balanced => vec![(BACKEND_ZSTD19, Coder::Zstd(19))],
         Profile::Maximum => backend_candidates(),
@@ -303,6 +316,8 @@ pub fn encode_mnf8(
             None => classes.push((key, vec![(bidx as u32, *backend)])),
         }
     }
+    // MNF15-P1-D D1: one exact probe memo per pick (docs/mnf15-p1d-record.md).
+    let cache = crate::mnf6::ProbeCache::new(crate::mnf6::PROBE_CACHE_BUDGET_BYTES);
     for (kidx, kind) in pred_arms.iter().enumerate() {
         for (pidx, planar) in [false, true].iter().enumerate() {
             let med = *kind == PredKind::Med;
@@ -318,9 +333,10 @@ pub fn encode_mnf8(
                 // cheap O(len) terminal relabel (ref 0 = the raw stream
                 // untouched, exactly this builder's output).
                 let arm_base = (kidx * 8 + pidx * 4) as u32;
-                let (raw0, st) =
-                    build_record_stream(pixels, dims, true, use_geom, *planar, med, *kind, &coder)
-                        .expect("encoding an in-memory image cannot fail");
+                let (raw0, st) = build_record_stream(
+                    pixels, dims, true, use_geom, *planar, med, *kind, &coder, &cache,
+                )
+                .expect("encoding an in-memory image cannot fail");
                 // ADR-008 (v1.12): the reference-channel field 0..3 — none,
                 // G (v1.11's bit-6 semantic), R, B — per-file at complete
                 // serialized cost (the C2 gate's table).
@@ -409,7 +425,20 @@ pub fn encode_mnf8(
     }
     let (_size, _rank, file, flags, mut st, backend) = best.expect("at least one candidate");
     st.chosen_flags = flags;
-    (file, st, backend)
+    (
+        (file, st, backend),
+        crate::mnf6::ProbeMetrics {
+            hits: cache.hits.get(),
+            misses: cache.misses.get(),
+            stored: cache.stored.get(),
+            exhausted_bodies: cache.exhausted_bodies.get(),
+            charged_bytes: cache.charged(),
+            tile_hits: cache.tile_hits.get(),
+            tile_misses: cache.tile_misses.get(),
+            tile_stored: cache.tile_stored.get(),
+            tile_exhausted: cache.tile_exhausted.get(),
+        },
+    )
 }
 
 /// The image-wide literal-body predictor (ADR-004): which causal rule
@@ -1112,6 +1141,7 @@ fn build_record_stream(
     med: bool,
     kind: PredKind,
     coder: &Coder,
+    cache: &crate::mnf6::ProbeCache,
 ) -> Result<(Vec<u8>, MnF6Stats)> {
     // ADR-004: Plane/Left are PURE prediction arms (the measured gate's
     // winning form) — no atlas candidates, no YCoCg; mode-0 bodies only.
@@ -1136,6 +1166,17 @@ fn build_record_stream(
     let mut raw: Vec<u8> = Vec::with_capacity(tiles.len() * 774);
     let mut stats = MnF6Stats::default();
     let mut atlas = Atlas::new();
+    // MNF15-P1-D D1 (docs/mnf15-p1d-record.md): every candidate-body cost
+    // routes through the exact per-pick probe cache — (configuration,
+    // full body bytes) identity decided by memcmp; the hash only locates
+    // the bucket. Equal inputs are the same mathematical cost, so reuse
+    // can never change a selection.
+    let probe_kind = crate::mnf6::ProbeKind::from_coder(coder);
+    let probe = |b: &[u8]| {
+        u64::from(cache.probe(probe_kind, b, |b2| {
+            crate::mnf6::probe_cost_raw(probe_kind, b2)
+        }))
+    };
 
     for (idx, tile) in tiles.iter().enumerate() {
         let n = tile.nbytes();
@@ -1169,10 +1210,10 @@ fn build_record_stream(
         };
 
         let lit_body = pack(&lit_src);
+        let mut best_cost = 1 + probe(&lit_body);
         let mut choice_body = lit_body.clone();
         let mut choice_mode = 0u8;
         let mut choice_ref: Option<(u32, u8)> = None;
-        let mut best_cost = 1 + proxy_cost(coder, &lit_body);
 
         // shared literal candidates (both arms): YCoCg-R (mode 3).
         // ADR-004 pure arms (Plane/Left) skip YCoCg + atlas — measured pure.
@@ -1182,7 +1223,7 @@ fn build_record_stream(
             m3.extend_from_slice(&cy);
             m3.extend_from_slice(&pack9(&cco));
             m3.extend_from_slice(&pack9(&ccg));
-            let m3_cost = 1 + proxy_cost(coder, &m3);
+            let m3_cost = 1 + probe(&m3);
             if m3_cost < best_cost {
                 best_cost = m3_cost;
                 choice_body = m3;
@@ -1199,137 +1240,178 @@ fn build_record_stream(
         // residual). The law is a per-channel planar / bilinear fit to the
         // TILE's own pixels; discovery = bounded quantized-lattice sweep
         // (charge every candidate). Decoder NEVER reruns the search.
+        //
+        // MNF15-P1-D D1b: the law lattice + flat field are pure functions
+        // of (exact tile bytes, planar, probe configuration) — no
+        // predictor residual, no tile position, KIND-independent — so the
+        // whole segment's winner is memoized per tile and every sweep
+        // sharing (planar, proxy, tile bytes) skips the ~103-probe
+        // lattice outright. Same exactness contract as the body probes:
+        // memcmp decides identity, the hash only locates the bucket, the
+        // budget only decides what is stored, and the winner is the true
+        // argmin either way (the internal candidate order and strict-less
+        // ties are preserved verbatim, so the choice is bit-exact).
         if !pure_pred {
-            let (seed_p, seed_b) =
-                crate::laws::discovery_seeds(&tile.data, tile.width, tile.height);
-            // cost = the SHIPPED shape: [params][pack(resid)] — the pack
-            // is what the coder will actually compress under planar.
-            let pack = |r: &[u8]| -> Vec<u8> {
-                if planar {
-                    planar_pack(r)
-                } else {
-                    r.to_vec()
-                }
-            };
-            let law_cost =
-                |lb: usize, r: &[u8]| -> u64 { (1 + lb) as u64 + proxy_cost(coder, &pack(r)) };
-            let sweep = |base: &crate::laws::PlanarLaw| -> crate::laws::PlanarLaw {
-                let mut best = *base;
-                let mut best_cost = {
-                    let r = crate::laws::law_residuals(
-                        &tile.data,
-                        tile.width,
-                        tile.height,
-                        &|x, y, c| crate::laws::planar_pred(&best, x, y, c),
-                    );
-                    law_cost(crate::laws::PLANAR_LAW_BYTES, &r)
-                };
-                for db in [-2i8, -1, 0, 1, 2] {
-                    for dc in [-2i8, -1, 0, 1, 2] {
-                        for dt in [0i8, 1, 2, 3] {
-                            let mut law = *base;
-                            for ch in 0..3usize {
-                                law.coef[ch][1] = base.coef[ch][1].saturating_add(db);
-                                law.coef[ch][2] = base.coef[ch][2].saturating_add(dc);
-                                law.t[ch] =
-                                    (((base.t[ch] >> 3) as i8).saturating_add(dt).clamp(0, 31)
-                                        as u8)
-                                        << 3;
+            let tkey = crate::mnf6::ProbeCache::tile_key(probe_kind, planar, &tile.data);
+            let lf: Option<(u64, u8, Vec<u8>)> = match cache.tile_outcome(tkey, &tile.data) {
+                Some((c, m, b)) => Some((c, m, b.to_vec())),
+                None => {
+                    let laws_outcome = || -> (u64, u8, Vec<u8>) {
+                        let (seed_p, seed_b) =
+                            crate::laws::discovery_seeds(&tile.data, tile.width, tile.height);
+                        // cost = the SHIPPED shape: [params][pack(resid)] — the
+                        // pack is what the coder will actually compress under
+                        // planar.
+                        let law_cost =
+                            |lb: usize, r: &[u8]| -> u64 { (1 + lb) as u64 + probe(&pack(r)) };
+                        let sweep = |base: &crate::laws::PlanarLaw| -> crate::laws::PlanarLaw {
+                            let mut best = *base;
+                            let mut best_cost = {
+                                let r = crate::laws::law_residuals(
+                                    &tile.data,
+                                    tile.width,
+                                    tile.height,
+                                    &|x, y, c| crate::laws::planar_pred(&best, x, y, c),
+                                );
+                                law_cost(crate::laws::PLANAR_LAW_BYTES, &r)
+                            };
+                            for db in [-2i8, -1, 0, 1, 2] {
+                                for dc in [-2i8, -1, 0, 1, 2] {
+                                    for dt in [0i8, 1, 2, 3] {
+                                        let mut law = *base;
+                                        for ch in 0..3usize {
+                                            law.coef[ch][1] = base.coef[ch][1].saturating_add(db);
+                                            law.coef[ch][2] = base.coef[ch][2].saturating_add(dc);
+                                            law.t[ch] = (((base.t[ch] >> 3) as i8)
+                                                .saturating_add(dt)
+                                                .clamp(0, 31)
+                                                as u8)
+                                                << 3;
+                                        }
+                                        let r = crate::laws::law_residuals(
+                                            &tile.data,
+                                            tile.width,
+                                            tile.height,
+                                            &|x, y, c| crate::laws::planar_pred(&law, x, y, c),
+                                        );
+                                        let cost = law_cost(crate::laws::PLANAR_LAW_BYTES, &r);
+                                        if cost < best_cost {
+                                            best_cost = cost;
+                                            best = law;
+                                        }
+                                    }
+                                }
                             }
-                            let r = crate::laws::law_residuals(
+                            best
+                        };
+                        let mut best_lf = u64::MAX;
+                        let mut mode_lf = 0u8;
+                        let mut body_lf: Vec<u8> = Vec::new();
+                        let law_p = sweep(&seed_p);
+                        let r_p = crate::laws::law_residuals(
+                            &tile.data,
+                            tile.width,
+                            tile.height,
+                            &|x, y, c| crate::laws::planar_pred(&law_p, x, y, c),
+                        );
+                        let cost_p = law_cost(crate::laws::PLANAR_LAW_BYTES, &r_p);
+                        if cost_p < best_lf {
+                            best_lf = cost_p;
+                            mode_lf = 6;
+                            body_lf = {
+                                let mut b = crate::laws::planar_wire(&law_p);
+                                b.extend_from_slice(&pack(&r_p));
+                                b
+                            };
+                        }
+                        // bilinear law arm (mode 7): seed = the tile's corners;
+                        // a small global shift sweep (+-4, 0) charged
+                        for d in [0i32, 4, -4] {
+                            let mut law_b = seed_b;
+                            for cc in law_b.corners.iter_mut() {
+                                for v in cc.iter_mut() {
+                                    *v = (*v as i32 + d).clamp(0, 255) as u8;
+                                }
+                            }
+                            let r_b = crate::laws::law_residuals(
                                 &tile.data,
                                 tile.width,
                                 tile.height,
-                                &|x, y, c| crate::laws::planar_pred(&law, x, y, c),
+                                &|x, y, c| {
+                                    crate::laws::bilinear_pred(
+                                        &law_b,
+                                        x,
+                                        y,
+                                        tile.width,
+                                        tile.height,
+                                        c,
+                                    )
+                                },
                             );
-                            let cost = law_cost(crate::laws::PLANAR_LAW_BYTES, &r);
-                            if cost < best_cost {
-                                best_cost = cost;
-                                best = law;
+                            let cost_b = law_cost(crate::laws::BILINEAR_LAW_BYTES, &r_b);
+                            if cost_b < best_lf {
+                                best_lf = cost_b;
+                                mode_lf = 7;
+                                body_lf = {
+                                    let mut b = crate::laws::bilinear_wire(&law_b);
+                                    b.extend_from_slice(&pack(&r_b));
+                                    b
+                                };
                             }
                         }
-                    }
+                        // MNF14-ID2 flat-field arm (mode 8): per-tile constant
+                        // field (3 u8 params, channel-independent); seed =
+                        // per-channel median, charged at complete-record cost
+                        // like every law arm. The "prediction origin" candidate
+                        // for zero-run/sky content.
+                        {
+                            let mut med_rgb = [0u8; 3];
+                            for (ch, slot) in med_rgb.iter_mut().enumerate() {
+                                let mut col: Vec<u32> = (0..n)
+                                    .step_by(3)
+                                    .map(|k| u32::from(tile.data[k + ch]))
+                                    .collect();
+                                col.sort_unstable();
+                                let mid = col.len() / 2;
+                                let v = if col.len() % 2 == 1 {
+                                    col[mid]
+                                } else {
+                                    (col[mid - 1] + col[mid]).div_ceil(2)
+                                };
+                                *slot = v.min(255) as u8;
+                            }
+                            let r_c = crate::laws::law_residuals(
+                                &tile.data,
+                                tile.width,
+                                tile.height,
+                                &move |_, _, c| i64::from(med_rgb[c]),
+                            );
+                            let cost_c = law_cost(3, &r_c);
+                            if cost_c < best_lf {
+                                best_lf = cost_c;
+                                mode_lf = 8;
+                                body_lf = {
+                                    let mut b = med_rgb.to_vec();
+                                    b.extend_from_slice(&pack(&r_c));
+                                    b
+                                };
+                            }
+                        }
+                        (best_lf, mode_lf, body_lf)
+                    };
+                    let out = laws_outcome();
+                    cache.tile_store(tkey, &tile.data, &(out.0, out.1, &out.2));
+                    Some(out)
                 }
-                best
             };
-            let law_p = sweep(&seed_p);
-            let r_p =
-                crate::laws::law_residuals(&tile.data, tile.width, tile.height, &|x, y, c| {
-                    crate::laws::planar_pred(&law_p, x, y, c)
-                });
-            let cost_p = law_cost(crate::laws::PLANAR_LAW_BYTES, &r_p);
-            if cost_p < best_cost {
-                best_cost = cost_p;
-                choice_body = {
-                    let mut b = crate::laws::planar_wire(&law_p);
-                    b.extend_from_slice(&pack(&r_p));
-                    b
-                };
-                choice_mode = 6;
-                choice_ref = None;
-            }
-            // bilinear law arm (mode 7): seed = the tile's corners; a small
-            // global shift sweep (+-4, 0) charged
-            for d in [0i32, 4, -4] {
-                let mut law_b = seed_b;
-                for cc in law_b.corners.iter_mut() {
-                    for v in cc.iter_mut() {
-                        *v = (*v as i32 + d).clamp(0, 255) as u8;
-                    }
-                }
-                let r_b =
-                    crate::laws::law_residuals(&tile.data, tile.width, tile.height, &|x, y, c| {
-                        crate::laws::bilinear_pred(&law_b, x, y, tile.width, tile.height, c)
-                    });
-                let cost_b = law_cost(crate::laws::BILINEAR_LAW_BYTES, &r_b);
-                if cost_b < best_cost {
-                    best_cost = cost_b;
-                    choice_body = {
-                        let mut b = crate::laws::bilinear_wire(&law_b);
-                        b.extend_from_slice(&pack(&r_b));
-                        b
-                    };
-                    choice_mode = 7;
-                    choice_ref = None;
-                }
-            }
-
-            // MNF14-ID2 flat-field arm (mode 8): per-tile constant field
-            // (3 u8 params, channel-independent); seed = per-channel median,
-            // charged at complete-record cost like every law arm. The
-            // "prediction origin" candidate for zero-run/sky content.
-            {
-                let mut med_rgb = [0u8; 3];
-                for (ch, slot) in med_rgb.iter_mut().enumerate() {
-                    let mut col: Vec<u32> = (0..n)
-                        .step_by(3)
-                        .map(|k| u32::from(tile.data[k + ch]))
-                        .collect();
-                    col.sort_unstable();
-                    let mid = col.len() / 2;
-                    let v = if col.len() % 2 == 1 {
-                        col[mid]
-                    } else {
-                        (col[mid - 1] + col[mid]).div_ceil(2)
-                    };
-                    *slot = v.min(255) as u8;
-                }
-                let r_c = crate::laws::law_residuals(
-                    &tile.data,
-                    tile.width,
-                    tile.height,
-                    &move |_, _, c| i64::from(med_rgb[c]),
-                );
-                let cost_c = law_cost(3, &r_c);
-                if cost_c < best_cost {
-                    best_cost = cost_c;
-                    choice_body = {
-                        let mut b = med_rgb.to_vec();
-                        b.extend_from_slice(&pack(&r_c));
-                        b
-                    };
-                    choice_mode = 8;
-                    choice_ref = None;
+            // the laws/flat winner re-enters the ORIGINAL strict-less order:
+            // lit -> m3 -> laws, so ties keep the earlier candidate exactly
+            // as the sequential code did.
+            if let Some((cost_lf, mode_lf, body_lf)) = lf {
+                if cost_lf < best_cost {
+                    best_cost = cost_lf;
+                    choice_body = body_lf;
+                    choice_mode = mode_lf;
                 }
             }
         }
@@ -1364,7 +1446,7 @@ fn build_record_stream(
                     let body = pack(&r);
                     // metadata: mode byte + u32 idx + optional transform byte
                     let meta: u64 = if t == 0 { 5 } else { 6 };
-                    let cost = meta + proxy_cost(coder, &body);
+                    let cost = meta + probe(&body);
                     if cost < best_cost {
                         best_cost = cost;
                         choice_body = body;
@@ -1383,7 +1465,7 @@ fn build_record_stream(
                         r_c[i] = tile_t[i].wrapping_sub(base_t[i]);
                     }
                     let body_c = pack(&r_c);
-                    let cost_c = meta + proxy_cost(coder, &body_c);
+                    let cost_c = meta + probe(&body_c);
                     if cost_c < best_cost {
                         best_cost = cost_c;
                         choice_body = body_c;
@@ -1460,8 +1542,10 @@ fn encode_stream_coder(
     backend: u32,
     reference: u8,
 ) -> Result<(Vec<u8>, MnF6Stats)> {
-    let (raw, stats) =
-        build_record_stream(pixels, dims, use_atlas, use_geom, planar, med, kind, coder)?;
+    let cache = crate::mnf6::ProbeCache::disabled();
+    let (raw, stats) = build_record_stream(
+        pixels, dims, use_atlas, use_geom, planar, med, kind, coder, &cache,
+    )?;
     // P1-C: the REF field is a terminal relabel (ref 0 = untouched).
     let raw = if reference == 0 {
         raw
@@ -2939,12 +3023,22 @@ mod channel_diff {
             let (d, px) = load(name);
             crate::mnf6::mnf6_p1d_census::reset();
             let t0 = std::time::Instant::now();
-            let _ = encode_mnf8(&px, d, true, Profile::Maximum);
+            let ((_f, _s, _b), m) = encode_mnf8_metrics(&px, d, true, Profile::Maximum);
             let (probes, distinct) = crate::mnf6::mnf6_p1d_census::read();
             println!(
-                "P1D census {name}: probes={probes} distinct={distinct} \
-                 dup={:.1}% wall={:.1}s",
-                100.0 * (probes.saturating_sub(distinct)) as f64 / probes.max(1) as f64,
+                "P1D census {name}: compressors_executed={probes} distinct_hint={distinct} \
+                 cache_hits={} cache_misses={} stored={} exhausted={} charged={:.1}MiB \
+                 tile_hits={} tile_misses={} tile_stored={} tile_exhausted={} \
+                 wall={:.1}s",
+                m.hits,
+                m.misses,
+                m.stored,
+                m.exhausted_bodies,
+                m.charged_bytes as f64 / (1024.0 * 1024.0),
+                m.tile_hits,
+                m.tile_misses,
+                m.tile_stored,
+                m.tile_exhausted,
                 t0.elapsed().as_secs_f32()
             );
         }
@@ -2980,6 +3074,7 @@ mod channel_diff {
                         kind == PredKind::Med,
                         kind,
                         coder,
+                        &crate::mnf6::ProbeCache::disabled(),
                     )
                     .expect("in-memory build");
                     build_count += 1;
