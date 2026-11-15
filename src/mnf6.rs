@@ -209,7 +209,7 @@ impl ProbeCache {
     /// The one entry point the sweep calls. `probe_cost` must be the raw
     /// uncompressed-identity cost for `kind` (zlib or zstd-3); it runs on
     /// misses and on budget-exhausted bodies. NEVER a heuristic.
-    pub(crate) fn probe(&self, kind: ProbeKind, body: &[u8]) -> u32 {
+    pub(crate) fn probe(&self, kind: ProbeKind, body: &[u8], origin: ProbeOrigin) -> u32 {
         let key = kind.discriminant() ^ {
             let mut h: u64 = 0xcbf2_9ce4_8422_2325;
             for &b in body {
@@ -232,6 +232,8 @@ impl ProbeCache {
         // length as the fresh oracle, one allocation-light context per
         // configuration (the workspace is created lazily on first miss).
         // The hit/miss/served-cost behavior is unchanged by D2.
+        #[cfg(test)]
+        let t0 = std::time::Instant::now();
         let cost = match kind {
             ProbeKind::Zlib => probe_cost_raw(kind, body),
             ProbeKind::Zstd3 => {
@@ -240,7 +242,18 @@ impl ProbeCache {
             }
         };
         self.misses.set(self.misses.get() + 1);
-        // census keeps counting EXECUTED compressions (misses only)
+        let charge = body.len() + PROBE_CACHE_ENTRY_OVERHEAD;
+        let mut exhausted = false;
+        let mut stored_charge = 0usize;
+        if self.used.get() + charge > self.budget {
+            self.exhausted_bodies.set(self.exhausted_bodies.get() + 1);
+            exhausted = true;
+        } else {
+            self.used.set(self.used.get() + charge);
+            stored_charge = charge;
+        }
+        // census keeps counting EXECUTED compressions (misses only),
+        // now with D3 cost mass: config x origin x wall time.
         #[cfg(test)]
         {
             let mut h: u64 = kind.discriminant();
@@ -248,14 +261,18 @@ impl ProbeCache {
                 h ^= u64::from(b);
                 h = h.wrapping_mul(0x0100_0000_01b3);
             }
-            crate::mnf6::mnf6_p1d_census::note_miss(h);
+            crate::mnf6::mnf6_p1d_census::note_miss3(
+                kind.discriminant(),
+                origin.discriminant(),
+                h,
+                t0.elapsed().as_nanos() as u64,
+                exhausted,
+                stored_charge,
+            );
         }
-        let charge = body.len() + PROBE_CACHE_ENTRY_OVERHEAD;
-        if self.used.get() + charge > self.budget {
-            self.exhausted_bodies.set(self.exhausted_bodies.get() + 1);
+        if exhausted {
             return cost;
         }
-        self.used.set(self.used.get() + charge);
         self.map
             .borrow_mut()
             .entry(key)
@@ -332,6 +349,26 @@ pub(crate) fn probe_cost_raw(kind: ProbeKind, buf: &[u8]) -> u32 {
 /// buffer. Previous calls therefore cannot influence the next result;
 /// the D2.1-D2.4 gates prove it length-for-length against the fresh
 /// oracle over adversarial sequences.
+/// D3: which site of the record-stream sweep a probe comes from. A
+/// production no-op (zero cost) and a census dimension (D3 cost mass).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ProbeOrigin {
+    Lit = 0,
+    M3,
+    LawLattice,
+    LawBilinear,
+    FlatField,
+    AtlasExact,
+    AtlasColor,
+    Other,
+}
+
+impl ProbeOrigin {
+    fn discriminant(self) -> u64 {
+        self as u8 as u64
+    }
+}
+
 /// D2: the zstd-3 probe workspace (one per pick, owned by the cache).
 /// The zlib side measured parity-equal but economically NEUTRAL
 /// (attribution: ~0.99x — flate2's fresh state is cheap relative to the
@@ -383,8 +420,85 @@ impl ProbeWorkspace {
 #[cfg(test)]
 pub(crate) mod mnf6_p1d_census {
     use super::Coder;
+    use std::collections::{HashMap, HashSet};
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::Mutex;
+
+    /// D3 cell: one (probe configuration, sweep-site) family.
+    #[derive(Default)]
+    pub(crate) struct D3Cell {
+        pub(crate) misses: u64,
+        pub(crate) time_ns: u64,
+        pub(crate) exhausted: u64,
+        pub(crate) stored_bytes: u64,
+        pub(crate) distinct: HashSet<u64>,
+    }
+
+    /// key = (full config discriminant << 8) | origin
+    pub(crate) static D3: Mutex<Option<HashMap<u64, D3Cell>>> = Mutex::new(None);
+
+    pub(crate) fn d3_reset() {
+        D3.lock().unwrap().replace(Default::default());
+    }
+
+    /// One executed (cache-miss) compression: cost mass bookkeeping.
+    pub(crate) fn note_miss3(
+        config: u64,
+        origin: u64,
+        distinct_hint: u64,
+        time_ns: u64,
+        exhausted: bool,
+        stored_bytes: usize,
+    ) {
+        let mut g = D3.lock().unwrap();
+        let cell = g
+            .get_or_insert_with(Default::default)
+            .entry((config << 8) | origin)
+            .or_insert_with(Default::default);
+        cell.misses += 1;
+        cell.time_ns = cell.time_ns.wrapping_add(time_ns);
+        cell.distinct.insert(distinct_hint);
+        if exhausted {
+            cell.exhausted += 1;
+        }
+        cell.stored_bytes += stored_bytes as u64;
+    }
+
+    /// D3 table snapshot (per-family rows).
+    pub(crate) fn d3_read() -> Vec<(u64, D3Stats)> {
+        let g = D3.lock().unwrap();
+        let mut rows: Vec<(u64, D3Stats)> = g
+            .as_ref()
+            .map(|m| {
+                m.iter()
+                    .map(|(&k, c)| {
+                        (
+                            k,
+                            D3Stats {
+                                misses: c.misses,
+                                distinct: c.distinct.len() as u64,
+                                time_ns: c.time_ns,
+                                exhausted: c.exhausted,
+                                stored_bytes: c.stored_bytes,
+                            },
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        // order by cost mass, largest first
+        rows.sort_by(|a, b| b.1.time_ns.cmp(&a.1.time_ns));
+        rows
+    }
+
+    #[derive(Clone, Copy)]
+    pub(crate) struct D3Stats {
+        pub(crate) misses: u64,
+        pub(crate) distinct: u64,
+        pub(crate) time_ns: u64,
+        pub(crate) exhausted: u64,
+        pub(crate) stored_bytes: u64,
+    }
 
     pub(crate) static PROBES: AtomicU64 = AtomicU64::new(0);
     pub(crate) static DISTINCT: Mutex<Option<std::collections::HashSet<u64>>> = Mutex::new(None);
@@ -1590,13 +1704,13 @@ mod tests {
                 key_b,
                 vec![(a.clone().into(), cost_a), (b.clone().into(), cost_b)],
             );
-            assert_eq!(cache.probe(kind, &b), cost_b);
+            assert_eq!(cache.probe(kind, &b, ProbeOrigin::Other), cost_b);
             assert_eq!(cache.hits.get(), 1, "b's hit skipped a via memcmp");
             assert_eq!(cache.misses.get(), 0);
             // a is not present under its own key: probe(a) misses, runs
             // the real compressor, stores, then hits on the repeat.
-            assert_eq!(cache.probe(kind, &a), cost_a);
-            assert_eq!(cache.probe(kind, &a), cost_a);
+            assert_eq!(cache.probe(kind, &a, ProbeOrigin::Other), cost_a);
+            assert_eq!(cache.probe(kind, &a, ProbeOrigin::Other), cost_a);
             assert_eq!(cache.hits.get(), 2);
             assert_eq!(cache.misses.get(), 1);
         }
@@ -1611,10 +1725,10 @@ mod tests {
             let q = probe_cost_raw(ProbeKind::Zlib, &body);
             let gz = ProbeKind::Zstd3;
             let gq = ProbeKind::Zlib;
-            assert_eq!(cache.probe(gz, &body), z);
-            assert_eq!(cache.probe(gz, &body), z);
-            assert_eq!(cache.probe(gq, &body), q);
-            assert_eq!(cache.probe(gq, &body), q);
+            assert_eq!(cache.probe(gz, &body, ProbeOrigin::Other), z);
+            assert_eq!(cache.probe(gz, &body, ProbeOrigin::Other), z);
+            assert_eq!(cache.probe(gq, &body, ProbeOrigin::Other), q);
+            assert_eq!(cache.probe(gq, &body, ProbeOrigin::Other), q);
             assert_eq!(
                 cache.misses.get(),
                 2,
@@ -1633,7 +1747,7 @@ mod tests {
             for n in 1..8u32 {
                 let body = vec![n as u8; 200];
                 let want = probe_cost_raw(g, &body);
-                let got = cache.probe(g, &body);
+                let got = cache.probe(g, &body, ProbeOrigin::Other);
                 assert_eq!(got, want, "budget exhaustion must never change a cost");
             }
             // budget 600, charge 248/body(200 B)+overhead → exactly 2 fit
@@ -1720,11 +1834,11 @@ mod tests {
         for body in d2_bodies() {
             let gz = probe_cost_raw(ProbeKind::Zlib, &body);
             let gs = probe_cost_raw(ProbeKind::Zstd3, &body);
-            assert_eq!(cache.probe(ProbeKind::Zlib, &body), gz);
-            assert_eq!(cache.probe(ProbeKind::Zstd3, &body), gs);
+            assert_eq!(cache.probe(ProbeKind::Zlib, &body, ProbeOrigin::Other), gz);
+            assert_eq!(cache.probe(ProbeKind::Zstd3, &body, ProbeOrigin::Other), gs);
             // reverse order re-check (both configs now have workspace state)
-            assert_eq!(cache.probe(ProbeKind::Zstd3, &body), gs);
-            assert_eq!(cache.probe(ProbeKind::Zlib, &body), gz);
+            assert_eq!(cache.probe(ProbeKind::Zstd3, &body, ProbeOrigin::Other), gs);
+            assert_eq!(cache.probe(ProbeKind::Zlib, &body, ProbeOrigin::Other), gz);
         }
     }
 

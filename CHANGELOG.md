@@ -105,6 +105,24 @@ reversing D1's open +1.7%); fuzz 525/0 (D2.9). Measured: zstd probe
 workspace is one fixed context + a recycled buffer). Hit/miss behavior
 unchanged by construction: D2 only cheapens executing a cache miss.
 
+## Research — MNF15-P1-D D3: cost-weighted residual probe census measured; zlib atlas mass concentrated and unstored (2026-11-14, not a release)
+
+D3 (bounded measurement, budget frozen) extends the D0 census with per-
+family COST: configuration × sweep-site (lit/m3/laws/bilinear/flat/atlas)
+with wall time, exhaustion and stored bytes per family
+([docs/mnf15-p1d3-gate.log](docs/mnf15-p1d3-gate.log)). Finding: on
+screenshot the two **zlib atlas families are 87.4% of the remaining miss
+wall (5,134 ms of 5.9 s), ~38.6× repeats over just 6,609 distinct bodies,
+and 100% budget-exhausted — 0 stored** — while the cheap reused zstd3
+families (2.4-2.6 µs) filled the 8 MiB budget first. Covering those
+distinct sets (11.8 MiB) would avoid the full 5,134 ms ≈ 434 ms/MiB;
+autumn 41.7 ms/MiB. Jon's stopping-criterion check: a measurable
+concentration exists in one class; production work (D3-B admission arms)
+awaits its own call. D3-A source analysis: the atlas segment is NOT a
+pure function of tile bytes (prior content = insertion history), so a
+D1b-style atlas decision memo needs an exact atlas-state identity test —
+the exact-safe surface remains body-level and cross-sweep reuse.
+
 ## v1.15.0 — Backend 6: the R9 warm/refined mix coder joins the pick (MNF13-R9-E promoted; 2026-11-04)
 
 The R9-C/D composition ships as **backend id 6** (backends 4/5's decode

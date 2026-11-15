@@ -1172,7 +1172,8 @@ fn build_record_stream(
     // the bucket. Equal inputs are the same mathematical cost, so reuse
     // can never change a selection.
     let probe_kind = crate::mnf6::ProbeKind::from_coder(coder);
-    let probe = |b: &[u8]| u64::from(cache.probe(probe_kind, b));
+    let probe =
+        |origin: crate::mnf6::ProbeOrigin, b: &[u8]| u64::from(cache.probe(probe_kind, b, origin));
 
     for (idx, tile) in tiles.iter().enumerate() {
         let n = tile.nbytes();
@@ -1206,7 +1207,7 @@ fn build_record_stream(
         };
 
         let lit_body = pack(&lit_src);
-        let mut best_cost = 1 + probe(&lit_body);
+        let mut best_cost = 1 + probe(crate::mnf6::ProbeOrigin::Lit, &lit_body);
         let mut choice_body = lit_body.clone();
         let mut choice_mode = 0u8;
         let mut choice_ref: Option<(u32, u8)> = None;
@@ -1219,7 +1220,7 @@ fn build_record_stream(
             m3.extend_from_slice(&cy);
             m3.extend_from_slice(&pack9(&cco));
             m3.extend_from_slice(&pack9(&ccg));
-            let m3_cost = 1 + probe(&m3);
+            let m3_cost = 1 + probe(crate::mnf6::ProbeOrigin::M3, &m3);
             if m3_cost < best_cost {
                 best_cost = m3_cost;
                 choice_body = m3;
@@ -1259,7 +1260,9 @@ fn build_record_stream(
                         // pack is what the coder will actually compress under
                         // planar.
                         let law_cost =
-                            |lb: usize, r: &[u8]| -> u64 { (1 + lb) as u64 + probe(&pack(r)) };
+                            |origin: crate::mnf6::ProbeOrigin, lb: usize, r: &[u8]| -> u64 {
+                                (1 + lb) as u64 + probe(origin, &pack(r))
+                            };
                         let sweep = |base: &crate::laws::PlanarLaw| -> crate::laws::PlanarLaw {
                             let mut best = *base;
                             let mut best_cost = {
@@ -1269,7 +1272,11 @@ fn build_record_stream(
                                     tile.height,
                                     &|x, y, c| crate::laws::planar_pred(&best, x, y, c),
                                 );
-                                law_cost(crate::laws::PLANAR_LAW_BYTES, &r)
+                                law_cost(
+                                    crate::mnf6::ProbeOrigin::LawLattice,
+                                    crate::laws::PLANAR_LAW_BYTES,
+                                    &r,
+                                )
                             };
                             for db in [-2i8, -1, 0, 1, 2] {
                                 for dc in [-2i8, -1, 0, 1, 2] {
@@ -1290,7 +1297,11 @@ fn build_record_stream(
                                             tile.height,
                                             &|x, y, c| crate::laws::planar_pred(&law, x, y, c),
                                         );
-                                        let cost = law_cost(crate::laws::PLANAR_LAW_BYTES, &r);
+                                        let cost = law_cost(
+                                            crate::mnf6::ProbeOrigin::LawLattice,
+                                            crate::laws::PLANAR_LAW_BYTES,
+                                            &r,
+                                        );
                                         if cost < best_cost {
                                             best_cost = cost;
                                             best = law;
@@ -1310,7 +1321,11 @@ fn build_record_stream(
                             tile.height,
                             &|x, y, c| crate::laws::planar_pred(&law_p, x, y, c),
                         );
-                        let cost_p = law_cost(crate::laws::PLANAR_LAW_BYTES, &r_p);
+                        let cost_p = law_cost(
+                            crate::mnf6::ProbeOrigin::LawLattice,
+                            crate::laws::PLANAR_LAW_BYTES,
+                            &r_p,
+                        );
                         if cost_p < best_lf {
                             best_lf = cost_p;
                             mode_lf = 6;
@@ -1344,7 +1359,11 @@ fn build_record_stream(
                                     )
                                 },
                             );
-                            let cost_b = law_cost(crate::laws::BILINEAR_LAW_BYTES, &r_b);
+                            let cost_b = law_cost(
+                                crate::mnf6::ProbeOrigin::LawBilinear,
+                                crate::laws::BILINEAR_LAW_BYTES,
+                                &r_b,
+                            );
                             if cost_b < best_lf {
                                 best_lf = cost_b;
                                 mode_lf = 7;
@@ -1382,7 +1401,7 @@ fn build_record_stream(
                                 tile.height,
                                 &move |_, _, c| i64::from(med_rgb[c]),
                             );
-                            let cost_c = law_cost(3, &r_c);
+                            let cost_c = law_cost(crate::mnf6::ProbeOrigin::FlatField, 3, &r_c);
                             if cost_c < best_lf {
                                 best_lf = cost_c;
                                 mode_lf = 8;
@@ -1442,7 +1461,7 @@ fn build_record_stream(
                     let body = pack(&r);
                     // metadata: mode byte + u32 idx + optional transform byte
                     let meta: u64 = if t == 0 { 5 } else { 6 };
-                    let cost = meta + probe(&body);
+                    let cost = meta + probe(crate::mnf6::ProbeOrigin::AtlasExact, &body);
                     if cost < best_cost {
                         best_cost = cost;
                         choice_body = body;
@@ -1461,7 +1480,7 @@ fn build_record_stream(
                         r_c[i] = tile_t[i].wrapping_sub(base_t[i]);
                     }
                     let body_c = pack(&r_c);
-                    let cost_c = meta + probe(&body_c);
+                    let cost_c = meta + probe(crate::mnf6::ProbeOrigin::AtlasColor, &body_c);
                     if cost_c < best_cost {
                         best_cost = cost_c;
                         choice_body = body_c;
@@ -3018,14 +3037,22 @@ mod channel_diff {
         ] {
             let (d, px) = load(name);
             crate::mnf6::mnf6_p1d_census::reset();
+            crate::mnf6::mnf6_p1d_census::d3_reset();
             let t0 = std::time::Instant::now();
             let ((_f, _s, _b), m) = encode_mnf8_metrics(&px, d, true, Profile::Maximum);
-            let (probes, distinct) = crate::mnf6::mnf6_p1d_census::read();
+            let distinct = crate::mnf6::mnf6_p1d_census::d3_read()
+                .iter()
+                .map(|(_, s)| s.distinct)
+                .sum::<u64>();
             println!(
-                "P1D census {name}: compressors_executed={probes} distinct_hint={distinct} \
+                "P1D census {name}: compressors_executed={} \
                  cache_hits={} cache_misses={} stored={} exhausted={} charged={:.1}MiB \
                  tile_hits={} tile_misses={} tile_stored={} tile_exhausted={} \
                  wall={:.1}s",
+                crate::mnf6::mnf6_p1d_census::d3_read()
+                    .iter()
+                    .map(|(_, s)| s.misses)
+                    .sum::<u64>(),
                 m.hits,
                 m.misses,
                 m.stored,
@@ -3037,6 +3064,50 @@ mod channel_diff {
                 m.tile_exhausted,
                 t0.elapsed().as_secs_f32()
             );
+            // D3 cost-mass table: the remaining miss families by where
+            // they execute and which configuration they run under.
+            let origin_name = |o: u64| match o {
+                0 => "lit",
+                1 => "m3",
+                2 => "law-lattice",
+                3 => "law-bilinear",
+                4 => "flat-field",
+                5 => "atlas-exact",
+                6 => "atlas-color",
+                _ => "other",
+            };
+            let mass_total: u64 = crate::mnf6::mnf6_p1d_census::d3_read()
+                .iter()
+                .map(|(_, s)| s.time_ns)
+                .sum();
+            println!(
+                "P1D D3 {name}: cost-mass table (config x origin, by time) — total wall of \
+                 executed misses {:.1} s:",
+                mass_total as f64 / 1e9
+            );
+            for (key, s) in crate::mnf6::mnf6_p1d_census::d3_read() {
+                let cfg = match key >> 8 {
+                    0x5a_4c_49_42 => "zlib",
+                    0x005a_5354_4433 => "zstd3",
+                    _ => "cfg?",
+                };
+                println!(
+                    "D3 {cfg}/{:<12}: executed={:<8} distinct={:<7} time={:>8.1}ms \
+                     share={:>5.1}% mean={:>6.2}us exhausted={:<6} stored={:.2}MiB",
+                    origin_name((key & 0xff) as u64),
+                    s.misses,
+                    s.distinct,
+                    s.time_ns as f64 / 1e6,
+                    100.0 * s.time_ns as f64 / mass_total as f64,
+                    if s.misses > 0 {
+                        s.time_ns as f64 / s.misses as f64 / 1e3
+                    } else {
+                        0.0
+                    },
+                    s.exhausted,
+                    s.stored_bytes as f64 / (1024.0 * 1024.0),
+                );
+            }
         }
     }
 

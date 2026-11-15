@@ -271,6 +271,12 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   cumulative, 5.74×), hubble 363.3 s byte-identical (-5.2%, reversing
   D1's open +1.7%), zstd probe 2.95×/miss, RSS 108.6 MB
   (mnf15-p1d2-gate.log).
+- [mnf15-p1d3-gate.log](mnf15-p1d3-gate.log) — P1-D D3 cost-weighted
+  census (bounded measurement): zlib atlas = 87.4% of screenshot's
+  remaining miss wall, ~38.6× repeats over 6,609 distinct bodies, 100%
+  budget-exhausted/0 stored; value frontier ~434 ms/MiB (screenshot);
+  D3-B admission arms and the D3-A atlas-state identity test recorded as
+  next-stage options, budget frozen.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).
