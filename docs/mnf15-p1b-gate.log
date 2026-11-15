@@ -1,35 +1,35 @@
-testdata/gradient_320x240.png                             254 B     22.8 s  RSS  99.6 MB (r9  87.4)  flags 0x20 b1  B4:IDENTICAL
-testdata/heldout-photos/autumn_160x120_s3100006.png     22368 B      7.6 s  RSS  97.1 MB (r9  84.6)  flags 0x51 b6  B4:IDENTICAL
-testdata/heldout-photos/dusk_160x120_s3100003.png       13808 B      7.9 s  RSS  96.8 MB (r9  85.3)  flags 0x10 b6  B4:IDENTICAL
-testdata/heldout-photos/dusk_224x160_s3100002.png       45436 B     14.3 s  RSS  98.4 MB (r9  85.9)  flags 0xd1 b6  B4:IDENTICAL
-testdata/heldout-photos/forest_192x144_s3100001.png     33516 B     11.0 s  RSS  97.4 MB (r9  85.1)  flags 0xa1 b5  B4:IDENTICAL
-testdata/heldout-photos/forest_224x160_s3100005.png     40720 B     14.3 s  RSS  98.1 MB (r9  85.5)  flags 0x61 b5  B4:IDENTICAL
-testdata/heldout-photos/forest_224x160_s3100008.png     23668 B     14.7 s  RSS  98.2 MB (r9  85.6)  flags 0x51 b5  B4:IDENTICAL
-testdata/heldout-photos/ocean_192x144_s3100007.png      32100 B     11.1 s  RSS  97.4 MB (r9  86.0)  flags 0x61 b5  B4:IDENTICAL
-testdata/heldout-photos/sand_192x144_s3100004.png       35200 B     11.3 s  RSS  97.3 MB (r9  85.6)  flags 0x51 b6  B4:IDENTICAL
-testdata/heldout-photos/slate_160x120_s3100009.png      21532 B      7.7 s  RSS  96.8 MB (r9  86.0)  flags 0xa1 b6  B4:IDENTICAL
-testdata/heldout-photos/terrain_160x120_s3100000.png    13496 B      7.8 s  RSS  96.9 MB (r9  85.7)  flags 0x10 b6  B4:IDENTICAL
-testdata/heldout/blob_224x160.png                        5986 B     13.1 s  RSS  97.8 MB (r9  85.3)  flags 0x21 b1  B4:IDENTICAL
+testdata/gradient_320x240.png                             254 B     22.9 s  RSS  99.5 MB (r9  87.4)  flags 0x20 b1  B4:IDENTICAL
+testdata/heldout-photos/autumn_160x120_s3100006.png     22368 B      7.7 s  RSS 108.7 MB (r9  84.6)  flags 0x51 b6  B4:IDENTICAL
+testdata/heldout-photos/dusk_160x120_s3100003.png       13808 B      7.9 s  RSS  97.1 MB (r9  85.3)  flags 0x10 b6  B4:IDENTICAL
+testdata/heldout-photos/dusk_224x160_s3100002.png       45436 B     14.4 s  RSS  98.0 MB (r9  85.9)  flags 0xd1 b6  B4:IDENTICAL
+testdata/heldout-photos/forest_192x144_s3100001.png     33516 B     11.0 s  RSS  97.5 MB (r9  85.1)  flags 0xa1 b5  B4:IDENTICAL
+testdata/heldout-photos/forest_224x160_s3100005.png     40720 B     14.4 s  RSS  98.3 MB (r9  85.5)  flags 0x61 b5  B4:IDENTICAL
+testdata/heldout-photos/forest_224x160_s3100008.png     23668 B     14.8 s  RSS  97.8 MB (r9  85.6)  flags 0x51 b5  B4:IDENTICAL
+testdata/heldout-photos/ocean_192x144_s3100007.png      32100 B     11.7 s  RSS  97.4 MB (r9  86.0)  flags 0x61 b5  B4:IDENTICAL
+testdata/heldout-photos/sand_192x144_s3100004.png       35200 B     11.6 s  RSS  97.5 MB (r9  85.6)  flags 0x51 b6  B4:IDENTICAL
+testdata/heldout-photos/slate_160x120_s3100009.png      21532 B      7.9 s  RSS  97.2 MB (r9  86.0)  flags 0xa1 b6  B4:IDENTICAL
+testdata/heldout-photos/terrain_160x120_s3100000.png    13496 B      8.2 s  RSS  96.8 MB (r9  85.7)  flags 0x10 b6  B4:IDENTICAL
+testdata/heldout/blob_224x160.png                        5986 B     12.6 s  RSS  98.0 MB (r9  85.3)  flags 0x21 b1  B4:IDENTICAL
 testdata/heldout/blocks_192x128.png                      1277 B      7.7 s  RSS  96.6 MB (r9  85.7)  flags 0xc b1  B4:IDENTICAL
-testdata/heldout/document_200x280.png                     540 B     14.2 s  RSS  98.3 MB (r9  86.5)  flags 0xe0 b6  B4:IDENTICAL
-testdata/heldout/plaid_192.png                          20677 B     15.1 s  RSS  98.0 MB (r9  86.2)  flags 0x11 b1  B4:IDENTICAL
-testdata/heldout/poster_208x144.png                      1141 B      8.8 s  RSS  96.6 MB (r9  85.5)  flags 0x60 b1  B4:IDENTICAL
-testdata/noise_256x256.png                             196912 B     26.4 s  RSS 108.5 MB (r9  96.1)  flags 0x0 b1  B4:IDENTICAL
-testdata/photos/autumn_192x144_s900001.png              18784 B     11.3 s  RSS  97.4 MB (r9  86.0)  flags 0x51 b6  B4:IDENTICAL
-testdata/photos/dusk_160x120_s900003.png                20744 B      7.6 s  RSS  97.1 MB (r9  85.7)  flags 0x51 b6  B4:IDENTICAL
-testdata/photos/forest_224x160_s900002.png              44384 B     14.3 s  RSS  97.7 MB (r9  86.4)  flags 0x51 b6  B4:IDENTICAL
-testdata/photos/ocean_192x144_s900007.png               33580 B     11.0 s  RSS  97.2 MB (r9  86.4)  flags 0x51 b6  B4:IDENTICAL
-testdata/photos/sand_160x120_s900000.png                24504 B      7.7 s  RSS  96.8 MB (r9  85.2)  flags 0x51 b6  B4:IDENTICAL
-testdata/photos/slate_192x144_s900004.png               35152 B     10.9 s  RSS  97.4 MB (r9  86.6)  flags 0x51 b6  B4:IDENTICAL
-testdata/photos/slate_224x160_s900008.png               48716 B     14.2 s  RSS  98.0 MB (r9  86.8)  flags 0x51 b6  B4:IDENTICAL
-testdata/photos/stone_160x120_s900006.png               12464 B      7.8 s  RSS  97.0 MB (r9  85.4)  flags 0xd1 b5  B4:IDENTICAL
-testdata/photos/terrain_160x120_s900009.png             23240 B      7.7 s  RSS  96.9 MB (r9  85.3)  flags 0x61 b6  B4:IDENTICAL
-testdata/photos/terrain_224x160_s900005.png             39792 B     14.2 s  RSS  97.8 MB (r9  86.5)  flags 0x61 b5  B4:IDENTICAL
-testdata/repeat_256x256.png                               301 B     16.0 s  RSS  89.6 MB (r9  86.7)  flags 0x21 b1  B4:IDENTICAL
-testdata/screenshot_640x400.png                           488 B     59.9 s  RSS 103.8 MB (r9  89.0)  flags 0xd0 b5  B4:IDENTICAL
-testdata/solid_256x256.png                                 36 B     15.7 s  RSS  87.9 MB (r9  85.4)  flags 0x0 b0  B4:IDENTICAL
+testdata/heldout/document_200x280.png                     540 B     14.2 s  RSS  98.0 MB (r9  86.5)  flags 0xe0 b6  B4:IDENTICAL
+testdata/heldout/plaid_192.png                          20677 B     15.5 s  RSS  98.7 MB (r9  86.2)  flags 0x11 b1  B4:IDENTICAL
+testdata/heldout/poster_208x144.png                      1141 B      8.9 s  RSS  96.6 MB (r9  85.5)  flags 0x60 b1  B4:IDENTICAL
+testdata/noise_256x256.png                             196912 B     26.8 s  RSS 102.7 MB (r9  96.1)  flags 0x0 b1  B4:IDENTICAL
+testdata/photos/autumn_192x144_s900001.png              18784 B     11.4 s  RSS  97.7 MB (r9  86.0)  flags 0x51 b6  B4:IDENTICAL
+testdata/photos/dusk_160x120_s900003.png                20744 B      7.8 s  RSS  97.1 MB (r9  85.7)  flags 0x51 b6  B4:IDENTICAL
+testdata/photos/forest_224x160_s900002.png              44384 B     14.5 s  RSS  98.2 MB (r9  86.4)  flags 0x51 b6  B4:IDENTICAL
+testdata/photos/ocean_192x144_s900007.png               33580 B     11.1 s  RSS  97.2 MB (r9  86.4)  flags 0x51 b6  B4:IDENTICAL
+testdata/photos/sand_160x120_s900000.png                24504 B      7.8 s  RSS  97.2 MB (r9  85.2)  flags 0x51 b6  B4:IDENTICAL
+testdata/photos/slate_192x144_s900004.png               35152 B     11.2 s  RSS  97.4 MB (r9  86.6)  flags 0x51 b6  B4:IDENTICAL
+testdata/photos/slate_224x160_s900008.png               48716 B     14.3 s  RSS  98.1 MB (r9  86.8)  flags 0x51 b6  B4:IDENTICAL
+testdata/photos/stone_160x120_s900006.png               12464 B      8.4 s  RSS  96.7 MB (r9  85.4)  flags 0xd1 b5  B4:IDENTICAL
+testdata/photos/terrain_160x120_s900009.png             23240 B      8.6 s  RSS  97.0 MB (r9  85.3)  flags 0x61 b6  B4:IDENTICAL
+testdata/photos/terrain_224x160_s900005.png             39792 B     14.6 s  RSS  97.9 MB (r9  86.5)  flags 0x61 b5  B4:IDENTICAL
+testdata/repeat_256x256.png                               301 B     16.4 s  RSS  89.5 MB (r9  86.7)  flags 0x21 b1  B4:IDENTICAL
+testdata/screenshot_640x400.png                           488 B     60.6 s  RSS 103.9 MB (r9  89.0)  flags 0xd0 b5  B4:IDENTICAL
+testdata/solid_256x256.png                                 36 B     15.6 s  RSS  87.7 MB (r9  85.4)  flags 0x0 b0  B4:IDENTICAL
 
 B4: 30/30 byte-identical (total 810816 = the v1.15.0 anchor)
 B6: 30/30 balanced byte-identical
-B5: maximum wall 414.2 s vs pre-refactor baseline 1127.9 s = -63.3%
-B6: max RSS 108.5 MB, worst delta vs r9e new_rss_mb +14.8 MB
+B5: maximum wall 420.7 s vs pre-refactor baseline 1127.9 s = -62.7%
+B6: max RSS 108.7 MB, worst delta vs r9e new_rss_mb +24.1 MB
