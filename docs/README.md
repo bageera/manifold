@@ -279,6 +279,12 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   instrument, per-arm digest assertions): strongest arm ≈ 0.1% wall —
   NEGATIVE result, P1 CLOSED at −63.2%/−82.6% cumulative (2.72×/5.74×)
   (mnf15-p1d3b-gate.log).
+- [mnf16-s1a-record.md](mnf16-s1a-record.md) — MNF16-S1 stage 1
+  conditional-information census on the shipped balanced streams
+  (measurement only): predictor disagreement D = +0.30 bits/sym and
+  8-px cross-scale gradient G8 = +0.92 bits/sym prequentially beyond a
+  16-bin prev-symbol context (26 files / 2.535M symbols); stage 2 =
+  exact production-context measurement through the Rust bridge.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).

@@ -141,6 +141,23 @@ P1 closed** at Maximum −63.2% (2.72×), Balanced −82.6% (5.74×), anchor
 inert-by-default allocation machinery stays as research instrumentation;
 production behavior byte-identical, verify chain green.)
 
+## Research — MNF16-S1 opens: conditional information discovery, stage-1 census measured (2026-11-15, not a release)
+
+S1-A/S1-B stage-1 census on the shipped balanced record streams
+(measurement only; instrument
+[crates/mnf-mans/scripts/mnf16_s1a_census.py]
+(crates/mnf-mans/scripts/mnf16_s1a_census.py), record and gates in
+[docs/mnf16-s1a-record.md](docs/mnf16-s1a-record.md)): over 26 files /
+2,535,168 wire symbols with causal prequential evaluation, predictor
+disagreement D carries **+0.30 millibits x8/symbol** and the 8-pixel
+cross-scale gradient G8 carries **+0.92** beyond a 16-bin
+prev-symbol context. Coverage honesty: mode-0 tiles only (law tiles are
+the shipped conditional machinery); three token-wire files and one
+container framing skip recorded. The numbers justify stage 2 (exact
+production-context measurement through the Rust bridge) and do NOT
+propose any wire change; the monotonicity caveat (weak-C upper bound)
+is stated in the record.
+
 ## v1.16.0 — Encoder performance release (P1: same compression, same wire, faster encoding; 2026-11-14)
 
 Same compressed output, same wire format, same decoding compatibility —
