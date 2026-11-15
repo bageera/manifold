@@ -141,6 +141,38 @@ P1 closed** at Maximum −63.2% (2.72×), Balanced −82.6% (5.74×), anchor
 inert-by-default allocation machinery stays as research instrumentation;
 production behavior byte-identical, verify chain green.)
 
+## v1.16.0 — Encoder performance release (P1: same compression, same wire, faster encoding; 2026-11-14)
+
+Same compressed output, same wire format, same decoding compatibility —
+substantially faster encoding. Measured on the established 30-file
+research corpus (workload-specific, not universal guarantees):
+
+- **Maximum**: 2.72× encoding speedup — 1,127.9 → 414.5 s (−63.2%).
+- **Balanced**: 5.74× — 165.92 → 28.92 s (−82.6%).
+- **Compression**: unchanged — 810,816 B Maximum corpus (60/60 digests
+  identical to the v1.15.0 references); Hubble Maximum byte-identical
+  (363.3 s).
+- **Compatibility**: no new backend identifiers, no wire-format changes,
+  no candidate elimination or approximate-cost substitution, original
+  tie-breaking precedence preserved.
+
+Mechanisms shipped (full records in docs/):
+1. Proxy-class record-stream sharing across compatible entropy backends
+   (P1-B).
+2. Reference-independent tile/token construction with terminal
+   channel-diff relabeling (P1-C).
+3. Collision-safe bounded memoization of exact compression-probe costs
+   (D1a) and of predictor-independent law/flat-field decision winners
+   (D1b).
+4. Zstd workspace reuse across cache misses with verified session-reset
+   isolation (D2).
+5. Research conclusions: alternative cache-allocation policies measured
+   and REJECTED (~0.1% << the 2% promotion hurdle); the B0 shared
+   arrival-order policy ships. The arm allocator is research-only
+   (cfg(test)); release builds expose no experimental controls.
+P1-B's purpose and this release's: eliminate redundant computation, not
+reduce the search space.
+
 ## v1.15.0 — Backend 6: the R9 warm/refined mix coder joins the pick (MNF13-R9-E promoted; 2026-11-04)
 
 The R9-C/D composition ships as **backend id 6** (backends 4/5's decode

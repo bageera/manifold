@@ -11,7 +11,7 @@ the pick; ADR-008's FLAG_CHANNEL_DIFF selects the per-pixel
 [g, r−g, b−g] residual organization when it wins the pick; the v1.12
 REF field generalizes bit 6 to a 2-bit reference selector (G/R/B
 per-file); the mix-coder backends 4-6 (v1.13-v1.15) add rate-aware
-entropy arms to the pick)) — release v1.15.0 · hardened decoders
+entropy arms to the pick)) — release v1.15.0, v1.16.0 encoder-performance (P1) · hardened decoders
 (bounded, checksummed, canonical, fuzzed) · independently validated ·
 normative format spec at
 [docs/format.md](docs/format.md)
@@ -26,7 +26,9 @@ vs v1.12, 20/30 mix picks, no regressions), backend 5's R6 tuning to
 (the R9 warm/refined mix coder — 20 contexts with the prev3-split
 heavy band, the cold-mix live-parent schedule) takes it to **810,816 B
 (−0.17%: 14 wins / 0 losses / 16 ties, mix6 fires 15/30)**.
-v1.15.0 is the shipping baseline;
+v1.16.0 is the shipping baseline (the P1 encoder-performance release:
+same compression and wire, encoding up to 2.72×/5.74× faster on the
+corpus);
 the MNF14-CS1 coastline-scaling probe closed the shared-rule and
 boundary-refinement arms as measured records
 ([docs/mnf14-cs1-probe.md](docs/mnf14-cs1-probe.md)); MNFX = the wrapper
@@ -48,7 +50,7 @@ frame with 64 edits at 122 B) — wire byte-frozen at v1.1; the combined
 storage-and-query gate GSE-09 failed now passes on the structured family
 ([docs/gse10/gate-report.md](docs/gse10/gate-report.md)).
 
-Identifier map: **Manifold v1.15.0** = the library release; **MNF9** = the
+Identifier map: **Manifold v1.16.0** = the library release; **MNF9** = the
 generative file format's magic; **MNF10** = the research program's milestone
 name (never a wire magic); **MNFX** = the wrapper format, own repo.
 
@@ -233,5 +235,6 @@ MIT — see [LICENSE](LICENSE).
 | v1.13.0 | MNF8 backend 4: the dual-timescale mix coder (MNF13-R5; −16,398 B corpus = −1.97%, 20/30 mix picks, zero regressions) |
 | v1.14.0 | MNF8 backend 5: the R6-tuned mix coder joins the pick (MNF13-R6; corpus 812,180 = −4,161 B = −0.51%, 0 regressions) |
 | v1.15.0 | MNF8 backend 6: the R9 warm/refined mix coder — 20 contexts, prev3-split heavy band, cold-mix live-parent schedule (MNF13-R9-E; 810,816 = −0.17%, 14/0/16, mix6 15/30) |
+| v1.16.0 | Encoder performance release (P1): proxy-class construction sharing, REF-independent construction, exact probe/decision memoization, zstd workspace reuse — same 810,816 B corpus, Maximum 1,127.9→414.5 s (−63.2%, 2.72×), Balanced 165.92→28.92 s (−82.6%, 5.74×); wire/decoder unchanged (D3-B allocation alternatives measured and rejected) |
 | — (research) | MNF14-CS1 coastline scaling: rule-codings constant-cost but fixture-only; boundary refinement = slowest honest growth (docs/mnf14-cs1-probe.md) |
 | — (research) | MNF11: channeldiff relabel −62,675 B/17-of-30 on shipped streams (ADR-008 PROPOSED); X369 grid: (1,1) = optimum; X1 program discovery honest-negative; G4/G5 shared-template + mask verdicts (docs/mnf10-g3-shared-model.md) |

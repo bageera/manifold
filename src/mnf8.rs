@@ -266,21 +266,25 @@ pub fn encode_mnf8(
 /// stored/exhausted/charged bytes). Production callers use
 /// `encode_mnf8`; the metrics form exists so the D1 gate can report
 /// measured cache behavior without exposing library state.
-/// D3-B allocation (bounded experiment): only the Maximum profile
-/// varies its split via MNF15_P1D_BODY_CAPS="zlib_mib,zstd_mib" (default
-/// "8,8"? NO — default None = the shipped shared 8 MiB arrival-order
-/// pool); Balanced always keeps the FULL body budget for its only
-/// active probe configuration (zstd), regardless of the Maximum arm.
+/// D3-B allocation: the shipped policy is B0 — the Maximum profile
+/// keeps the shared 8 MiB arrival-order pool (no caps); Balanced always
+/// keeps the FULL body budget for its only active probe configuration
+/// (zstd), regardless of any Maximum-side experiment. The
+/// MNF15_P1D_BODY_CAPS arm override is cfg(test)-only (release hygiene:
+/// no undocumented production configuration).
 fn p1d_body_caps(profile: Profile) -> Option<[usize; 2]> {
-    const MIB: usize = 1024 * 1024;
-    if let Ok(s) = std::env::var("MNF15_P1D_BODY_CAPS") {
-        let parts: Vec<&str> = s.split(',').collect();
-        if parts.len() == 2 {
-            if let (Ok(a), Ok(b)) = (
-                parts[0].trim().parse::<usize>(),
-                parts[1].trim().parse::<usize>(),
-            ) {
-                return Some([a * MIB, b * MIB]);
+    #[cfg(test)]
+    {
+        const MIB: usize = 1024 * 1024;
+        if let Ok(s) = std::env::var("MNF15_P1D_BODY_CAPS") {
+            let parts: Vec<&str> = s.split(',').collect();
+            if parts.len() == 2 {
+                if let (Ok(a), Ok(b)) = (
+                    parts[0].trim().parse::<usize>(),
+                    parts[1].trim().parse::<usize>(),
+                ) {
+                    return Some([a * MIB, b * MIB]);
+                }
             }
         }
     }
