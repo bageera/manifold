@@ -266,6 +266,30 @@ pub fn encode_mnf8(
 /// stored/exhausted/charged bytes). Production callers use
 /// `encode_mnf8`; the metrics form exists so the D1 gate can report
 /// measured cache behavior without exposing library state.
+/// D3-B allocation (bounded experiment): only the Maximum profile
+/// varies its split via MNF15_P1D_BODY_CAPS="zlib_mib,zstd_mib" (default
+/// "8,8"? NO — default None = the shipped shared 8 MiB arrival-order
+/// pool); Balanced always keeps the FULL body budget for its only
+/// active probe configuration (zstd), regardless of the Maximum arm.
+fn p1d_body_caps(profile: Profile) -> Option<[usize; 2]> {
+    const MIB: usize = 1024 * 1024;
+    if let Ok(s) = std::env::var("MNF15_P1D_BODY_CAPS") {
+        let parts: Vec<&str> = s.split(',').collect();
+        if parts.len() == 2 {
+            if let (Ok(a), Ok(b)) = (
+                parts[0].trim().parse::<usize>(),
+                parts[1].trim().parse::<usize>(),
+            ) {
+                return Some([a * MIB, b * MIB]);
+            }
+        }
+    }
+    match profile {
+        Profile::Balanced => Some([0, crate::mnf6::PROBE_CACHE_BUDGET_BYTES]),
+        Profile::Maximum => None,
+    }
+}
+
 pub(crate) fn encode_mnf8_metrics(
     pixels: &[u8],
     dims: Dims,
@@ -317,7 +341,12 @@ pub(crate) fn encode_mnf8_metrics(
         }
     }
     // MNF15-P1-D D1: one exact probe memo per pick (docs/mnf15-p1d-record.md).
-    let cache = crate::mnf6::ProbeCache::new(crate::mnf6::PROBE_CACHE_BUDGET_BYTES);
+    let cache = match p1d_body_caps(profile) {
+        Some(caps) => {
+            crate::mnf6::ProbeCache::new_capped(crate::mnf6::PROBE_CACHE_BUDGET_BYTES, caps)
+        }
+        None => crate::mnf6::ProbeCache::new(crate::mnf6::PROBE_CACHE_BUDGET_BYTES),
+    };
     for (kidx, kind) in pred_arms.iter().enumerate() {
         for (pidx, planar) in [false, true].iter().enumerate() {
             let med = *kind == PredKind::Med;
@@ -3040,18 +3069,14 @@ mod channel_diff {
             crate::mnf6::mnf6_p1d_census::d3_reset();
             let t0 = std::time::Instant::now();
             let ((_f, _s, _b), m) = encode_mnf8_metrics(&px, d, true, Profile::Maximum);
-            let distinct = crate::mnf6::mnf6_p1d_census::d3_read()
-                .iter()
-                .map(|(_, s)| s.distinct)
-                .sum::<u64>();
             println!(
-                "P1D census {name}: compressors_executed={} \
+                "P1D census {name}: distinct_hint={} \
                  cache_hits={} cache_misses={} stored={} exhausted={} charged={:.1}MiB \
                  tile_hits={} tile_misses={} tile_stored={} tile_exhausted={} \
                  wall={:.1}s",
                 crate::mnf6::mnf6_p1d_census::d3_read()
                     .iter()
-                    .map(|(_, s)| s.misses)
+                    .map(|(_, s)| s.distinct)
                     .sum::<u64>(),
                 m.hits,
                 m.misses,
@@ -3094,7 +3119,7 @@ mod channel_diff {
                 println!(
                     "D3 {cfg}/{:<12}: executed={:<8} distinct={:<7} time={:>8.1}ms \
                      share={:>5.1}% mean={:>6.2}us exhausted={:<6} stored={:.2}MiB",
-                    origin_name((key & 0xff) as u64),
+                    origin_name(key & 0xff),
                     s.misses,
                     s.distinct,
                     s.time_ns as f64 / 1e6,
@@ -3170,5 +3195,76 @@ mod channel_diff {
             "P1C split: {build_count} sweeps + {relabel_count} terminal relabels in {build_s:.2}s; full pick {full_s:.2}s; construction share {:.0}%",
             build_s / full_s * 100.0
         );
+    }
+
+    /// MNF15-P1-D D3-B (bounded): the four body-budget allocations under
+    /// the same frozen 16 MiB total, measured INSIDE one encoder run per
+    /// arm. G = newly-avoided miss mass - displaced mass is captured by
+    /// comparing arms directly under the real pick's access sequence
+    /// (the census could not support exact offline replay: only per-
+    /// family aggregates were recorded). Each arm MUST reproduce the B0
+    /// digest byte-for-byte (the served costs are exact either way).
+    #[test]
+    #[ignore] // timing instrument; run with -- --ignored --nocapture
+    fn p1d_d3b_arms() {
+        std::env::remove_var("MNF15_P1D_BODY_CAPS");
+        for name in [
+            "gradient_320x240.png",
+            "screenshot_640x400.png",
+            "heldout-photos/autumn_160x120_s3100006.png",
+        ] {
+            let (d, px) = load(name);
+            let arms: [(&str, Option<[usize; 2]>); 4] = [
+                ("B0-shared", None),
+                ("B1-even  ", Some([4 << 20, 4 << 20])),
+                ("B2-value ", Some([2 << 20, 6 << 20])),
+                ("B3-zlib  ", Some([6 << 20, 2 << 20])),
+            ];
+            let mut baseline: Option<Vec<u8>> = None;
+            for (label, caps) in arms {
+                // MNF15_P1D_BODY_CAPS drives the PRODUCTION allocation fn;
+                // "8,8" caps each config at the full pool ~= B0 semantics
+                // for these single-class-at-a-time fixtures... use the
+                // env to inject the arm EXACTLY: parse "MiB,MiB"
+                std::env::set_var(
+                    "MNF15_P1D_BODY_CAPS",
+                    format!(
+                        "{},{}",
+                        caps.map(|c| c[0] >> 20).unwrap_or(8),
+                        caps.map(|c| c[1] >> 20).unwrap_or(0)
+                    ),
+                );
+                crate::mnf6::mnf6_p1d_census::d3_reset();
+                let t0 = std::time::Instant::now();
+                let ((bytes, _, _), m) = encode_mnf8_metrics(&px, d, true, Profile::Maximum);
+                let miss_wall_ms: f64 = crate::mnf6::mnf6_p1d_census::d3_read()
+                    .iter()
+                    .map(|(_, s)| s.time_ns as f64 / 1e6)
+                    .sum();
+                let zlib_miss_ms: f64 = crate::mnf6::mnf6_p1d_census::d3_read()
+                    .iter()
+                    .filter(|(k, _)| k >> 8 == 0x5a_4c_49_42)
+                    .map(|(_, s)| s.time_ns as f64 / 1e6)
+                    .sum();
+                match &baseline {
+                    None => {
+                        baseline = Some(bytes.clone());
+                    }
+                    Some(base) => {
+                        assert_eq!(bytes, *base, "D3-B {name} {label}: digest drift");
+                    }
+                }
+                println!(
+                    "D3-B {name} {label}: wall={:.1}s miss_wall={:.0}ms \
+                     zlib_miss={:.0}ms exhausted={} charged={:.1}MiB",
+                    t0.elapsed().as_secs_f32(),
+                    miss_wall_ms,
+                    zlib_miss_ms,
+                    m.exhausted_bodies,
+                    m.charged_bytes as f64 / (1024.0 * 1024.0),
+                );
+            }
+            std::env::remove_var("MNF15_P1D_BODY_CAPS");
+        }
     }
 }

@@ -123,6 +123,24 @@ pure function of tile bytes (prior content = insertion history), so a
 D1b-style atlas decision memo needs an exact atlas-state identity test —
 the exact-safe surface remains body-level and cross-sweep reuse.
 
+## Research — MNF15-P1-D D3-B: cost-aware admission NEGATIVE (matched arms ~0.1% << the 2% hurdle); P1 CLOSED (2026-11-14, not a release)
+
+One final bounded allocation experiment under the frozen 16 MiB total:
+B0 shared arrival-order (shipped) vs B1 even 4/4, B2 2/6, B3 6/2, run
+back-to-back in one matched instrument with per-arm digest assertions
+(all byte-equal to B0; identity by construction). Strongest arm (B3):
+~-493 ms miss-wall across gradient+screenshot+autumn ≈ **0.1% of the
+414.5 s Maximum wall** — an order of magnitude under the 2% hurdle.
+The displacement accounting explains the collapse of the gross 434
+ms/MiB estimate: B0's first-come order already retains each hot body's
+first occurrence (the hot heads), capping zstd pushes cheap-probe
+families back to fresh probes (gradient punishes every arm, +4-9%), and
+compulsory first misses amortize the tail. **Negative result recorded;
+P1 closed** at Maximum −63.2% (2.72×), Balanced −82.6% (5.74×), anchor
+810,816 B. ([docs/mnf15-p1d3b-gate.log](docs/mnf15-p1d3b-gate.log); the
+inert-by-default allocation machinery stays as research instrumentation;
+production behavior byte-identical, verify chain green.)
+
 ## v1.15.0 — Backend 6: the R9 warm/refined mix coder joins the pick (MNF13-R9-E promoted; 2026-11-04)
 
 The R9-C/D composition ships as **backend id 6** (backends 4/5's decode

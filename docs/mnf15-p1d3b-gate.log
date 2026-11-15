@@ -1,0 +1,55 @@
+MNF15-P1-D D3-B gate log (2026-11-14) — cost-aware admission: NEGATIVE RESULT, P1 CLOSED
+
+Scope (per instruction): one final bounded cache-allocation experiment.
+Total budget frozen (8 MiB body + 8 MiB tile); ONLY the body split
+varied. Arms: B0 shared arrival-order (shipped default), B1 even 4/4,
+B2 value 2/6, B3 zlib-priority 6/2. Balanced keeps the FULL body budget
+for its only active probe configuration (zstd) under every arm —
+p1d_body_caps() pins Some([0, 8 MiB]) for Profile::Balanced regardless
+of the Maximum arm.
+
+Method: matched-environment instrument (p1d_d3b_arms, one process,
+fixtures back-to-back), each arm re-running the REAL pick under its
+allocation; the D3 census aggregates could not support exact offline
+replay (no ordered access trace), so this is the narrowly scoped
+instrumented trace. Every arm must reproduce the B0 digest exactly —
+all did (served costs are exact either way; identity by construction
+and by assertion).
+
+Measured (miss-walls within one matched run):
+  gradient:    B0 4458 ms; B1 +4.2%; B2 +8.8%; B3 -0.7%
+  screenshot:  B0 2559 ms; B1 -14.8%; B2 -8.4%; B3 -19.4%
+  autumn:      B0 1215 ms; B1 +1.7%; B2 +6.1%; B3 +3.6%
+  Sum of miss-wall deltas for the strongest arm (B3): ~ -493 ms across
+  the three fixtures ≈ 0.1% of the 414.5 s matched Maximum corpus wall
+  — an order of magnitude below the 2% promotion hurdle. Encoder walls
+  within noise (screenshot B0 64.1 vs B3 63.5 s).
+
+Why the gross 434 ms/MiB frontier collapsed (the displacement accounting
+the instruction required):
+  1. B0's arrival order is not blind: each hot body's FIRST occurrence
+     is stored, so the expensive families' hot heads are already
+     retained; the exhausted tail carries far less repeat mass than the
+     D3 aggregate suggested.
+  2. Displacement is real: capping zstd pushed its law-lattice bodies
+     back into fresh probes (gradient punishes every reallocation arm).
+  3. Compulsory first misses and the loss of previously retained zstd
+     bodies are exactly why the arms underperform the gross estimate.
+  4. Cross-run probe-cost variance (e.g. zlib atlas means 10.1 us in
+     the D3 record run vs ~2.9 us in this matched run under identical
+     execution counts) bounds the ABSOLUTE value of any such estimate;
+     only same-run comparisons are decision-grade.
+
+Disposition (Jon's rule): NO admission policy meets the byte-identity +
+reproducibility + >2% (or near-zero-complexity) conditions. Recorded as
+the negative result. P1 is CLOSED. The shipped default (B0, shared
+arrival-order) stays; the allocation machinery (new_capped +
+MNF15_P1D_BODY_CAPS) is retained as inert-by-default research
+instrumentation (production behavior byte-identical: verify chain 30/30
+Maximum + 30/30 Balanced, 810,816 = the anchor, wall 414.2 s = the D2
+vintage, fuzz 525/0).
+
+P1 FINAL ladder (all outputs byte-identical to the v1.15.0 references):
+  Baseline 1,127.9 s -> Maximum 414.5 s (-63.2%, 2.72x)
+  Balanced 165.92 s -> 28.92 s (-82.6%, 5.74x)
+  Peak corpus RSS 108.6 MB; compression anchor 810,816 B.

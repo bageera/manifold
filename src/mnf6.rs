@@ -114,7 +114,11 @@ impl ProbeKind {
 /// under that configuration.
 pub(crate) struct ProbeCache {
     budget: usize,
-    used: std::cell::Cell<usize>,
+    used: std::cell::Cell<[usize; 2]>,
+    /// D3-B: per-configuration caps for the body map. None = the shared
+    /// arrival-order pool (B0, the shipped behavior); Some([zlib, zstd])
+    /// caps each configuration's own occupancy.
+    caps: Option<[usize; 2]>,
     map: std::cell::RefCell<ProbeMap>,
     ws: std::cell::RefCell<Option<ProbeWorkspace>>,
     tile_map: std::cell::RefCell<TileMap>,
@@ -177,7 +181,8 @@ impl ProbeCache {
     pub(crate) fn new(budget: usize) -> Self {
         Self {
             budget,
-            used: std::cell::Cell::new(0),
+            used: std::cell::Cell::new([0, 0]),
+            caps: None,
             map: std::cell::RefCell::new(std::collections::HashMap::new()),
             ws: std::cell::RefCell::new(None),
             tile_map: std::cell::RefCell::new(std::collections::HashMap::new()),
@@ -193,6 +198,14 @@ impl ProbeCache {
         }
     }
 
+    /// D3-B arm constructor: per-configuration cap allocation over the
+    /// same total budget (the caps sum to the total; B0 keeps no caps).
+    pub(crate) fn new_capped(budget: usize, caps: [usize; 2]) -> Self {
+        let mut c = Self::new(budget);
+        c.caps = Some(caps);
+        c
+    }
+
     /// A cost-only cache: correct on any budget (0 = pure passthrough).
     /// Test paths (the byte-identity instrument) run uncached so the
     /// committed manifest keeps comparing against probe-free digests.
@@ -203,12 +216,13 @@ impl ProbeCache {
 
     /// Bytes charged to the budget (body + per-entry overhead).
     pub(crate) fn charged(&self) -> usize {
-        self.used.get()
+        self.used.get().iter().sum()
     }
 
     /// The one entry point the sweep calls. `probe_cost` must be the raw
     /// uncompressed-identity cost for `kind` (zlib or zstd-3); it runs on
     /// misses and on budget-exhausted bodies. NEVER a heuristic.
+    #[cfg_attr(not(test), allow(unused_variables, unused_mut, unused_assignments))]
     pub(crate) fn probe(&self, kind: ProbeKind, body: &[u8], origin: ProbeOrigin) -> u32 {
         let key = kind.discriminant() ^ {
             let mut h: u64 = 0xcbf2_9ce4_8422_2325;
@@ -245,11 +259,21 @@ impl ProbeCache {
         let charge = body.len() + PROBE_CACHE_ENTRY_OVERHEAD;
         let mut exhausted = false;
         let mut stored_charge = 0usize;
-        if self.used.get() + charge > self.budget {
+        let ci = kind as usize;
+        let admit = match self.caps {
+            Some(caps) => self.used.get()[ci] + charge <= caps[ci],
+            None => {
+                let u = self.used.get();
+                u[0] + u[1] + charge <= self.budget
+            }
+        };
+        if !admit {
             self.exhausted_bodies.set(self.exhausted_bodies.get() + 1);
             exhausted = true;
         } else {
-            self.used.set(self.used.get() + charge);
+            let mut u = self.used.get();
+            u[ci] += charge;
+            self.used.set(u);
             stored_charge = charge;
         }
         // census keeps counting EXECUTED compressions (misses only),
@@ -351,6 +375,7 @@ pub(crate) fn probe_cost_raw(kind: ProbeKind, buf: &[u8]) -> u32 {
 /// oracle over adversarial sequences.
 /// D3: which site of the record-stream sweep a probe comes from. A
 /// production no-op (zero cost) and a census dimension (D3 cost mass).
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ProbeOrigin {
     Lit = 0,
@@ -364,6 +389,7 @@ pub(crate) enum ProbeOrigin {
 }
 
 impl ProbeOrigin {
+    #[cfg_attr(not(test), allow(dead_code))]
     fn discriminant(self) -> u64 {
         self as u8 as u64
     }
@@ -454,7 +480,7 @@ pub(crate) mod mnf6_p1d_census {
         let cell = g
             .get_or_insert_with(Default::default)
             .entry((config << 8) | origin)
-            .or_insert_with(Default::default);
+            .or_default();
         cell.misses += 1;
         cell.time_ns = cell.time_ns.wrapping_add(time_ns);
         cell.distinct.insert(distinct_hint);
@@ -487,7 +513,7 @@ pub(crate) mod mnf6_p1d_census {
             })
             .unwrap_or_default();
         // order by cost mass, largest first
-        rows.sort_by(|a, b| b.1.time_ns.cmp(&a.1.time_ns));
+        rows.sort_by_key(|r| std::cmp::Reverse(r.1.time_ns));
         rows
     }
 
@@ -533,7 +559,7 @@ pub(crate) mod mnf6_p1d_census {
             .insert(distinct_hint);
     }
 
-    /// (probes, distinct)
+    #[allow(dead_code)]
     pub(crate) fn read() -> (u64, u64) {
         (
             PROBES.load(Ordering::Relaxed),
