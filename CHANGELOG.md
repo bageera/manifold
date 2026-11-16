@@ -188,6 +188,47 @@ the refine-package/children accounting decomposition showing
 per-child accounting recorded. S4/S5 conditional; no wire changes, no
 new backend identifiers; the 810,816-byte anchor stands.
 
+## v1.17.0 — Backend 7: structural entropy coding joins the pick (MNF16-X1-L promoted; 2026-11-15)
+
+Introduces **backend 7**, a structural entropy-coding backend in the
+Maximum compression portfolio: 40 frozen contexts with fresh
+lane-children keys derived natively from decoder-accessible
+record-grammar state (`LaneWalk` — a pure prefix function of the decoded
+prefix + container geometry), **zero transmitted classification**, the
+exact research adaptation schedule, no format-version change, token path
+excluded (record framing only). Deterministic, exact reconstruction.
+
+- **Compression** (established 30-file research corpus):
+  **810,816 → 768,303 B (−5.24%, 42,513 B)**; backend 7 selected on
+  23/30 files across 9 flag triples; **zero per-file regressions**;
+  Hubble 1,452,400 → 1,438,848 B (−13,552, −0.93%), repeat run
+  byte-identical.
+- **Performance** (measured at release vintage): encoding R_enc 1.197×
+  (527.4 s vs 440.7 s aggregate), decoding R_dec 1.042×; diagnostic
+  bytes-saved-per-additional-second ≈ 490 B/s. Peak encode RSS below
+  the v1.16.0 corpus anchor (97.7–97.9 MB); the Hubble encode peaks at
+  127.6 MB (largest observed, not a proven bound).
+- **Compatibility**: MNF8/MNF9 legacy containers decode exactly (30/30
+  digests reproduced by the v1.16.0 binary; the new decoder reconstructs
+  all legacy containers exactly); a v1.16.0 decoder rejects backend-7
+  streams cleanly ("unknown backend 7"); independent decoding verified
+  through the C ABI; the public Rust API is additive only.
+- **Robustness**: 437-case targeted malformed sweep + 900-trial mutation
+  fuzz — **0 panics, 0 timeouts**; 11 pre-existing (v1.16.0-identical)
+  legacy corruption-decode classes **disclosed** in
+  [docs/mnf16-x1l-r6-record.md](docs/mnf16-x1l-r6-record.md) and
+  deferred to a separate wire-integrity hardening effort. Lossless
+  reconstruction of valid streams must not be read as detection of
+  arbitrary corrupted streams: MNF8/MNF9 carry no checksum mechanism.
+- **Candidate identity** (permanent research requirement, from the
+  R6.2 closure): a configuration identifies an arm FAMILY; content
+  hashes identify the actual candidate. Future parity comparisons bind
+  I = (H_body, H_classes, geometry, config, model), with the wire hash
+  verifying the result. Records:
+  [docs/mnf16-x1l-record.md](docs/mnf16-x1l-record.md),
+  [docs/mnf16-x1l-r62-record.md](docs/mnf16-x1l-r62-record.md),
+  [docs/mnf16-x1l-r6-record.md](docs/mnf16-x1l-r6-record.md).
+
 ## v1.16.0 — Encoder performance release (P1: same compression, same wire, faster encoding; 2026-11-14)
 
 Same compressed output, same wire format, same decoding compatibility —
