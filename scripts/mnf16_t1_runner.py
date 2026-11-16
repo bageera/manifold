@@ -21,6 +21,7 @@ recorded numbers from the trace alone - reuse may not change
 measurements.
 """
 
+import hashlib
 import json
 import sys
 import time
@@ -70,16 +71,27 @@ def main():
         N = m["n"]
         base_bits = float(tr["bits"].sum()) / 8.0     # stored baseline: L0
         classes = tr["classes"]
+        stream_b = tr["stream"].tobytes()
+        body_sha = hashlib.sha256(stream_b).hexdigest()[:16]
+        cls_sha = hashlib.sha256(classes.tobytes()).hexdigest()[:16]
+        geom = (m["w"], m["h"], m["tile_count"], m["flags"])
         row = {"file": m["file"], "backend": m["backend"], "n": N,
+               "body_sha": body_sha, "classes_sha": cls_sha, "geom": geom,
                "L0_B": round(base_bits, 1), "arms": {}}
         for name, mode, feats in arms_for(m, classes):
             feats_b = classes.tobytes() if feats is None else feats.tobytes()
-            out = s3.bridge_feat(mode, tr["stream"].tobytes(), feats_b, "a")
+            out = s3.bridge_feat(mode, stream_b, feats_b, "a")
             nn = int.from_bytes(out[:4], "little")
             bits = np.frombuffer(out[4:4 + 8 * nn], np.float64)
-            wire_b, _ = s3.wire_len(mode, tr["stream"].tobytes(), np.frombuffer(feats_b, np.uint8))
+            # candidate provenance (R6.2 lesson): construction id = mode
+            # string + body hash + geometry — a flag string identifies an
+            # arm FAMILY, never a unique input stream.
+            wire = s3.bridge_feat(mode, stream_b, np.frombuffer(feats_b, np.uint8), "e")
+            wire_sha = hashlib.sha256(wire).hexdigest()[:16]
             row["arms"][name] = {"L_B": round(float(bits.sum() / 8), 3),
-                                 "wire_B": int(wire_b)}
+                                 "wire_B": int(len(wire) - 4),
+                                 "mode": mode,
+                                 "wire_sha": wire_sha}
         row["gain_L1_B"] = round(row["L0_B"] - row["arms"]["L1"]["L_B"], 1)
         row["gain_L2_B"] = round(row["L0_B"] - row["arms"]["L2"]["L_B"], 1)
         row["gain_L3_B"] = round(row["L0_B"] - row["arms"]["L3"]["L_B"], 1)

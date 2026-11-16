@@ -405,14 +405,20 @@ fn walk_classes(stream: &[u8], w: u32, h: u32, tc: u32, planar: bool) -> Option<
             1 | 4 => 4,
             2 | 5 => 5,
             8 => 3,
-            6 | 7 => if planar { 12 } else { 9 },
+            6 | 7 => {
+                if planar {
+                    12
+                } else {
+                    9
+                }
+            }
             _ => return None,
         };
         // framing bytes carry class 0 (the external array's convention:
         // mode + meta are structural, never residual operands)
         cls.push(0u8);
         for _ in 0..meta {
-            stream.get(off)?;      // bounds check the meta span
+            stream.get(off)?; // bounds check the meta span
             cls.push(0u8);
             off += 1;
         }
@@ -643,6 +649,7 @@ fn main() {
     let mut prev = 0u8;
     let mut prev2 = 0u8;
     let mut prev3 = 0u8;
+
     for (i, &b) in syms.iter().enumerate() {
         let k = feat_key(cfg, prev, prev2, prev3, feats[i]);
         // C1 Init seeding BEFORE the model build (the decode side seeds

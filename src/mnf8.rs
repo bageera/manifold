@@ -111,6 +111,14 @@ pub const BACKEND_MIX5: u32 = 5;
 /// 5's, hence the distinct id.
 pub const BACKEND_MIX6: u32 = 6;
 
+/// The lane-class-conditioned mix coder backend (MNF16-X1-L, promoted at
+/// v1.17.0): backend 6's full warm/refined/shared schedule plus 20 fresh
+/// children keyed by the byte's decoder-available lane class. See
+/// docs/mnf16-x1l-record.md (measurement), docs/mnf16-x1l-r4-record.md
+/// (independent reconstruction), docs/mnf16-x1l-r5-record.md (portfolio
+/// promotion evidence).
+pub const BACKEND_MIX7: u32 = 7;
+
 // zstd-19's default window is 8 MiB = 2^23; hard-pin the decoder cap to it
 // (review fix 4: a hostile frame can't claim a 128 MiB window).
 /// zstd decoder window ceiling (8 MiB; matches level-19 encoder).
@@ -139,6 +147,7 @@ type ProxyClass = ((bool, i32), Vec<(u32, u32)>);
 /// applies to any arm's payload; the pick measures it per file.
 fn backend_candidates() -> Vec<(u32, Coder)> {
     vec![
+        (BACKEND_MIX7, Coder::Zstd(19)),
         (BACKEND_MIX6, Coder::Zstd(19)),
         (BACKEND_MIX5, Coder::Zstd(19)),
         (BACKEND_MIX, Coder::Zstd(19)),
@@ -172,7 +181,11 @@ fn assemble_mnf8(
     Ok(file)
 }
 
-fn backend_compress(backend: u32, buf: &[u8]) -> Result<Vec<u8>> {
+fn backend_compress(
+    backend: u32,
+    buf: &[u8],
+    geom: Option<crate::mix_coder::Geom>,
+) -> Result<Vec<u8>> {
     match backend {
         BACKEND_ZLIB => Ok(compress_stream(&Coder::Zlib, buf)),
         BACKEND_ZSTD19 => Ok(compress_stream(&Coder::Zstd(19), buf)),
@@ -184,6 +197,13 @@ fn backend_compress(backend: u32, buf: &[u8]) -> Result<Vec<u8>> {
         BACKEND_MIX6 => Ok(crate::mix_coder::mix_encode_with(
             &crate::mix_coder::MixParams::BACKEND6,
             buf,
+        )),
+        BACKEND_MIX7 => Ok(crate::mix_coder::mix_encode_with_lane(
+            &crate::mix_coder::MixParams::BACKEND7,
+            buf,
+            geom.ok_or_else(|| {
+                Error::fmt_msg("backend 7 needs container geometry (record arms only)")
+            })?,
         )),
         other => Err(Error::fmt_msg(format!(
             "backend {other} not a compressed-output coder"
@@ -373,6 +393,12 @@ pub(crate) fn encode_mnf8_metrics(
                 // ADR-008 (v1.12): the reference-channel field 0..3 — none,
                 // G (v1.11's bit-6 semantic), R, B — per-file at complete
                 // serialized cost (the C2 gate's table).
+                let geom7 = crate::mix_coder::Geom {
+                    width: dims.width,
+                    height: dims.height,
+                    tile_count: u32::try_from(st.modes.len()).expect("tile count fits u32"),
+                    planar: *planar,
+                };
                 for reference in 0u8..=3 {
                     let flags = kind.flag_bit()
                         | if *planar { FLAG_PLANAR } else { 0 }
@@ -392,7 +418,7 @@ pub(crate) fn encode_mnf8_metrics(
                     };
                     for &(bidx, backend) in group {
                         let rank = bidx * 40 + arm;
-                        let payload = backend_compress(backend, raw)
+                        let payload = backend_compress(backend, raw, Some(geom7))
                             .expect("encoding an in-memory image cannot fail");
                         let tile_count = u32::try_from(st.modes.len())
                             .map_err(|_| Error::fmt_msg("too many tiles"))
@@ -428,9 +454,15 @@ pub(crate) fn encode_mnf8_metrics(
             } else {
                 &channel_diff_relabel(&wire0, false, true, dims.width, dims.height, reference)
             };
-            for (bidx, (backend, _coder)) in candidates.iter().enumerate() {
+            // Backend 7 rides the record grammar only — token wires have
+            // no record framing, so its walk does not apply here.
+            for (bidx, (backend, _coder)) in candidates
+                .iter()
+                .filter(|(b, _)| *b != BACKEND_MIX7)
+                .enumerate()
+            {
                 let rank = (bidx as u32) * 40 + arm;
-                let payload = backend_compress(*backend, wire)
+                let payload = backend_compress(*backend, wire, None)
                     .expect("encoding an in-memory image cannot fail");
                 let cols = div_ceil(dims.width, TILE_SIZE);
                 let rows = div_ceil(dims.height, TILE_SIZE);
@@ -1110,12 +1142,19 @@ fn encode_tokens_coder_cap(
     } else {
         channel_diff_relabel(&wire0, false, true, dims.width, dims.height, reference)
     };
-    let payload = backend_compress(backend, &wire)?;
     let cols = div_ceil(dims.width, TILE_SIZE);
     let rows = div_ceil(dims.height, TILE_SIZE);
     let tile_count: u32 = cols
         .checked_mul(rows)
         .ok_or_else(|| Error::fmt_msg("too many tiles"))?;
+    // token wires carry no record framing: backend 7 intentionally
+    // rejects here rather than pretending the walk applies.
+    let payload = backend_compress(backend, &wire, None)?;
+    if backend == BACKEND_MIX7 {
+        return Err(Error::fmt_msg(
+            "backend 7 codes record grammar only, not token wires",
+        ));
+    }
     let file = assemble_mnf8(&payload, dims, tile_count, flags, backend)?;
     let st = MnF6Stats {
         literal: u32::try_from(ts.literals).unwrap_or(u32::MAX),
@@ -1600,9 +1639,18 @@ fn encode_stream_coder(
     } else {
         channel_diff_relabel(&raw, planar, false, dims.width, dims.height, reference)
     };
-    let payload = backend_compress(backend, &raw)?;
     let tile_count =
         u32::try_from(stats.modes.len()).map_err(|_| Error::fmt_msg("too many tiles"))?;
+    let payload = backend_compress(
+        backend,
+        &raw,
+        Some(crate::mix_coder::Geom {
+            width: dims.width,
+            height: dims.height,
+            tile_count,
+            planar,
+        }),
+    )?;
     let file = assemble_mnf8(&payload, dims, tile_count, flags, backend)?;
     Ok((file, stats))
 }
@@ -1700,6 +1748,7 @@ pub fn decode_mnf8_with_limits(
             | BACKEND_MIX
             | BACKEND_MIX5
             | BACKEND_MIX6
+            | BACKEND_MIX7
     ) {
         return Err(Error::fmt_msg(format!("unknown backend {backend}")));
     }
@@ -1756,6 +1805,17 @@ pub fn decode_mnf8_with_limits(
             &crate::mix_coder::MixParams::BACKEND6,
             payload,
             limit.min(i64::MAX as u64) as usize,
+        )?,
+        BACKEND_MIX7 => crate::mix_coder::mix_decode_with_lane(
+            &crate::mix_coder::MixParams::BACKEND7,
+            payload,
+            limit.min(i64::MAX as u64) as usize,
+            crate::mix_coder::Geom {
+                width,
+                height,
+                tile_count,
+                planar,
+            },
         )?,
         other => return Err(Error::fmt_msg(format!("unsupported backend {other}"))),
     };
@@ -2834,17 +2894,21 @@ mod channel_diff {
                         old = old.min(file.len());
                     }
                 }
-                for cap in [16, tokens::MAX_CANDIDATES] {
-                    let (file, _) = encode_tokens_coder_cap(
-                        &px,
-                        d,
-                        backend,
-                        FLAG_PRED_MED | FLAG_TOKENS,
-                        cap,
-                        0,
-                    )
-                    .expect("encode");
-                    old = old.min(file.len());
+                // token wires have no record framing: backend 7 has no token
+                // arm (mirrors the production candidate matrix).
+                if backend != BACKEND_MIX7 {
+                    for cap in [16, tokens::MAX_CANDIDATES] {
+                        let (file, _) = encode_tokens_coder_cap(
+                            &px,
+                            d,
+                            backend,
+                            FLAG_PRED_MED | FLAG_TOKENS,
+                            cap,
+                            0,
+                        )
+                        .expect("encode");
+                        old = old.min(file.len());
+                    }
                 }
             }
             assert!(

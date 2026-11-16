@@ -1,6 +1,7 @@
 //! MNF13-R5 — the dual-timescale adaptive mix coder (backend id 4),
 //! MNF13-R6 — the R6-tuned variant (backend id 5),
 //! MNF13-R9 — the R9 warm/refined variant (backend id 6).
+//! MNF16-X1-L — the lane-class-conditioned variant (backend id 7).
 //!
 //! Per-context FAST and SLOW adaptive fixed-point (2^24-scale) estimators
 //! over the full 256-symbol alphabet, mixed by a log-space EWA weight
@@ -67,6 +68,9 @@ pub const MIX5_NCTX: usize = 16;
 /// Backend 6's context count: backend 5's 16 keys + 4 refined heavy-band
 /// children (keys 7 -> {16, 17}, key 15 -> {18, 19} by prev3's band).
 pub const MIX6_NCTX: usize = 20;
+/// Backend 7 (MNF16-X1-L): the promoted 40-context lane-class mapping
+/// (20-key base + 20 fresh children; docs/mnf16-x1l-r5-record.md).
+pub const MIX7_NCTX: usize = 40;
 /// Backend 6's cold-mix schedule n0 (the R9-C measured winner; lambda =
 /// n0 / (n0 + nlocal) decays from full-parent at first use and leaves the
 /// window after WARM_COLD_WINDOW local updates of the context).
@@ -96,6 +100,12 @@ pub struct MixParams {
     /// Backend 6 only: the parent model also takes the symbol's update
     /// (live ancestors — the composition the R9-D gate measured).
     pub share: bool,
+    /// Backend 7 only: lane-class conditioning (MNF16-X1-L, promoted at
+    /// v1.17.0). Class-1 difference-lane bytes take a child context at
+    /// 20 + the base key; class-0 value-lane/framing bytes keep the base
+    /// key. Classes derive from the decoder-available grammar walk
+    /// (`LaneWalk`); nothing is transmitted. Requires `nctx` = 40.
+    pub lane_child: bool,
 }
 
 impl MixParams {
@@ -107,6 +117,7 @@ impl MixParams {
         warm_n0: None,
         refine_heavy: false,
         share: false,
+        lane_child: false,
     };
     /// Backend 5 constants (v1.14.0, MNF13-R6; backend 4's 16-key tuning,
     /// byte-frozen at its release).
@@ -117,6 +128,7 @@ impl MixParams {
         warm_n0: None,
         refine_heavy: false,
         share: false,
+        lane_child: false,
     };
     /// Backend 6 constants (MNF13-R9-E): backend 5's caps + the R9
     /// warm/refine/share composition (n0 = 12, the measured winner).
@@ -127,6 +139,20 @@ impl MixParams {
         warm_n0: Some(MIX6_WARM_N0),
         refine_heavy: true,
         share: true,
+        lane_child: false,
+    };
+    /// Backend 7 constants (v1.17.0, MNF16-X1-L): backend 6's full
+    /// schedule plus lane-class children (fresh, no hierarchical
+    /// sharing — L2 measured half of L1 and was not promoted). The
+    /// measured winner across the R0-R5 program.
+    pub const BACKEND7: Self = Self {
+        nctx: MIX7_NCTX,
+        cap_fast: MIX5_FAST_CAP,
+        cap_slow: MIX5_SLOW_CAP,
+        warm_n0: Some(MIX6_WARM_N0),
+        refine_heavy: true,
+        share: true,
+        lane_child: true,
     };
 }
 
@@ -303,16 +329,25 @@ fn build_parent_tree(ctxs: &mut [MixCtx], params: &MixParams) {
     if params.warm_n0.is_none() {
         return; // backends 4/5: no tree, no share, byte-frozen shapes
     }
+    // Backend 7: the lane children (keys 20+) are FRESH — no ancestors
+    // (the X1-L L1 arm's measured winner; hierarchical sharing, L2,
+    // measured half of L1 and was not promoted). The base keys 8..19
+    // keep the R9 warm topology.
+    let parented = if params.lane_child {
+        MIX6_NCTX
+    } else {
+        params.nctx
+    };
     ctxs.iter_mut()
         .enumerate()
         .skip(8)
-        .take(params.nctx.saturating_sub(8))
+        .take(parented.saturating_sub(8))
         .for_each(|(k, ctx)| ctx.parent = (k & 7) as u8);
-    if ctxs.len() > 16 {
+    if parented > 16 {
         ctxs[16].parent = 7;
         ctxs[17].parent = 7;
     }
-    if ctxs.len() > 18 {
+    if parented > 18 {
         ctxs[18].parent = 15;
         ctxs[19].parent = 15;
     }
@@ -330,6 +365,173 @@ fn share_step(ctxs: &mut [MixCtx], params: &MixParams, k: usize, s: u8) {
             ctxs[p].step(s);
         }
     }
+}
+
+/// Backend 7's incrementally maintained lane class (MNF16-X1-L, promoted
+/// at v1.17.0 per docs/mnf16-x1l-r5-record.md; native per R4
+/// docs/mnf16-x1l-r4-record.md). A pure function of the container
+/// metadata (width, height, tile count, `planar`) and the decoded-prefix
+/// grammar state — zero transmitted classification. Framing (mode/meta)
+/// bytes class 0; interleaved bodies repeat (0,1,1) per pixel; planar
+/// bodies stack lane-major planes (tw*th class-0 bytes then 2*tw*th
+/// class-1 bytes). Byte-exact mirror of the R4 native walk that the
+/// parity gate validated; `None` on malformed framing (reject, not
+/// panic — the decode side maps this to a clean error).
+#[derive(Clone)]
+pub struct LaneWalk {
+    planar: bool,
+    width: u32,
+    height: u32,
+    grid_cols: u32,
+    next_tile: u32,
+    tile_count: u32,
+    tw: u32,
+    th: u32,
+    meta_left: usize,
+    body_left: u64,
+    body_pos: u64,
+    all_zero: bool,
+}
+
+/// The record grammar's record shape after the mode byte: (meta bytes
+/// still to come, residual-block bytes), per the shipped relabel/decode
+/// walk (mnf8.rs channel_diff_relabel, residual_census.py) — mode 3 =
+/// the bit-packed transform record (np + 2*ceil(np*9/8), no per-lane
+/// layout), modes 6/7 = the law-record constants.
+fn record_shape(mode: u8, np: u64) -> Option<(usize, u64)> {
+    let nb = np * 3;
+    match mode {
+        0 => Some((0, nb)),
+        1 | 4 => Some((4, nb)),
+        2 | 5 => Some((5, nb)),
+        3 => {
+            let n9 = (np * 9).div_ceil(8);
+            Some((0, np + 2 * n9))
+        }
+        6 => Some((crate::laws::PLANAR_LAW_BYTES, nb)),
+        7 => Some((crate::laws::BILINEAR_LAW_BYTES, nb)),
+        8 => Some((3, nb)),
+        _ => None, // unknown record mode: reject
+    }
+}
+
+impl LaneWalk {
+    /// Fresh walker; `None` on degenerate geometry.
+    pub fn new(width: u32, height: u32, tile_count: u32, planar: bool) -> Option<Self> {
+        if width == 0 || height == 0 || tile_count == 0 {
+            return None;
+        }
+        Some(Self {
+            planar,
+            width,
+            height,
+            grid_cols: width.div_ceil(crate::codec::TILE_SIZE),
+            next_tile: 0,
+            tile_count,
+            tw: 0,
+            th: 0,
+            meta_left: 0,
+            body_left: 0,
+            body_pos: 0,
+            all_zero: false,
+        })
+    }
+
+    /// Class of the byte at the current grammar position — computable
+    /// from the decoded prefix alone (the class never depends on the
+    /// byte's value: framing is structural, bodies are positional).
+    /// Class 0 = value-lane-or-framing, class 1 = difference-lane (the
+    /// X1 availability partition). `None` = malformed framing (a byte
+    /// beyond any record).
+    pub fn peek_class(&self) -> Option<u8> {
+        if self.meta_left == 0 && self.body_left == 0 {
+            // record boundary: the next byte is the next tile's mode byte
+            if self.next_tile >= self.tile_count {
+                return None; // byte beyond the grammar: malformed
+            }
+            return Some(0);
+        }
+        if self.meta_left > 0 {
+            return Some(0);
+        }
+        // body byte (mode 3 = the bit-packed transform record: class 0
+        // throughout — deterministic; no per-lane byte structure)
+        if self.all_zero {
+            return Some(0);
+        }
+        if self.planar {
+            Some(if self.body_pos < u64::from(self.tw) * u64::from(self.th) {
+                0
+            } else {
+                1
+            })
+        } else if self.body_pos.is_multiple_of(3) {
+            Some(0)
+        } else {
+            Some(1)
+        }
+    }
+
+    /// Feed the byte at the current position and advance. At a record
+    /// boundary `b` must be a valid mode byte (it sets the meta count
+    /// and the body length); `None` rejects unknown modes. A record that
+    /// completes past the final tile leaves a terminal state; any byte
+    /// after that peeks `None` (reject trailing data).
+    pub fn consume(&mut self, b: u8) -> Option<()> {
+        if self.meta_left == 0 && self.body_left == 0 {
+            if self.next_tile >= self.tile_count {
+                return None; // trailing byte: malformed
+            }
+            self.tw = crate::codec::TILE_SIZE
+                .min(self.width - (self.next_tile % self.grid_cols) * crate::codec::TILE_SIZE);
+            self.th = crate::codec::TILE_SIZE
+                .min(self.height - (self.next_tile / self.grid_cols) * crate::codec::TILE_SIZE);
+            self.next_tile += 1;
+            self.body_pos = 0;
+            let np = u64::from(self.tw) * u64::from(self.th);
+            let (meta, body) = record_shape(b, np)?;
+            self.meta_left = meta;
+            self.body_left = body;
+            // mode 3's bit-packed body is class-0 throughout
+            self.all_zero = b == 3;
+            return Some(());
+        }
+        if self.meta_left > 0 {
+            self.meta_left -= 1;
+            return Some(());
+        }
+        self.body_pos += 1;
+        self.body_left -= 1;
+        Some(())
+    }
+
+    /// True when every record has been framed and the residual block of
+    /// the last record completed — the structural end check the R4
+    /// walk's consumed-everything rule corresponds to.
+    pub fn complete(&self) -> bool {
+        self.next_tile == self.tile_count
+            && self.meta_left == 0
+            && self.body_left == 0
+            && (self.body_pos == 0 || self.body_pos == self.body_len())
+    }
+
+    fn body_len(&self) -> u64 {
+        u64::from(self.tw) * u64::from(self.th) * 3
+    }
+}
+
+/// Container geometry the lane walk needs (the same fields the R4 gate
+/// rode in the audit header).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Geom {
+    /// Image width in pixels (the record grid's full extent).
+    pub width: u32,
+    /// Image height in pixels.
+    pub height: u32,
+    /// Number of record frames (= tiles; `cols * rows`).
+    pub tile_count: u32,
+    /// The container's layout bit (bodies planar-ordered when set).
+    pub planar: bool,
 }
 
 /// The context key for the byte at coded position `i`, given the three
@@ -407,6 +609,58 @@ pub fn mix_encode(data: &[u8]) -> Vec<u8> {
     mix_encode_with(&MixParams::BACKEND4, data)
 }
 
+/// Backend 7: encode with lane-class conditioning under `geom` (the
+/// container metadata the walk needs). The wire shape is identical to
+/// the other mix backends; the class mapping is never transmitted.
+pub fn mix_encode_with_lane(params: &MixParams, data: &[u8], geom: Geom) -> Vec<u8> {
+    let mut walk = LaneWalk::new(geom.width, geom.height, geom.tile_count, geom.planar)
+        .expect("valid container geometry");
+    let mut ctxs: Vec<MixCtx> = (0..params.nctx)
+        .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+        .collect();
+    build_parent_tree(&mut ctxs, params);
+    let mut enc = DefaultRangeEncoder::new();
+    let mut prev = 0u8;
+    let mut prev2 = 0u8;
+    let mut prev3 = 0u8;
+
+    for &b in data {
+        let cls = walk
+            .peek_class()
+            .expect("byte beyond the record grammar on the encode path");
+        walk.consume(b)
+            .expect("well-formed record stream on the encode path");
+        let base = mix_ctx_key(params, prev, prev2, prev3);
+        let c = if params.lane_child && cls == 1 {
+            base + 20
+        } else {
+            base
+        };
+        let m = ctxs[c]
+            .model(&ctxs, params)
+            .expect("mix model with all-nonzero probabilities is always buildable");
+        enc.encode_symbols(std::iter::once((usize::from(b), &m)))
+            .expect("mix encode symbol");
+        ctxs[c].step(b);
+        share_step(&mut ctxs, params, c, b);
+        prev3 = prev2;
+        prev2 = prev;
+        prev = b;
+    }
+    assert!(walk.complete(), "record grammar must consume the stream");
+    let compressed = enc.into_compressed().expect("mix seal");
+    let mut out = Vec::with_capacity(compressed.len() * 4 + 4);
+    out.extend_from_slice(
+        &u32::try_from(data.len())
+            .expect("stream len fits u32")
+            .to_le_bytes(),
+    );
+    for w in compressed {
+        out.extend_from_slice(&w.to_le_bytes());
+    }
+    out
+}
+
 /// The inverse under `params`: decode the wire back to its stream bytes.
 /// Errors, never panics, on malformed input.
 pub fn mix_decode_with(
@@ -465,9 +719,175 @@ pub fn mix_decode(data: &[u8], limit: usize) -> Result<Vec<u8>, crate::error::Er
     mix_decode_with(&MixParams::BACKEND4, data, limit)
 }
 
+/// Backend 7: the lane-conditioned inverse under `geom`. Errors, never
+/// panics, on malformed input; classes rederive strictly from
+/// already-coded bytes plus the container geometry.
+pub fn mix_decode_with_lane(
+    params: &MixParams,
+    data: &[u8],
+    limit: usize,
+    geom: Geom,
+) -> Result<Vec<u8>, crate::error::Error> {
+    if !params.lane_child {
+        return Err(crate::error::Error::fmt_msg(
+            "lane conditioning requires backend 7 parameters",
+        ));
+    }
+    if data.len() < 4 || !(data.len() - 4).is_multiple_of(4) {
+        return Err(crate::error::Error::fmt_msg("mix payload not word-aligned"));
+    }
+    let stream_len = usize::try_from(u32::from_le_bytes(data[..4].try_into().expect("4 bytes")))
+        .map_err(|_| crate::error::Error::fmt_msg("mix stream length"))?;
+    if stream_len > limit {
+        return Err(crate::error::Error::fmt_msg("bomb"));
+    }
+    let mut words = Vec::with_capacity((data.len() - 4) / 4);
+    let (chunks, _) = data[4..].as_chunks::<4>();
+    for chunk in chunks {
+        words.push(u32::from_le_bytes(*chunk));
+    }
+    let mut dec = DefaultRangeDecoder::from_compressed(words)
+        .map_err(|e| crate::error::Error::fmt_msg(format!("mix decoder open: {e:?}")))?;
+    let mut walk = LaneWalk::new(geom.width, geom.height, geom.tile_count, geom.planar)
+        .ok_or_else(|| crate::error::Error::fmt_msg("invalid container geometry"))?;
+    let mut ctxs: Vec<MixCtx> = (0..params.nctx)
+        .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+        .collect();
+    build_parent_tree(&mut ctxs, params);
+    let mut out = Vec::with_capacity(stream_len);
+    let mut prev = 0u8;
+    let mut prev2 = 0u8;
+    let mut prev3 = 0u8;
+    for _i in 0..stream_len {
+        // class FIRST: computable from the decoded prefix (never from
+        // the byte being decoded — the same prefix-invariance contract
+        // every conditional feature passes)
+        let cls = walk
+            .peek_class()
+            .ok_or_else(|| crate::error::Error::fmt_msg("byte beyond the record grammar"))?;
+        let base = mix_ctx_key(params, prev, prev2, prev3);
+        let c = if cls == 1 { base + 20 } else { base };
+        let m = ctxs[c]
+            .model(&ctxs, params)
+            .ok_or_else(|| crate::error::Error::fmt_msg("mix model build failed"))?;
+        let s = dec
+            .decode_symbols(std::iter::once(&m))
+            .next()
+            .ok_or_else(|| crate::error::Error::fmt_msg("mix stream exhausted"))?
+            .map_err(|e| crate::error::Error::fmt_msg(format!("mix decode symbol: {e:?}")))?;
+        let s = u8::try_from(s)
+            .map_err(|_| crate::error::Error::fmt_msg("mix symbol out of byte range"))?;
+        walk.consume(s)
+            .ok_or_else(|| crate::error::Error::fmt_msg("malformed record framing"))?;
+        ctxs[c].step(s);
+        share_step(&mut ctxs, params, c, s);
+        out.push(s);
+        prev3 = prev2;
+        prev2 = prev;
+        prev = s;
+    }
+    if !walk.complete() {
+        return Err(crate::error::Error::fmt_msg(
+            "record grammar incomplete: payload shorter than its records frame",
+        ));
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// R6.2-C: backend 7's wire must BYTE-MATCH the audit's reference
+    /// implementation on identical (stream, classes, geometry): a 16x4
+    /// planar mode-0 record through the lane walk + cold-mix + all caps.
+    /// On mismatch, bisects the first divergent symbol by truncation.
+    #[test]
+    fn backend7_lane_wire_matches_audit() {
+        let npx = 16 * 4usize;
+        let np = npx * 3;
+        let mut data = vec![0u8; 1 + np];
+        for (i, b) in data[1..].iter_mut().enumerate() {
+            *b = ((i * 7 + (i >> 3)) % 256) as u8;
+        }
+        let geom = crate::mix_coder::Geom {
+            width: 16,
+            height: 4,
+            tile_count: 1,
+            planar: true,
+        };
+        let wire = mix_encode_with_lane(&MixParams::BACKEND7, &data, geom);
+        let bridge = std::path::Path::new("target/release/examples/r9_audit");
+        if !bridge.exists() {
+            eprintln!("audit bridge not built; skipping");
+            return;
+        }
+        let mode = "mix32768_1048576-lr15-inc32-ctx16-refineA-warm2p12-share-lanechild";
+        // per-SYMBOL classes: the mode byte itself is class 0
+        let classes: Vec<u8> = std::iter::once(0u8)
+            .chain(std::iter::repeat_n(0u8, npx))
+            .chain(std::iter::repeat_n(1u8, 2 * npx))
+            .collect();
+        let run = |k: usize| -> Vec<u8> {
+            let mut input = format!("{} {mode}\n", data[..1 + k].len()).into_bytes();
+            input.extend_from_slice(&data[..1 + k]);
+            input.extend_from_slice(&classes[..1 + k]);
+            use std::io::Write;
+            let mut child = std::process::Command::new(bridge)
+                .arg("e")
+                .arg(mode)
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::inherit())
+                .spawn()
+                .expect("bridge spawn");
+            child
+                .stdin
+                .take()
+                .expect("stdin")
+                .write_all(&input)
+                .expect("bridge stdin");
+            let c = child.wait_with_output().expect("bridge run");
+            assert_eq!(c.status.code(), Some(0), "audit failed: {}", c.status);
+            c.stdout
+        };
+        let ref_wire = run(data.len() - 1);
+        if wire == ref_wire {
+            eprintln!("R6.2-C: synthetic wire MATCHES the audit reference");
+            return;
+        }
+        eprintln!(
+            "R6.2-C: MISMATCH prod {} vs audit {} bytes on {} symbols",
+            wire.len(),
+            ref_wire.len(),
+            data.len()
+        );
+        let mut lo = 1usize;
+        let mut b = data.len() - 1;
+        // longest K whose wires agree; report the first divergent symbol
+        while lo < b {
+            let mid = (lo + b).div_ceil(2);
+            let pw = mix_encode_with_lane(&MixParams::BACKEND7, &data[..1 + mid], geom);
+            let aw = run(mid);
+            if pw == aw {
+                lo = mid;
+            } else {
+                b = mid - 1;
+            }
+        }
+        eprintln!(
+            "R6.2-C: first divergent SYMBOL = {} (wires agree through {lo})",
+            lo + 1
+        );
+        eprintln!(
+            "  prod[:{}] = {} B | audit[:{}] = {} B",
+            lo + 2,
+            mix_encode_with_lane(&MixParams::BACKEND7, &data[..lo + 2], geom).len(),
+            lo + 2,
+            run(lo + 1).len()
+        );
+        panic!("backend 7 wire != audit reference (see R6.2-C report)");
+    }
 
     /// R5 legacy: the 8-ctx backend-4 form is byte-exact on run classes.
     #[test]
