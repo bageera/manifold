@@ -1546,3 +1546,19 @@ single-shot frozen Hubble holdout of +12,653 B**, shuffled controls
 negative everywhere. Instrumentation only: no production backend, no
 wire change; X1 closes positive with the self-contained-decode +
 portfolio-accounting promotion contract recorded.
+
+### MNF16-T1 — research throughput, first deliverable (2026-11-15, not a release)
+
+The research-funnel substrate per the acceleration contract
+([scripts/mnf16_t1_trace.py](scripts/mnf16_t1_trace.py),
+[scripts/mnf16_t1_contract.py](scripts/mnf16_t1_contract.py),
+[scripts/mnf16_t1_runner.py](scripts/mnf16_t1_runner.py), record
+[docs/mnf16-t1-record.md](docs/mnf16-t1-record.md)): 22 v1.16.0
+production traces materialized once (sha256-bound in
+research/manifests/corpus.lock, blobs gitignored/regenerable), the
+prefix-invariance contract executable on traces (T1 substitute/T2
+mutate/T4 parity), and a multi-arm runner comparing probability models
+on the frozen stream with zero encoder invocations. X1-L reproduced
+file-for-file with maximum difference 0.0 (model costs, wire bytes) at
+8x lower marginal cost (332 s -> 41 s for the arm set). Measurement
+infrastructure only; production untouched.

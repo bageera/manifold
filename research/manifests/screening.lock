@@ -1,0 +1,11 @@
+{
+ "rule": "argmin n, argmax n, 3 nearest-median-n files",
+ "seed_vintage": "v1.16.0",
+ "files": [
+  "testdata/heldout-photos/autumn_160x120_s3100006.png",
+  "testdata/heldout-photos/forest_192x144_s3100001.png",
+  "testdata/heldout-photos/ocean_192x144_s3100007.png",
+  "testdata/heldout-photos/sand_192x144_s3100004.png",
+  "testdata/screenshot_640x400.png"
+ ]
+}

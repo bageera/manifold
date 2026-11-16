@@ -7,3 +7,7 @@ crates/*/out/
 
 # research workdir artifacts (large binaries; regenerable via committed instruments)
 .research/
+
+# MNF16-T1 research trace blobs (regenerable from the committed fixtures; digests in research/manifests/corpus.lock)
+research/traces/
+research/results/

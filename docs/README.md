@@ -322,6 +322,12 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   (0.87%), shuffled control negative everywhere; X1 closes positive;
   independent self-contained decode + portfolio accounting required
   before any promotion.
+- [mnf16-t1-record.md](mnf16-t1-record.md) — MNF16-T1 research
+  throughput, first deliverable: versioned production traces (22 mix
+  streams, 2.54M bytes, v1.16.0 digest-bound) + the executable T0–T4
+  prefix contract + the multi-arm runner; X1-L reproduced from the
+  trace with max diff 0.0 on every cost and wire byte at 8x lower
+  marginal cost; screening population pre-registered.
 
 ## Measurements (canonical numbers)
 
