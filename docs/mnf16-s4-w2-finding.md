@@ -71,3 +71,43 @@ a coarse function of R itself was conditioning the model coding R.
 3. The production anchors untouched: 810,816 B corpus, 414.5 s / 28.92 s
    walls, shipped backends and v1.16.0 release unchanged. No
    production source was modified by S1-S4 research.
+
+## Post-publication ratification (2026-11-15)
+
+The finding is accepted as the close of the G8 research line: S4 is
+denied at W2, S5 is not reached, and no parameter search may attempt to
+recover the original gains (no threshold, context-population or spatial-
+distance variants).
+
+The causal requirement is strengthened into the PREFIX INVARIANCE
+CONTRACT, mandatory for every future conditional-information feature.
+Decoder-available state before symbol i is P_i = (s_0..s_{i-1}, M_i)
+with M_i the metadata the decoder already has; the feature contract is
+F_i = f(P_i), i.e. identical prefixes force identical features
+regardless of current or future symbols. Mandatory gate order:
+
+| Gate | Requirement |
+| --- | --- |
+| T0 — Dependency audit | Every feature operand named; any operand outside P_i fails |
+| T1 — Target substitution | Changing the target while fixing its prefix cannot change the feature |
+| T2 — Future substitution | Changing future symbols cannot change the feature |
+| T3 — Prefix-only execution | Feature extraction receives no access to undecoded values — interface-enforced over test-only detection |
+| T4 — Decoder parity | Independently reconstructed decoder feature == encoder feature |
+| T5 — Conditional information | Only after T0–T4 may the probability census begin |
+
+Interpretation note retained: a deterministic feature derived from the
+target and prefix obeys H(R|P) = H(F|P) + H(R|F,P) — apparent residual
+uncertainty reduction is paid by the feature's own information cost
+under complete description-length accounting; apparent information is
+never free.
+
+Research dispositions (permanent): original G8 invalid for decoder-side
+conditioning; strictly-past G8' measured negative; disagreement and
+joint conditioning denied; the S3/Hubble positives are
+oracle-conditioned; cross-scale dependence remains UNRESOLVED as a
+hypothesis class but has no viable realizable candidate. Next domains
+under T0–T5, as directed: acquisition-system signatures (e.g. (x mod 8,
+y mod 8) — target-independent by construction if coordinates resolve at
+the entropy-decode point) and conditional cross-channel information
+using only already-decoded channel values. Same-plane local magnitude
+and cross-scale gradients are deferred.
