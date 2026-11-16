@@ -91,3 +91,18 @@ sources untouched. Research instruments: scripts/mnf16_s3_coder.py,
 crates/mnf-mans/examples/r9_audit.rs (additive g8child token).
 Run artifacts: /tmp/mnf16_s3_full.log, /tmp/mnf16_s3_hubble.log,
 /tmp/mnf16_s3_hubble.json, /tmp/s3_decomp.log.
+
+## ADDENDUM (2026-11-15, post-publication finding)
+
+The S4 W2 (self-containment) design review found that the frozen G8
+stencil reads its own target symbol — mean(|west-8 − R|, |north-8 − R|)
+— so neither the encoder's feature sequence nor the S3 gains were
+decoder-realizable. The strictly-past re-measurement
+(scripts/mnf16_s3_coder.py --past, all else frozen) collapses the
+corpus gain: S3-1' = 585,449.0 B vs S3-0 583,366.1 B = **−2,082.9 B**
+(21/22 files negative; same-run control −6,487.9 B). The S3-1/S3-H
+positives are attributed to target-correlated feature leakage, not
+cross-scale predictive information. Full analysis and disposition:
+docs/mnf16-s4-w2-finding.md. The S3 arithmetic above remains the correct
+measurement of the feature as defined; the addendum states its
+realizability limit. The S3 line is closed on G8.

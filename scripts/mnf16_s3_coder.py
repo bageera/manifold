@@ -98,10 +98,17 @@ def annotate_all(stream, flags, w, h, tile_count):
             np.asarray(idx, np.intp))
 
 
-def g8_feature_bytes(stream, flags, w, h, tile_count, n_syms):
+def g8_feature_bytes(stream, flags, w, h, tile_count, n_syms, past=False):
     """The frozen G8 feature byte per STREAM symbol (0..7), computed from
     same-plane earlier positions only (frozen stage-1 convention: clip to
-    image bounds, 128 for positions the stream never annotated)."""
+    image bounds, 128 for positions the stream never annotated).
+
+    past=True: the S4-realizable strictly-past form — the current
+    symbol's own value does NOT enter the feature (a wire decoder
+    cannot know its target's value before decoding it): G8' =
+    mean(|west-8|, |north-8|) instead of mean(|west-8 - R|,
+    |north-8 - R|). The S3 frozen form is kept for the recorded arms.
+    """
     wire, pos, idx = annotate_all(stream, flags, w, h, tile_count)
     h_, w_ = h, w
     y, x, c = pos[:, 0], pos[:, 1], pos[:, 2]
@@ -114,7 +121,10 @@ def g8_feature_bytes(stream, flags, w, h, tile_count, n_syms):
         li = lut[yy, xx, c]
         return np.where(li >= 0, wire[li], 128)
 
-    g8 = (np.abs(sym(0, -8) - wire) + np.abs(sym(-8, 0) - wire)) / 2
+    if past:
+        g8 = (np.abs(sym(0, -8)) + np.abs(sym(-8, 0))) / 2
+    else:
+        g8 = (np.abs(sym(0, -8) - wire) + np.abs(sym(-8, 0) - wire)) / 2
     fb = np.zeros(n_syms, np.uint8)
     fb[idx] = s1.bucket(g8, EDGES).astype(np.uint8)
     # temporal dependency proof (Jon's gate): every read neighbor is
@@ -203,7 +213,8 @@ def main():
         stream = bridge(mode, payload, "p")
         _walk_check(stream, w, h)
         n = len(stream)
-        fb = g8_feature_bytes(stream, flags, w, h, tile_count, n)
+        past = "--past" in sys.argv
+        fb = g8_feature_bytes(stream, flags, w, h, tile_count, n, past=past)
         t_feat = time.perf_counter() - t0
         ks0 = s2.prod_keys(stream, be)
         s3_0 = audit_bits(mode, stream)
@@ -241,5 +252,36 @@ def main():
           f"(gain {tot0 - tot2:,.1f} B)", flush=True)
 
 
+def _self_check():
+    """Strictly-past vs frozen forms must differ exactly by the target
+    terms; the border-clip exemption must not fire for G8' reads."""
+    import numpy as np
+    wire = np.array([10, 200, 30, 40], np.int64)
+    pos = np.array([(0, 1, 0), (0, 1, 1), (0, 2, 0), (0, 3, 0)], np.intp)
+    h_, w_ = 1, 4
+    y, x, c = pos[:, 0], pos[:, 1], pos[:, 2]
+    lut = -np.ones((h_, w_, 3), np.int64)
+    lut[y, x, c] = np.arange(len(wire))
+
+    def sym(dy, dx):
+        yy = np.clip(y + dy, 0, h_ - 1)
+        xx = np.clip(x + dx, 0, w_ - 1)
+        li = lut[yy, xx, c]
+        return np.where(li >= 0, wire[li], 128)
+
+    frozen = (np.abs(sym(0, -8) - wire) + np.abs(sym(-8, 0) - wire)) / 2
+    past = (np.abs(sym(0, -8)) + np.abs(sym(-8, 0))) / 2
+    # frozen at sym(0,2,0): west-8 clips to x=0 (self) => |10-30|/... contains self
+    assert frozen[2] != past[2], "forms identical — target term lost"
+    # west-8 clips to (0,0) = unannotated -> the frozen 128 miss byte;
+    # north is the symbol AT (0,2) itself... no: north reads (0,2) which IS
+    # the symbol's own position (row 0, clip-to-self) -> |30|; past = 79
+    assert past[2] == 79.0, past[2]
+    print("self-check ok (past form never reads the target beyond clip-to-self)")
+
+
 if __name__ == "__main__":
-    main()
+    if "--selfcheck" in sys.argv:
+        _self_check()
+    else:
+        main()

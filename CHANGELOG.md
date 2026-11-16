@@ -1505,3 +1505,13 @@ Lossless RGB8 16×16 tile codec per the v0.5 spec: MNF5 container (24-byte
 header + zlib tile stream), literal/reference modes, backward patch atlas
 (mean-RGB ranking, last-128 window, 8 candidates), standalone integer-only
 decoder, CLI (encode/decode/verify/benchmark), atlas-disabled ablation.
+### MNF16-S4 W2 finding — G8 not decoder-realizable; line closes (2026-11-15, not a release)
+
+The S4 authorization's self-containment gate caught the S3 feature
+reading its own target symbol; the strictly-past re-measurement
+(--past, all else frozen) is negative across the corpus (−2,082.9 B,
+21/22 files). S3's recorded gains are attributed to target-correlated
+leakage; the G8 line closes with the negatives standing and production
+anchors untouched ([docs/mnf16-s4-w2-finding.md]
+(docs/mnf16-s4-w2-finding.md), record addendum in
+[docs/mnf16-s3-record.md](docs/mnf16-s3-record.md)).

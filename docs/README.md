@@ -300,6 +300,11 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   children (+15,788 B children-specific) from the refine package
   (−1,433 B alone); feature-causality proof, adaptive parity, per-child
   accounting recorded; S4/S5 conditional, no backend, anchors untouched.
+- [mnf16-s4-w2-finding.md](mnf16-s4-w2-finding.md) — S4 W2 self-
+  containment finding: the G8 stencil reads its own target
+  (unrealizable); the strictly-past re-measurement collapses the S3
+  gains (corpus −2,083 B, 21/22 negative) — G8 line CLOSES; negatives
+  stand; anchors untouched.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).
