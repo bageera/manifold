@@ -1530,3 +1530,19 @@ every content arm nets below the plain lane-availability partition
 target-independent by construction). X1-A/B/X3 closed; the partition
 defers to a coder-arm decision; controls limited by backend-1 picks on
 the synthetic fixtures (recorded).
+
+### MNF16-X1-L — lane-class conditioning, coder-level (2026-11-15, not a release)
+
+Additive `lanechild`/`laneparent` tokens on the r9_audit instrument
+([crates/mnf-mans/examples/r9_audit.rs]
+(crates/mnf-mans/examples/r9_audit.rs), harness
+[scripts/mnf16_x1l.py](scripts/mnf16_x1l.py), record
+[docs/mnf16-x1l-record.md](docs/mnf16-x1l-record.md)): per-context
+lane-class children (context space 40; class = the X1 availability
+mapping — record-grammar metadata, decoder-derivable, NOT transmitted)
+deliver **+41,720.9 B prequential / +41,708 B measured wire corpus-wide
+(7.15%, positive on 22/22 mix files; L0 = the exact S3-0 anchor) and a
+single-shot frozen Hubble holdout of +12,653 B**, shuffled controls
+negative everywhere. Instrumentation only: no production backend, no
+wire change; X1 closes positive with the self-contained-decode +
+portfolio-accounting promotion contract recorded.

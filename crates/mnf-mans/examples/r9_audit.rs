@@ -221,6 +221,22 @@ struct Cfg {
     /// replicating the S2-5 static form exactly. Additive research mode:
     /// S3-0 (any mode without this token) is untouched.
     feat_ctx: bool,
+    /// MNF16-X1-L: lane-class children splice (child = 20 + k for the
+    /// difference-lane class, base key kept for the value-lane/framing
+    /// class — the exact X1 availability classification; context space
+    /// 40). Children parent = 0xFF unless `share` is also set, in which
+    /// case parent = the base context (hierarchical sharing, the shipped
+    /// refine-child pattern). Lane bytes ride after the stream like feat
+    /// bytes but are decoder-derivable from the record walk (X1 T0-T4
+    /// proof: scripts/mnf16_x1.py PrefixView) and are NOT transmitted.
+    /// Additive research mode: any mode without `lanechild` untouched.
+    lane_ctx: bool,
+    /// X1-L L2 token (`laneparent`): children parented to their base
+    /// context AND child updates propagate down the ancestor chain
+    /// (the shipped hierarchical-refine pattern) WITHOUT flipping the
+    /// shipped base-key share semantics. L1 (`lanechild` alone) keeps
+    /// children fresh (parent 0xFF, no propagation).
+    lane_parent: bool,
 }
 
 /// R9-D refinement scope (the registered arms). Base backend-5 key =
@@ -255,6 +271,8 @@ fn parse_mode(mode: &str) -> Cfg {
         refine: Refine::None,
         share: false,
         feat_ctx: false,
+        lane_ctx: false,
+        lane_parent: false,
     };
     for tok in mode.split('-') {
         if let Some(rest) = tok.strip_prefix("mix") {
@@ -292,6 +310,11 @@ fn parse_mode(mode: &str) -> Cfg {
                 }
                 _ => {}
             }
+        } else if tok == "lanechild" {
+            c.lane_ctx = true;
+            c.nctx = 40;
+        } else if tok == "laneparent" {
+            c.lane_parent = true;
         } else if tok == "g8child" {
             c.feat_ctx = true;
             c.nctx = 52;
@@ -352,6 +375,8 @@ fn feat_key(cfg: Cfg, prev: u8, prev2: u8, prev3: u8, feat: u8) -> usize {
     let k = key_of(cfg, prev, prev2, prev3);
     if cfg.feat_ctx && (16..=19).contains(&k) {
         20 + (k - 16) * 8 + feat as usize
+    } else if cfg.lane_ctx && k < 20 && feat > 0 {
+        20 + k
     } else {
         k
     }
@@ -409,13 +434,23 @@ fn main() {
                 m.parent = 0xFF;
             }
         }
+        if cfg.lane_ctx && cfg.nctx >= 40 {
+            for (k, m) in models.iter_mut().enumerate().skip(20).take(20) {
+                // L1: children fresh (parent 0xFF). L2 (`laneparent`):
+                // children parented to their base context so the child-
+                // local share propagation keeps the base live while cold
+                // (the shipped hierarchical-refine pattern; base-key
+                // share semantics untouched).
+                m.parent = if cfg.lane_parent { k as u8 - 20 } else { 0xFF };
+            }
+        }
     };
     // R9-D `share`: also step the ancestor chain's model with the same
     // symbol (child -> its parent; one chain level). The ancestor then
     // keeps LIVE statistics for the child to mix against while cold —
     // without it a refined arm's base parent stops receiving symbols.
     let share_update = |models: &mut [Dual], cfg: Cfg, k: usize, s: u8| {
-        if cfg.share {
+        if cfg.share || (cfg.lane_parent && k >= 20) {
             let p = models[k].parent;
             if p != 0xFF {
                 models[p as usize].step(s);
@@ -425,7 +460,7 @@ fn main() {
 
     // MNF16-S3 g8child: 'p' decode under feat_ctx consumes the same
     // feature-byte array (n bytes) after the payload.
-    let feats_for_p: Vec<u8> = if cmd == "p" && cfg.feat_ctx {
+    let feats_for_p: Vec<u8> = if cmd == "p" && (cfg.feat_ctx || cfg.lane_ctx) {
         let f = body[body.len().saturating_sub(n)..].to_vec();
         if f.len() != n {
             eprintln!("ERR feat bytes (p) {} != n {}", f.len(), n);
@@ -514,7 +549,7 @@ fn main() {
     }
 
     let syms: Vec<u8> = body[..n].to_vec();
-    let feats: Vec<u8> = if cfg.feat_ctx {
+    let feats: Vec<u8> = if cfg.feat_ctx || cfg.lane_ctx {
         let f = body[n..].to_vec();
         if f.len() != n {
             eprintln!("ERR feat bytes {} != n {}", f.len(), n);

@@ -314,6 +314,14 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   the lane-availability partition (+3,989 B estimator-level, structural,
   target-independent by construction); partition advances deferred as a
   pending coder-arm decision; A1 queued; anchors untouched.
+- [mnf16-x1l-record.md](mnf16-x1l-record.md) — MNF16-X1-L lane-class
+  coder experiment (additive `lanechild`/`laneparent` instrument
+  tokens; class = the exact X1 availability mapping, decoder-derivable,
+  zero transmission): corpus +41,720.9 B model / +41,708 B wire (7.15%,
+  22/22 files, L0 = the exact S3-0 anchor), Hubble holdout +12,653 B
+  (0.87%), shuffled control negative everywhere; X1 closes positive;
+  independent self-contained decode + portfolio accounting required
+  before any promotion.
 
 ## Measurements (canonical numbers)
 
