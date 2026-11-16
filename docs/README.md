@@ -337,6 +337,13 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   phase features deny economically (A2 content +491 B under ~18 kB
   fragmentation, A1/A3 noise), instrument validated by constructed
   audit-path micro-stream controls; A1 closed, no R3.
+- [mnf16-x1l-r5-record.md](mnf16-x1l-r5-record.md) — X1-L R5 PASS:
+  full 30-file portfolio competition (experimental discriminator 0xFFFF,
+  out-of-namespace): shipped corpus reproduced exactly (810,816), L1
+  portfolio 769,108 (+41,708 B = 5.14%, 22/22 mix files flip, 100%
+  research-savings retention), Hubble −12,652 B; 8 non-mix files keep
+  shipped representations (limitations recorded); promotion candidate
+  for a compression-focused v1.17.0 — promotion decision pending.
 
 ## Measurements (canonical numbers)
 

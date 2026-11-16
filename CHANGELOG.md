@@ -1583,3 +1583,18 @@ production context; conditional content noise-scale (A2 +491 B under
 ~18 kB fragmentation); the audit-path micro-stream control pair
 validates the estimator both directions; no arm advances to R3 per the
 stopping rule, with the length-selected-screening caveat recorded.
+
+### MNF16-X1-L R5 — production portfolio competition (2026-11-15, not a release)
+
+R5 PASSES ([scripts/mnf16_x1l_r5.py](scripts/mnf16_x1l_r5.py), record
+[docs/mnf16-x1l-r5-record.md](docs/mnf16-x1l-r5-record.md)): the frozen
+L1 candidate added to the complete v1.16.0 Maximum portfolio through the
+experimental integration path (discriminator 0xFFFF, outside the stable
+namespace) yields **810,816 -> 769,108 B (+41,708 B, 5.14%)** with the
+shipped basis reproduced exactly (R5.3 identity: 22 mix traces + 7
+be1 + 1 MNF9 file re-encoded deterministically), all 22 mix files
+selecting L1, the 8 non-mix files unchanged, Hubble complete-file
+-12,652 B, and the 100% retention bound confirmed. Timing: shipped path
+unchanged by construction (414.5 s ref); instrument marginal < 0.27
+s/KiB; production-integration timing pre-promotion. Promotion decision
+pending; no backend identifier assigned; measurement-only commit.
