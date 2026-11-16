@@ -1562,3 +1562,24 @@ on the frozen stream with zero encoder invocations. X1-L reproduced
 file-for-file with maximum difference 0.0 (model costs, wire bytes) at
 8x lower marginal cost (332 s -> 41 s for the arm set). Measurement
 infrastructure only; production untouched.
+
+### MNF16-X1-L R4 + MNF16-A1 R0-R2 (2026-11-15, not a release)
+
+X1-L R4 (independent self-contained decoding) PASSES: additive `nat`
+instrument token + native record-grammar walk regenerates lane classes
+from the decoded prefix and container metadata — probability words
+identical to the external-array path on all 22 corpus files and Hubble,
+entropy-wire bytes unchanged (no class bytes transmitted), exact
+reconstruction via the audit contract, 60-case malformed/truncated
+fuzz clean, native walk overhead 1.01x
+([docs/mnf16-x1l-r4-record.md](docs/mnf16-x1l-r4-record.md)). R5
+(production portfolio) remains the promotion gate; no backend id.
+
+MNF16-A1 acquisition-signature screening R0-R2 closes negative on the
+T1 substrate ([scripts/mnf16_a1.py](scripts/mnf16_a1.py),
+[docs/mnf16-a1-record.md](docs/mnf16-a1-record.md)): 2x2/8x8 phase and
+block-edge features carry trace marginal information absorbed by the
+production context; conditional content noise-scale (A2 +491 B under
+~18 kB fragmentation); the audit-path micro-stream control pair
+validates the estimator both directions; no arm advances to R3 per the
+stopping rule, with the length-selected-screening caveat recorded.

@@ -328,6 +328,15 @@ principles (information theory, coding theory, MDL) to the mechanisms.
   prefix contract + the multi-arm runner; X1-L reproduced from the
   trace with max diff 0.0 on every cost and wire byte at 8x lower
   marginal cost; screening population pre-registered.
+- [mnf16-x1l-r4-record.md](mnf16-x1l-r4-record.md) — X1-L R4 pass:
+  native `nat` token + record-grammar walk regenerates lane classes
+  from decoder state; word-for-word probability parity and identical
+  self-contained wire bytes on all 22 files + Hubble; 60-case fuzz
+  clean; native overhead 1.01x. [mnf16-a1-record.md](mnf16-a1-record.md)
+  — MNF16-A1 acquisition-signature screening (R0–R2 on T1): coordinate-
+  phase features deny economically (A2 content +491 B under ~18 kB
+  fragmentation, A1/A3 noise), instrument validated by constructed
+  audit-path micro-stream controls; A1 closed, no R3.
 
 ## Measurements (canonical numbers)
 

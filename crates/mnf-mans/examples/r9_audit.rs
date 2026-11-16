@@ -237,6 +237,13 @@ struct Cfg {
     /// shipped base-key share semantics. L1 (`lanechild` alone) keeps
     /// children fresh (parent 0xFF, no propagation).
     lane_parent: bool,
+    /// X1-L R4 (`nat` token): native lane classes — regenerated
+    /// internally from the record grammar walk over the stream and the
+    /// container metadata (w, h, tile_count, flags ride in the stdin
+    /// header after n), instead of external arrays. Decoder-accessible
+    /// by construction; the R4 harness asserts parity with the
+    /// external-array path.
+    native: bool,
 }
 
 /// R9-D refinement scope (the registered arms). Base backend-5 key =
@@ -273,6 +280,7 @@ fn parse_mode(mode: &str) -> Cfg {
         feat_ctx: false,
         lane_ctx: false,
         lane_parent: false,
+        native: false,
     };
     for tok in mode.split('-') {
         if let Some(rest) = tok.strip_prefix("mix") {
@@ -315,6 +323,8 @@ fn parse_mode(mode: &str) -> Cfg {
             c.nctx = 40;
         } else if tok == "laneparent" {
             c.lane_parent = true;
+        } else if tok == "nat" {
+            c.native = true;
         } else if tok == "g8child" {
             c.feat_ctx = true;
             c.nctx = 52;
@@ -371,6 +381,60 @@ fn key_of(cfg: Cfg, prev: u8, prev2: u8, prev3: u8) -> usize {
 /// MNF16-S3 g8child splice: under `feat_ctx`, the refine-selected heavy
 /// children (16..19) further condition on the per-symbol G8 feature
 /// bucket (frozen edges; ids 20..51, context space 52 — S2-5 spec).
+/// X1-L R4: native incremental lane classification from decoder-accessible
+/// state — the container metadata (w, h, tile_count, flags) plus the record
+/// grammar's framing bytes in the stream themselves. Per byte: mode byte ->
+/// meta bytes (the committed META table) -> body; interleaved bodies iterate
+/// pixels in lane order (classes 0,1,1 repeating), planar bodies stack
+/// lane-major planes (tw*th zeros then tw*th*2 ones). Returns the per-byte
+/// class or None on any malformed framing (bounds-checked; no panics).
+fn walk_classes(stream: &[u8], w: u32, h: u32, tc: u32, planar: bool) -> Option<Vec<u8>> {
+    let ts: u32 = 16;
+    let cols = (w + ts - 1) / ts;
+    let mut cls = Vec::with_capacity(stream.len());
+    let mut off: usize = 0;
+    for t in 0..tc {
+        let gy = t / cols;
+        let gx = t % cols;
+        let tw = ts.min(w - gx * ts) as usize;
+        let th = ts.min(h - gy * ts) as usize;
+        let mode = *stream.get(off)?;
+        off += 1;
+        let meta: usize = match mode {
+            0 | 3 => 0,
+            1 | 4 => 4,
+            2 | 5 => 5,
+            8 => 3,
+            6 | 7 => if planar { 12 } else { 9 },
+            _ => return None,
+        };
+        // framing bytes carry class 0 (the external array's convention:
+        // mode + meta are structural, never residual operands)
+        cls.push(0u8);
+        for _ in 0..meta {
+            stream.get(off)?;      // bounds check the meta span
+            cls.push(0u8);
+            off += 1;
+        }
+        if off + tw * th * 3 > stream.len() {
+            return None;
+        }
+        if planar {
+            cls.extend(std::iter::repeat(0u8).take(tw * th));
+            cls.extend(std::iter::repeat(1u8).take(2 * tw * th));
+        } else {
+            for p in 0..(tw * th * 3) {
+                cls.push(if p % 3 == 0 { 0 } else { 1 });
+            }
+        }
+        off += tw * th * 3;
+    }
+    if off != stream.len() {
+        return None;
+    }
+    Some(cls)
+}
+
 fn feat_key(cfg: Cfg, prev: u8, prev2: u8, prev3: u8, feat: u8) -> usize {
     let k = key_of(cfg, prev, prev2, prev3);
     if cfg.feat_ctx && (16..=19).contains(&k) {
@@ -392,12 +456,13 @@ fn main() {
     std::io::stdin().read_to_end(&mut stdin).expect("stdin");
     let hdr_len = stdin.iter().position(|&b| b == b'\n').expect("header");
     let hdr = String::from_utf8(stdin[..hdr_len].to_vec()).expect("utf8");
-    let n: usize = hdr
-        .split_whitespace()
-        .next()
-        .expect("n")
-        .parse()
-        .expect("n");
+    let fields: Vec<&str> = hdr.split_whitespace().collect();
+    let n: usize = fields[0].parse().expect("n");
+    // optional container geometry (needed by `nat` modes): "n [w h tc flags]"
+    let gw: u32 = fields.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let gh: u32 = fields.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let gtc: u32 = fields.get(3).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let gflags: u32 = fields.get(4).and_then(|s| s.parse().ok()).unwrap_or(0);
     let body = &stdin[hdr_len + 1..];
     // 'p' (payload decode): the declared "n" is the payload's own byte
     // length, not a symbol count — the payload carries its own stream_len
@@ -549,7 +614,17 @@ fn main() {
     }
 
     let syms: Vec<u8> = body[..n].to_vec();
-    let feats: Vec<u8> = if cfg.feat_ctx || cfg.lane_ctx {
+    let feats: Vec<u8> = if cfg.native {
+        // R4: regenerate classes from decoder-accessible state; no
+        // external arrays are consumed or transmitted.
+        match walk_classes(&body[..n], gw, gh, gtc, gflags & 1 == 1) {
+            Some(v) => v,
+            None => {
+                eprintln!("ERR native walk: malformed or truncated framing");
+                std::process::exit(1);
+            }
+        }
+    } else if cfg.feat_ctx || cfg.lane_ctx {
         let f = body[n..].to_vec();
         if f.len() != n {
             eprintln!("ERR feat bytes {} != n {}", f.len(), n);
