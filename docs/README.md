@@ -308,6 +308,12 @@ principles (information theory, coding theory, MDL) to the mechanisms.
 - [mnf10-autopsy.md](mnf10-autopsy.md) — two-track opener: Bit-Cost
   Autopsy instrumentation + hand-off to generative discovery
   (docs/mnf10-autopsy-gate.csv carries the per-file walk).
+- [mnf16-x1-record.md](mnf16-x1-record.md) — MNF16-X1 cross-channel
+  discovery (first extractor built under T0–T5; 22 mix files, 2.54M
+  stream bytes): X1-A/B/X3 content noise-scale and net-negative against
+  the lane-availability partition (+3,989 B estimator-level, structural,
+  target-independent by construction); partition advances deferred as a
+  pending coder-arm decision; A1 queued; anchors untouched.
 
 ## Measurements (canonical numbers)
 

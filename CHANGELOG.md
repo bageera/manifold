@@ -1515,3 +1515,18 @@ leakage; the G8 line closes with the negatives standing and production
 anchors untouched ([docs/mnf16-s4-w2-finding.md]
 (docs/mnf16-s4-w2-finding.md), record addendum in
 [docs/mnf16-s3-record.md](docs/mnf16-s3-record.md)).
+
+### MNF16-X1 — cross-channel information discovery (2026-11-15, not a release)
+
+First feature instrument built under the ratified prefix-invariance
+contract ([scripts/mnf16_x1.py](scripts/mnf16_x1.py), record
+[docs/mnf16-x1-record.md](docs/mnf16-x1-record.md)): T0–T4 gates pass
+exhaustively (5.77M target substitutions, exact fast/reference parity);
+T5 census over 22 mix files (2.54M stream bytes, 66.67% admissible —
+exactly the grammar's lane distribution): earlier-lane residual
+magnitude/sign content is noise-scale (+74/+296 B corpus-wide) and
+every content arm nets below the plain lane-availability partition
+(+3,989 B, 0.684% of L6 — structural metadata, zero extraction cost,
+target-independent by construction). X1-A/B/X3 closed; the partition
+defers to a coder-arm decision; controls limited by backend-1 picks on
+the synthetic fixtures (recorded).
