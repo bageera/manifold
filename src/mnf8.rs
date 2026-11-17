@@ -551,6 +551,7 @@ pub(crate) fn encode_mnf8_metrics(
                             let mut d6 = D6.lock().expect("d6 stats");
                             d6.dominated += 1;
                             d6.dominated_symbols += at as u64;
+                            d6.dominated_streams += raw.len() as u64;
                             let frac = (at * 4).saturating_div(raw.len().max(1));
                             let bucket = usize::from(u8::try_from(frac.min(3)).unwrap_or(3));
                             d6.dominated_position[bucket] += 1;
@@ -657,6 +658,8 @@ pub struct D6Stats {
     pub dominated_symbols: u64,
     /// Symbols encoded by COMPLETED mix arms (the full stream length).
     pub completed_symbols: u64,
+    /// Symbols the DOMINATED arms' full streams would have required.
+    pub dominated_streams: u64,
     /// Termination position of dominated arms, as a fraction of the
     /// stream (0: under 25% of symbols, .., 3: over 75%).
     pub dominated_position: [u64; 4],
@@ -668,6 +671,7 @@ pub static D6: Mutex<D6Stats> = Mutex::new(D6Stats {
     completed: 0,
     dominated_symbols: 0,
     completed_symbols: 0,
+    dominated_streams: 0,
     dominated_position: [0; 4],
 });
 

@@ -69,11 +69,12 @@ fn encode_cmd(
         if std::env::var("MNF17_P1D6_STATS").is_ok() {
             let d6 = manifold::mnf8::d6_take_stats();
             println!(
-                "  [d6] dominated={} completed={} dom_symbols={} mix_symbols={}",
+                "  [d6] dominated={} completed={} dom_symbols={} mix_symbols={} dom_streams={}",
                 d6.dominated,
                 d6.completed,
                 d6.dominated_symbols,
-                d6.dominated_symbols + d6.completed_symbols
+                d6.dominated_symbols + d6.completed_symbols,
+                d6.dominated_streams
             );
         }
         println!(
