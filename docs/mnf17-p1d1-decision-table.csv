@@ -1,0 +1,13 @@
+strat,stride,symbols_avoided_pct,time_weighted_pct,bound_overhead_pct,note
+A,1,61.446%,59.840%,0.0979%,
+A,16,61.443%,n/a,0.0061%,
+A,64,61.433%,n/a,0.0015%,
+A,256,61.393%,n/a,0.0004%,
+B,1,68.119%,66.775%,0.0979%,
+C,1,63.065%,61.637%,0.0979%,
+ORACLE,1,68.971%,67.622%,0.0979%,not a deployable selector; upper-bound reference only
+
+TOTAL mix symbols,239260400,total mix encode s,192.2,mix arms,1024,arms total,1600
+validity,monotone series: ALL arms,exact final: ALL arms,HEADER8==32 asserted per arm
+crossings A,median tau/N,0.46,never-crossed,40/1024
+crossings ORACLE,median tau/N,0.34,never-crossed,4/1024

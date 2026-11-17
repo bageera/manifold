@@ -3121,6 +3121,357 @@ mod channel_diff {
         }
     }
 
+    // ==== MNF17-P1-D1: counterfactual termination census. Every
+    // candidate runs to COMPLETION; the num_words lower-bound series is
+    // recorded per mix arm and the incumbent strategies are computed
+    // offline from the same series (D0 monotonicity + exact-final
+    // validation asserted per arm).
+    #[test]
+    #[ignore]
+    fn p1d1_census() {
+        use crate::mix_coder::{p1d1, Geom, MixParams};
+        use std::time::Instant;
+        let out = std::env::var("MNF17_P1D1_OUT").expect("MNF17_P1D1_OUT");
+        let files: Vec<String> = match std::env::var("MNF17_P1A_FILES") {
+            Ok(v) => v.split(',').map(|p| p.trim().to_string()).collect(),
+            Err(_) => vec![
+                "testdata/solid_256x256.png".into(),
+                "testdata/gradient_320x240.png".into(),
+                "testdata/screenshot_640x400.png".into(),
+                "testdata/noise_256x256.png".into(),
+                "testdata/repeat_256x256.png".into(),
+                "testdata/heldout/plaid_192.png".into(),
+                "testdata/photos/forest_224x160_s900002.png".into(),
+                "testdata/photos/dusk_160x120_s900003.png".into(),
+            ],
+        };
+        fn px_of_d1(path: &str) -> (Vec<u8>, Dims) {
+            let img = image::open(path).expect("census png").to_rgb8();
+            let (w, h) = (img.width(), img.height());
+            (
+                img.into_raw(),
+                Dims {
+                    width: w,
+                    height: h,
+                },
+            )
+        }
+        let candidates = backend_candidates();
+        let mut csv = String::from(
+            "file,backend,kidx,pidx,reference,arm,rank,N,size,encode_us,probe_us,tau_a1,tau_a16,tau_a64,tau_a256,tau_b1,tau_c1,tau_o1,avoided_a1,avoided_c1,avoided_o1,monotone,exact_final\n",
+        );
+        #[derive(Clone)]
+        struct ArmRec {
+            backend: u32,
+            kidx: usize,
+            pidx: usize,
+            reference: u8,
+            arm: u32,
+            rank: usize,
+            n: usize,
+            size: usize,
+            encode_us: u64,
+            probe_us: u64,
+            series: Vec<u32>,
+            monotone: bool,
+            exact_final: bool,
+        }
+        for f in &files {
+            let (pixels, dims) = px_of_d1(f);
+            let cache = crate::mnf6::ProbeCache::new(crate::mnf6::PROBE_CACHE_BUDGET_BYTES);
+            let pred_arms = [
+                PredKind::None,
+                PredKind::Med,
+                PredKind::Plane,
+                PredKind::Left,
+            ];
+            #[allow(clippy::type_complexity)]
+            let mut class_groups: Vec<((bool, u32), Vec<(usize, u32)>)> = Vec::new();
+            for (bidx, (backend, coder)) in candidates.iter().enumerate() {
+                let key = match coder {
+                    Coder::Zlib => (true, 0),
+                    Coder::Zstd(l) => (false, *l as u32),
+                };
+                match class_groups.iter_mut().find(|(k, _)| *k == key) {
+                    Some((_, g)) => g.push((bidx, *backend)),
+                    None => class_groups.push((key, vec![(bidx, *backend)])),
+                }
+            }
+            let mut recs: Vec<ArmRec> = Vec::new();
+            for (kidx, kind) in pred_arms.iter().enumerate() {
+                for (pidx, planar) in [false, true].iter().enumerate() {
+                    let med = *kind == PredKind::Med;
+                    for (class_key, group) in &class_groups {
+                        let coder = match class_key {
+                            (true, _) => Coder::Zlib,
+                            (false, l) => Coder::Zstd(*l as i32),
+                        };
+                        let (raw0, st) = build_record_stream(
+                            &pixels, dims, true, true, *planar, med, *kind, &coder, &cache,
+                        )
+                        .expect("d1 build");
+                        let tile_count = st.modes.len() as u32;
+                        for reference in 0u8..=3u8 {
+                            let raw = if reference == 0 {
+                                raw0.clone()
+                            } else {
+                                channel_diff_relabel(
+                                    &raw0,
+                                    *planar,
+                                    false,
+                                    dims.width,
+                                    dims.height,
+                                    reference,
+                                )
+                            };
+                            for &(bidx, backend) in group {
+                                let arm =
+                                    8u32 * kidx as u32 + 2u32 * pidx as u32 + u32::from(reference);
+                                let rank = bidx * 40 + arm as usize;
+                                let geom = Geom {
+                                    width: dims.width,
+                                    height: dims.height,
+                                    tile_count,
+                                    planar: *planar,
+                                };
+                                let is_mix = backend >= BACKEND_MIX;
+                                let (payload, encode_us, probe_us, series, mono, exact): (
+                                    Vec<u8>,
+                                    u64,
+                                    u64,
+                                    Vec<u32>,
+                                    bool,
+                                    bool,
+                                ) = if is_mix {
+                                    let params = match backend {
+                                        BACKEND_MIX => MixParams::BACKEND4,
+                                        BACKEND_MIX5 => MixParams::BACKEND5,
+                                        BACKEND_MIX6 => MixParams::BACKEND6,
+                                        _ => MixParams::BACKEND7,
+                                    };
+                                    let lane7 = backend == BACKEND_MIX7;
+                                    let g7 = if lane7 { Some(geom) } else { None::<Geom> };
+                                    let t = Instant::now();
+                                    let probe = p1d1::mix_encode_with_probe(&params, &raw, g7, 1);
+                                    let enc_us = t.elapsed().as_micros() as u64 - probe.probe_us;
+                                    let expect = if lane7 {
+                                        crate::mix_coder::mix_encode_with_lane(&params, &raw, geom)
+                                    } else {
+                                        crate::mix_coder::mix_encode_with(&params, &raw)
+                                    };
+                                    assert_eq!(
+                                        probe.wire, expect,
+                                        "D1 probe wire parity {f} b{backend}"
+                                    );
+                                    let mono = probe.series.windows(2).all(|w| w[0] <= w[1]);
+                                    let payload_len = 4usize
+                                        + 4usize * probe.series[probe.series.len() - 1] as usize;
+                                    let exact = payload_len == probe.wire.len();
+                                    (
+                                        probe.wire,
+                                        enc_us,
+                                        probe.probe_us,
+                                        probe.series,
+                                        mono,
+                                        exact,
+                                    )
+                                } else {
+                                    let t = Instant::now();
+                                    let payload = backend_compress(backend, &raw, None)
+                                        .expect("cheap encode");
+                                    let enc_us = t.elapsed().as_micros() as u64;
+                                    (payload, enc_us, 0, Vec::new(), true, true)
+                                };
+                                let file_bytes =
+                                    assemble_mnf8(&payload, dims, tile_count, 0, backend)
+                                        .expect("assemble");
+                                let size = file_bytes.len();
+                                assert_eq!(size - payload.len(), HEADER8, "D0 header audit");
+                                recs.push(ArmRec {
+                                    backend,
+                                    kidx,
+                                    pidx,
+                                    reference,
+                                    arm,
+                                    rank,
+                                    n: raw.len(),
+                                    size,
+                                    encode_us,
+                                    probe_us,
+                                    series,
+                                    monotone: mono,
+                                    exact_final: exact,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            // token arms (fixed sizes; no series)
+            for (cidx, cap) in [(0usize, 16usize), (1usize, tokens::MAX_CANDIDATES)] {
+                let (wire0, _ts) = build_token_wire(&pixels, dims, cap).expect("token build");
+                for reference in 0u8..=3u8 {
+                    let arm = 32u32 + (cidx as u32) * 4 + u32::from(reference);
+                    recs.push(ArmRec {
+                        backend: u32::MAX,
+                        kidx: 9,
+                        pidx: cidx,
+                        reference,
+                        arm,
+                        rank: 5 * 40 + arm as usize,
+                        n: wire0.len(),
+                        size: HEADER8 + wire0.len(),
+                        encode_us: 0,
+                        probe_us: 0,
+                        series: Vec::new(),
+                        monotone: true,
+                        exact_final: true,
+                    });
+                }
+            }
+            // ---- offline incumbent strategies over the SAME series ----
+            let order_a: Vec<usize> = (0..recs.len()).collect();
+            let order_b = {
+                let mut o: Vec<usize> = (0..recs.len()).collect();
+                o.sort_by_key(|&i| {
+                    let r = &recs[i];
+                    (
+                        match r.backend {
+                            BACKEND_ZLIB | BACKEND_ZSTD19 => 0,
+                            u32::MAX => 2,
+                            _ => 1,
+                        },
+                        r.kidx,
+                        r.pidx,
+                        r.reference,
+                        r.rank,
+                    )
+                });
+                o
+            };
+            let order_c = {
+                let mut o: Vec<usize> = (0..recs.len()).collect();
+                o.sort_by_key(|&i| {
+                    let r = &recs[i];
+                    (r.kidx, r.pidx, r.reference, -(r.rank as i64))
+                });
+                o
+            };
+            let best_final = recs.iter().map(|r| (r.size, r.rank)).min().expect("winner");
+            let tau_from = |series: &[u32], incumbent_size: usize, stride: usize| -> usize {
+                for t in (0..series.len()).step_by(stride) {
+                    if HEADER8 + 4 * series[t] as usize + 4 > incumbent_size {
+                        return t;
+                    }
+                }
+                let last = series.len() - 1;
+                if HEADER8 + 4 * series[last] as usize + 4 > incumbent_size {
+                    return last;
+                }
+                usize::MAX
+            };
+            #[allow(clippy::type_complexity)]
+            let mut rows: Vec<(
+                ArmRec,
+                usize,
+                usize,
+                usize,
+                usize,
+                usize,
+                usize,
+                usize,
+            )> = Vec::new();
+            for arm_i in 0..recs.len() {
+                if recs[arm_i].series.is_empty() {
+                    rows.push((
+                        recs[arm_i].clone(),
+                        usize::MAX,
+                        usize::MAX,
+                        usize::MAX,
+                        usize::MAX,
+                        usize::MAX,
+                        usize::MAX,
+                        usize::MAX,
+                    ));
+                    continue;
+                }
+                let inc_a = order_a[..arm_i]
+                    .iter()
+                    .map(|&i| recs[i].size)
+                    .min()
+                    .unwrap_or(usize::MAX);
+                let inc_b = {
+                    let pos = order_b.iter().position(|&i| i == arm_i).unwrap_or(0);
+                    order_b[..pos]
+                        .iter()
+                        .map(|&i| recs[i].size)
+                        .min()
+                        .unwrap_or(usize::MAX)
+                };
+                let inc_c = {
+                    let pos = order_c.iter().position(|&i| i == arm_i).unwrap_or(0);
+                    order_c[..pos]
+                        .iter()
+                        .map(|&i| recs[i].size)
+                        .min()
+                        .unwrap_or(usize::MAX)
+                };
+                let s = &recs[arm_i].series;
+                let ta1 = tau_from(s, inc_a, 1);
+                let ta16 = tau_from(s, inc_a, 16);
+                let ta64 = tau_from(s, inc_a, 64);
+                let ta256 = tau_from(s, inc_a, 256);
+                let tb1 = tau_from(s, inc_b, 1);
+                let tc1 = tau_from(s, inc_c, 1);
+                let to1 = tau_from(s, best_final.0, 1);
+                rows.push((recs[arm_i].clone(), ta1, ta16, ta64, ta256, tb1, tc1, to1));
+            }
+            for (rec, ta1, ta16, ta64, ta256, tb1, tc1, to1) in &rows {
+                let n = rec.n;
+                let av = |t: usize| {
+                    let t = if t == usize::MAX { n } else { t };
+                    n - t
+                };
+                let fmt = |t: &usize| {
+                    if *t == usize::MAX {
+                        "NEVER".to_string()
+                    } else {
+                        t.to_string()
+                    }
+                };
+                csv.push_str(&format!(
+                    "{f},{backend},{kidx},{pidx},{reference},{arm},{rank},{n},{size},{encode_us},{probe_us},{},{},{},{},{},{},{},{},{},{},{mono},{exact}\n",
+                    fmt(ta1),
+                    fmt(ta16),
+                    fmt(ta64),
+                    fmt(ta256),
+                    fmt(tb1),
+                    fmt(tc1),
+                    fmt(to1),
+                    av(*ta1),
+                    av(*tc1),
+                    av(*to1),
+                    f = f,
+                    backend = if rec.backend == u32::MAX { "token".to_string() } else { rec.backend.to_string() },
+                    kidx = rec.kidx,
+                    pidx = rec.pidx,
+                    reference = rec.reference,
+                    arm = rec.arm,
+                    rank = rec.rank,
+                    n = rec.n,
+                    size = rec.size,
+                    encode_us = rec.encode_us,
+                    probe_us = rec.probe_us,
+                    mono = rec.monotone,
+                    exact = rec.exact_final,
+                ));
+            }
+            std::fs::write(&out, &csv).expect("d1 csv");
+            println!("p1d1 flush {}", f);
+        }
+        println!("P1D1-WRITTEN {}", out);
+    }
+
     /// MNF15-P1-D D0 instrument: how many proxy-cost PROBES one pick
     /// runs, and how many are byte-identical repeats (D1's exact-reuse
     /// surface). FNV-1a 64 dedupe over (coder, body); multi-minute.

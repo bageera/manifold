@@ -2700,3 +2700,110 @@ pub(crate) mod oracle {
         }
     }
 }
+
+/// MNF17-P1-D1: byte-exact encode mirror exposing `num_words()` at every
+/// symbol boundary (the certified lower-bound series). cfg(test) only.
+#[cfg(test)]
+pub(crate) mod p1d1 {
+    use super::*;
+    use std::time::Instant;
+
+    pub(crate) struct ProbeOut {
+        pub wire: Vec<u8>,
+        pub series: Vec<u32>,
+        pub probe_us: u64,
+    }
+
+    /// Mirrors `mix_encode_with` (plain) or `mix_encode_with_lane`
+    /// (geom supplied) and records `num_words` after every `stride`
+    /// symbols plus the final state. Wire parity against the production
+    /// function is asserted by the caller's harness.
+    pub(crate) fn mix_encode_with_probe(
+        params: &MixParams,
+        data: &[u8],
+        geom: Option<Geom>,
+        stride: usize,
+    ) -> ProbeOut {
+        let mut series = Vec::with_capacity(data.len() / stride + 2);
+        let mut probe_us = 0u64;
+        let mut enc = DefaultRangeEncoder::new();
+        if let Some(geom) = geom {
+            let mut walk = LaneWalk::new(geom.width, geom.height, geom.tile_count, geom.planar)
+                .expect("valid container geometry");
+            let mut ctxs: Vec<MixCtx> = (0..params.nctx)
+                .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+                .collect();
+            build_parent_tree(&mut ctxs, params);
+            let mut prev = 0u8;
+            let mut prev2 = 0u8;
+            let mut prev3 = 0u8;
+            for (i, &b) in data.iter().enumerate() {
+                let cls = walk
+                    .peek_class()
+                    .expect("byte beyond the record grammar on the encode path");
+                walk.consume(b)
+                    .expect("well-formed record stream on the encode path");
+                let base = mix_ctx_key(params, prev, prev2, prev3);
+                let c = if params.lane_child && cls == 1 {
+                    base + 20
+                } else {
+                    base
+                };
+                let m = ctxs[c].model(&ctxs, params).expect("mix model buildable");
+                enc.encode_symbols(std::iter::once((usize::from(b), &m)))
+                    .expect("mix encode symbol");
+                ctxs[c].step(b);
+                share_step(&mut ctxs, params, c, b);
+                prev3 = prev2;
+                prev2 = prev;
+                prev = b;
+                if (i + 1).is_multiple_of(stride) {
+                    let t = Instant::now();
+                    series.push(enc.num_words() as u32);
+                    probe_us += t.elapsed().as_micros() as u64;
+                }
+            }
+            assert!(walk.complete(), "record grammar must consume the stream");
+        } else {
+            let mut ctxs: Vec<MixCtx> = (0..params.nctx)
+                .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+                .collect();
+            build_parent_tree(&mut ctxs, params);
+            let mut prev = 0u8;
+            let mut prev2 = 0u8;
+            let mut prev3 = 0u8;
+            for (i, &b) in data.iter().enumerate() {
+                let c = mix_ctx_key(params, prev, prev2, prev3);
+                let m = ctxs[c].model(&ctxs, params).expect("mix model buildable");
+                enc.encode_symbols(std::iter::once((usize::from(b), &m)))
+                    .expect("mix encode symbol");
+                ctxs[c].step(b);
+                share_step(&mut ctxs, params, c, b);
+                prev3 = prev2;
+                prev2 = prev;
+                prev = b;
+                if (i + 1).is_multiple_of(stride) {
+                    let t = Instant::now();
+                    series.push(enc.num_words() as u32);
+                    probe_us += t.elapsed().as_micros() as u64;
+                }
+            }
+        }
+        series.push(enc.num_words() as u32); // t = N (final, pre-seal? no: num_words INCLUDES seal words)
+        let compressed = enc.into_compressed().expect("mix seal");
+        let mut out = Vec::with_capacity(compressed.len() * 4 + 4);
+        out.extend_from_slice(
+            &u32::try_from(data.len())
+                .expect("stream len fits u32")
+                .to_le_bytes(),
+        );
+        for w in compressed {
+            out.extend_from_slice(&w.to_le_bytes());
+        }
+        ProbeOut {
+            wire: out,
+            series,
+            probe_us,
+        }
+    }
+}
