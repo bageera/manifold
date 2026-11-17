@@ -30,10 +30,13 @@ verified per symbol including tie-breaking and slot-0 status flips.
 ## Why B does not pay (recorded conclusion)
 
 C4-B fused the *sweeps* (7 → 3 array passes) but the per-slot workload
-is dominated by the **two float divisions and two multiplies per slot**
-(512 arithmetic ops per symbol, unchanged by fusion — reassociation or
-reciprocal substitution would change the fixed-point vector and the
-wire). Array passes operate on an L1-resident 2 KB working set; their
+is dominated by per-slot float arithmetic — the convention recorded
+here is **divisions**: `pf=cf/tf` and `ps=cs/ts` = **2 divisions/slot =
+512 divisions per symbol**; counting the mix multiplies (`wf*mix +
+(1-wf)*mix`) and the integer-scale quantize multiply raises the full
+per-symbol float-op tally to ~1,024. Either convention leaves fusion
+unchanged (and unchanged in cost): reassociation or reciprocal
+substitution would change the fixed-point vector and the wire. Array passes operate on an L1-resident 2 KB working set; their
 cost is orders below the float arithmetic. Pass fusion was an Amdahl
 model over a component that is not the bottleneck inside the model
 layer — the honest correction to the §3 projection.

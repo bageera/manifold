@@ -190,7 +190,12 @@ pub fn mix_ctx_bucket(prev: u8) -> u8 {
     }
 }
 
-/// One context's dual estimator.
+/// One context's dual estimator. The counter sums are MAINTAINED
+/// (MNF17-P1-C4-A, integrated at research validation): `sf`/`ss` equal
+/// Σ fast / Σ slow at every state transition (point updates carry the
+/// increment inline; rescaling recounts inside its already-required
+/// sweep). Differential fixture + cohort evidence:
+/// docs/mnf17-p1c4a-record.md, mnf17-p1c4bcd-record.md.
 #[derive(Clone)]
 struct MixCtx {
     fast: Vec<u64>,
@@ -204,6 +209,10 @@ struct MixCtx {
     /// Local updates SINCE the context was built — the R9 cold-mix
     /// window's counter (saturating; inert when `warm_n0` = None).
     nlocal: u64,
+    /// Maintained Σ fast (== sum of `fast` at every transition).
+    sf: u64,
+    /// Maintained Σ slow (== sum of `slow` at every transition).
+    ss: u64,
 }
 
 impl MixCtx {
@@ -216,14 +225,16 @@ impl MixCtx {
             cap_slow,
             parent: NO_PARENT,
             nlocal: 0,
+            sf: 256,
+            ss: 256,
         }
     }
 
     /// Fixed-point probability vector over the FULL alphabet; every
     /// symbol >= 1 (all must stay decodable); total exactly SCALE.
     fn probs(&self) -> Vec<u64> {
-        let tf = self.fast.iter().sum::<u64>() as f64;
-        let ts = self.slow.iter().sum::<u64>() as f64;
+        let tf = self.sf as f64;
+        let ts = self.ss as f64;
         let wf = 1.0 / (1.0 + (-self.log_w).exp());
         let mut p: Vec<u64> = self
             .fast
@@ -288,25 +299,33 @@ impl MixCtx {
 
     fn step(&mut self, s: u8) {
         let si = usize::from(s);
-        let tf = self.fast.iter().sum::<u64>() as f64;
-        let ts = self.slow.iter().sum::<u64>() as f64;
+        let tf = self.sf as f64;
+        let ts = self.ss as f64;
         let pf = (self.fast[si] as f64 / tf).max(1e-9);
         let ps = (self.slow[si] as f64 / ts).max(1e-9);
         self.log_w = (self.log_w + EWA_LR * (pf.ln() - ps.ln())).clamp(-20.0, 20.0);
         self.fast[si] += COUNT_INC;
+        self.sf += COUNT_INC;
         self.slow[si] += COUNT_INC;
+        self.ss += COUNT_INC;
         // nlocal stops counting at the Init-seal ceiling by saturation
         // (the ceiling is unreachable on the shipped schedule)
         self.nlocal = self.nlocal.saturating_add(1);
-        if self.fast.iter().sum::<u64>() > self.cap_fast {
+        if self.sf > self.cap_fast {
+            let mut acc = 0u64;
             for c in &mut self.fast {
                 *c = (*c + 1) >> 1;
+                acc += *c;
             }
+            self.sf = acc;
         }
-        if self.slow.iter().sum::<u64>() > self.cap_slow {
+        if self.ss > self.cap_slow {
+            let mut acc = 0u64;
             for c in &mut self.slow {
                 *c = (*c + 1) >> 1;
+                acc += *c;
             }
+            self.ss = acc;
         }
     }
 }
@@ -2251,5 +2270,433 @@ pub(crate) mod p1c4b {
         println!(
             "C4C-PROBE ctor_total_us={t_ctor} ({REPS} builds) writer_total_us={t_writer} infer_total_us={t_infer} infer_mismatch={infer_mismatch} fused_quant_256_us={tq}"
         );
+    }
+}
+
+/// MNF17-P1-C5 oracle (cfg(test)): the pre-C4-A context — recomputed
+/// sums, original pass structure — retained verbatim as the differential
+/// reference for the integrated production path. C5 wire parity and the
+/// C6 contemporaneous timing control ride these twins.
+#[cfg(test)]
+pub(crate) mod oracle {
+    use super::*;
+
+    pub(crate) struct MixCtxO {
+        fast: Vec<u64>,
+        slow: Vec<u64>,
+        log_w: f64,
+        cap_fast: u64,
+        cap_slow: u64,
+        parent: u8,
+        nlocal: u64,
+    }
+
+    impl MixCtxO {
+        pub(crate) fn new(cap_fast: u64, cap_slow: u64) -> Self {
+            Self {
+                fast: vec![1; 256],
+                slow: vec![1; 256],
+                log_w: 0.0,
+                cap_fast,
+                cap_slow,
+                parent: NO_PARENT,
+                nlocal: 0,
+            }
+        }
+
+        fn probs_o(&self) -> Vec<u64> {
+            let tf = self.fast.iter().sum::<u64>() as f64;
+            let ts = self.slow.iter().sum::<u64>() as f64;
+            let wf = 1.0 / (1.0 + (-self.log_w).exp());
+            let mut p: Vec<u64> = self
+                .fast
+                .iter()
+                .zip(&self.slow)
+                .map(|(&cf, &cs)| {
+                    ((wf * (cf as f64 / tf) + (1.0 - wf) * (cs as f64 / ts)) * SCALE as f64) as u64
+                })
+                .collect();
+            let sum: u64 = p.iter().sum();
+            p[0] += SCALE - sum;
+            let mut dense = 0usize;
+            for (i, &v) in p.iter().enumerate() {
+                if v > p[dense] {
+                    dense = i;
+                }
+            }
+            let zeros = p.iter().filter(|&&v| v == 0).count();
+            p[dense] = p[dense].max(1 + zeros as u64);
+            for v in p.iter_mut() {
+                if *v == 0 {
+                    *v = 1;
+                }
+            }
+            p
+        }
+
+        fn probs_with_o(&self, ctxs: &[MixCtxO], params: &MixParams) -> Vec<u64> {
+            let base = self.probs_o();
+            match params.warm_n0 {
+                Some(n0) if self.nlocal < WARM_COLD_WINDOW && self.parent != NO_PARENT => {
+                    let n = self.nlocal as f64;
+                    let lam = n0 as f64 / (n0 as f64 + n);
+                    mix_vecs(&base, &ctxs[usize::from(self.parent)].probs_o(), lam)
+                }
+                _ => base,
+            }
+        }
+
+        pub(crate) fn step_o(&mut self, s: u8) {
+            let si = usize::from(s);
+            let tf = self.fast.iter().sum::<u64>() as f64;
+            let ts = self.slow.iter().sum::<u64>() as f64;
+            let pf = (self.fast[si] as f64 / tf).max(1e-9);
+            let ps = (self.slow[si] as f64 / ts).max(1e-9);
+            self.log_w = (self.log_w + EWA_LR * (pf.ln() - ps.ln())).clamp(-20.0, 20.0);
+            self.fast[si] += COUNT_INC;
+            self.slow[si] += COUNT_INC;
+            self.nlocal = self.nlocal.saturating_add(1);
+            if self.fast.iter().sum::<u64>() > self.cap_fast {
+                for c in &mut self.fast {
+                    *c = (*c + 1) >> 1;
+                }
+            }
+            if self.slow.iter().sum::<u64>() > self.cap_slow {
+                for c in &mut self.slow {
+                    *c = (*c + 1) >> 1;
+                }
+            }
+        }
+
+        fn verify(&self, p: &MixCtx) {
+            assert_eq!(self.fast, p.get_fast(), "oracle: fast counters diverged");
+            assert_eq!(self.slow, p.get_slow(), "oracle: slow counters diverged");
+            assert_eq!(self.log_w, p.get_log_w(), "oracle: EWA bit-diverged");
+            assert_eq!(self.nlocal, p.get_nlocal(), "oracle: nlocal diverged");
+        }
+    }
+
+    fn tree_o(ctxs: &mut [MixCtxO], params: &MixParams) {
+        if params.warm_n0.is_none() {
+            return;
+        }
+        let parented = if params.lane_child {
+            MIX6_NCTX
+        } else {
+            params.nctx
+        };
+        ctxs.iter_mut()
+            .enumerate()
+            .skip(8)
+            .take(parented.saturating_sub(8))
+            .for_each(|(k, ctx)| ctx.parent = (k & 7) as u8);
+        if parented > 16 {
+            ctxs[16].parent = 7;
+            ctxs[17].parent = 7;
+        }
+        if parented > 18 {
+            ctxs[18].parent = 15;
+            ctxs[19].parent = 15;
+        }
+    }
+
+    fn share_o(ctxs: &mut [MixCtxO], params: &MixParams, k: usize, s: u8) {
+        if params.share {
+            let p = ctxs[k].parent;
+            if p != NO_PARENT {
+                let p = usize::from(p);
+                ctxs[p].step_o(s);
+            }
+        }
+    }
+
+    fn mix_model(vec: Vec<u64>) -> Option<ContiguousCategoricalEntropyModel<u32, Vec<u32>, 24>> {
+        ContiguousCategoricalEntropyModel::<u32, Vec<u32>, 24>::from_nonzero_fixed_point_probabilities(
+            vec.into_iter().map(|v| v as u32).collect::<Vec<u32>>(),
+            false,
+        )
+        .ok()
+    }
+
+    pub(crate) fn mix_encode_with_o(params: &MixParams, data: &[u8]) -> Vec<u8> {
+        let mut ctxs: Vec<MixCtxO> = (0..params.nctx)
+            .map(|_| MixCtxO::new(params.cap_fast, params.cap_slow))
+            .collect();
+        tree_o(&mut ctxs, params);
+        let mut enc = DefaultRangeEncoder::new();
+        let mut prev = 0u8;
+        let mut prev2 = 0u8;
+        let mut prev3 = 0u8;
+        for &b in data {
+            let c = mix_ctx_key(params, prev, prev2, prev3);
+            let m = mix_model(ctxs[c].probs_with_o(&ctxs, params)).expect("oracle model buildable");
+            enc.encode_symbols(std::iter::once((usize::from(b), &m)))
+                .expect("oracle encode symbol");
+            ctxs[c].step_o(b);
+            share_o(&mut ctxs, params, c, b);
+            prev3 = prev2;
+            prev2 = prev;
+            prev = b;
+        }
+        let compressed = enc.into_compressed().expect("oracle seal");
+        let mut out = Vec::with_capacity(compressed.len() * 4 + 4);
+        out.extend_from_slice(
+            &u32::try_from(data.len())
+                .expect("stream len fits u32")
+                .to_le_bytes(),
+        );
+        for w in compressed {
+            out.extend_from_slice(&w.to_le_bytes());
+        }
+        out
+    }
+
+    pub(crate) fn mix_encode_with_lane_o(params: &MixParams, data: &[u8], geom: Geom) -> Vec<u8> {
+        let mut walk = LaneWalk::new(geom.width, geom.height, geom.tile_count, geom.planar)
+            .expect("valid container geometry");
+        let mut ctxs: Vec<MixCtxO> = (0..params.nctx)
+            .map(|_| MixCtxO::new(params.cap_fast, params.cap_slow))
+            .collect();
+        tree_o(&mut ctxs, params);
+        let mut enc = DefaultRangeEncoder::new();
+        let mut prev = 0u8;
+        let mut prev2 = 0u8;
+        let mut prev3 = 0u8;
+        for &b in data {
+            let cls = walk
+                .peek_class()
+                .expect("byte beyond the record grammar on the encode path");
+            walk.consume(b)
+                .expect("well-formed record stream on the encode path");
+            let base = mix_ctx_key(params, prev, prev2, prev3);
+            let c = if params.lane_child && cls == 1 {
+                base + 20
+            } else {
+                base
+            };
+            let m = mix_model(ctxs[c].probs_with_o(&ctxs, params)).expect("oracle model buildable");
+            enc.encode_symbols(std::iter::once((usize::from(b), &m)))
+                .expect("oracle encode symbol");
+            ctxs[c].step_o(b);
+            share_o(&mut ctxs, params, c, b);
+            prev3 = prev2;
+            prev2 = prev;
+            prev = b;
+        }
+        assert!(walk.complete(), "record grammar must consume the stream");
+        let compressed = enc.into_compressed().expect("oracle seal");
+        let mut out = Vec::with_capacity(compressed.len() * 4 + 4);
+        out.extend_from_slice(
+            &u32::try_from(data.len())
+                .expect("stream len fits u32")
+                .to_le_bytes(),
+        );
+        for w in compressed {
+            out.extend_from_slice(&w.to_le_bytes());
+        }
+        out
+    }
+
+    /// Decode oracle: the pre-C4A decode form (recomputed sums).
+    pub(crate) fn mix_decode_with_o(
+        params: &MixParams,
+        data: &[u8],
+        limit: usize,
+    ) -> Result<Vec<u8>, ()> {
+        if data.len() < 4 || !(data.len() - 4).is_multiple_of(4) {
+            return Err(());
+        }
+        let stream_len = usize::try_from(u32::from_le_bytes(data[..4].try_into().expect("4")))
+            .map_err(|_| ())?;
+        if stream_len > limit {
+            return Err(());
+        }
+        let (chunks, _) = data[4..].as_chunks::<4>();
+        let mut words = Vec::with_capacity((data.len() - 4) / 4);
+        for chunk in chunks {
+            words.push(u32::from_le_bytes(*chunk));
+        }
+        let mut dec = DefaultRangeDecoder::from_compressed(words).map_err(|_| ())?;
+        let mut ctxs: Vec<MixCtxO> = (0..params.nctx)
+            .map(|_| MixCtxO::new(params.cap_fast, params.cap_slow))
+            .collect();
+        tree_o(&mut ctxs, params);
+        let mut out = Vec::with_capacity(stream_len);
+        let mut prev = 0u8;
+        let mut prev2 = 0u8;
+        let mut prev3 = 0u8;
+        for _i in 0..stream_len {
+            let c = mix_ctx_key(params, prev, prev2, prev3);
+            let m = mix_model(ctxs[c].probs_with_o(&ctxs, params)).ok_or(())?;
+            let s = dec
+                .decode_symbols(std::iter::once(&m))
+                .next()
+                .ok_or(())?
+                .map_err(|_| ())?;
+            let s = u8::try_from(s).map_err(|_| ())?;
+            ctxs[c].step_o(s);
+            share_o(&mut ctxs, params, c, s);
+            out.push(s);
+            prev3 = prev2;
+            prev2 = prev;
+            prev = s;
+        }
+        Ok(out)
+    }
+
+    /// Lane decode oracle: the pre-C4A lane decode form.
+    pub(crate) fn mix_decode_with_lane_o(
+        params: &MixParams,
+        data: &[u8],
+        limit: usize,
+        geom: Geom,
+    ) -> Result<Vec<u8>, ()> {
+        if data.len() < 4 || !(data.len() - 4).is_multiple_of(4) {
+            return Err(());
+        }
+        let stream_len = usize::try_from(u32::from_le_bytes(data[..4].try_into().expect("4")))
+            .map_err(|_| ())?;
+        if stream_len > limit {
+            return Err(());
+        }
+        let (chunks, _) = data[4..].as_chunks::<4>();
+        let mut words = Vec::with_capacity((data.len() - 4) / 4);
+        for chunk in chunks {
+            words.push(u32::from_le_bytes(*chunk));
+        }
+        let mut dec = DefaultRangeDecoder::from_compressed(words).map_err(|_| ())?;
+        let mut walk =
+            LaneWalk::new(geom.width, geom.height, geom.tile_count, geom.planar).ok_or(())?;
+        let mut ctxs: Vec<MixCtxO> = (0..params.nctx)
+            .map(|_| MixCtxO::new(params.cap_fast, params.cap_slow))
+            .collect();
+        tree_o(&mut ctxs, params);
+        let mut out = Vec::with_capacity(stream_len);
+        let mut prev = 0u8;
+        let mut prev2 = 0u8;
+        let mut prev3 = 0u8;
+        for _i in 0..stream_len {
+            let cls = walk.peek_class().ok_or(())?;
+            let base = mix_ctx_key(params, prev, prev2, prev3);
+            let c = if cls == 1 { base + 20 } else { base };
+            let m = mix_model(ctxs[c].probs_with_o(&ctxs, params)).ok_or(())?;
+            let s = dec
+                .decode_symbols(std::iter::once(&m))
+                .next()
+                .ok_or(())?
+                .map_err(|_| ())?;
+            let s = u8::try_from(s).map_err(|_| ())?;
+            walk.consume(s).ok_or(())?;
+            ctxs[c].step_o(s);
+            share_o(&mut ctxs, params, c, s);
+            out.push(s);
+            prev3 = prev2;
+            prev2 = prev;
+            prev = s;
+        }
+        if !walk.complete() {
+            return Err(());
+        }
+        Ok(out)
+    }
+
+    /// Differential fixture: production (C4-A integrated) vs the oracle,
+    /// per-symbol state parity + wire parity (reuses p1c4a's §4 streams).
+    #[test]
+    fn c5_oracle_differential() {
+        let all = [
+            &MixParams::BACKEND4,
+            &MixParams::BACKEND5,
+            &MixParams::BACKEND6,
+            &MixParams::BACKEND7,
+        ];
+        let mut st = 0x0ddc0ffeebadf00du64;
+        let mut random = Vec::new();
+        for _ in 0..20000 {
+            st ^= st << 13;
+            st ^= st >> 7;
+            st ^= st << 17;
+            random.push((st >> 24) as u8);
+        }
+        let fixtures: Vec<Vec<u8>> = vec![
+            vec![17u8; 4096],
+            std::iter::repeat_n(0, 512)
+                .chain(std::iter::repeat_n(255, 512))
+                .collect(),
+            std::iter::repeat_n(255, 6000).collect(),
+            (0..3000u16).map(|i| ((i * 37) & 0xff) as u8).collect(),
+            vec![9u8; 40000],
+        ];
+        for params in all {
+            // per-symbol state parity on a representative stream
+            let mut octxs: Vec<MixCtxO> = (0..params.nctx)
+                .map(|_| MixCtxO::new(params.cap_fast, params.cap_slow))
+                .collect();
+            let mut pctxs: Vec<MixCtx> = (0..params.nctx)
+                .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+                .collect();
+            tree_o(&mut octxs, params);
+            build_parent_tree(&mut pctxs, params);
+            let mut prev = 0u8;
+            let mut prev2 = 0u8;
+            let mut prev3 = 0u8;
+            for &b in &random {
+                let c = mix_ctx_key(params, prev, prev2, prev3);
+                let o_vec = octxs[c].probs_with_o(&octxs, params);
+                let p_vec = pctxs[c].probs_with(&pctxs, params);
+                assert_eq!(o_vec, p_vec, "oracle vector diverged");
+                octxs[c].step_o(b);
+                share_o(&mut octxs, params, c, b);
+                pctxs[c].step(b);
+                share_step(&mut pctxs, params, c, b);
+                for (o, p) in octxs.iter().zip(&pctxs) {
+                    o.verify(p);
+                }
+                prev3 = prev2;
+                prev2 = prev;
+                prev = b;
+            }
+            // wire parity on every fixture
+            for stream in &fixtures {
+                assert_eq!(
+                    mix_encode_with_o(params, stream),
+                    mix_encode_with(params, stream),
+                    "oracle wire diverged"
+                );
+            }
+            // the random stream runs wire parity + DECODE parity
+            let wp = mix_encode_with(params, &random);
+            assert_eq!(
+                mix_encode_with_o(params, &random),
+                wp,
+                "oracle wire diverged (random)"
+            );
+            {
+                let limit = random.len() + 1024;
+                let want = mix_decode_with(params, &wp, limit);
+                let got = mix_decode_with_o(params, &wp, limit);
+                assert_eq!(got.is_ok(), want.is_ok(), "oracle decode status diverged");
+                if let (Ok(g), Ok(w)) = (got, want) {
+                    assert_eq!(g, w, "oracle decode bytes diverged");
+                }
+            }
+            if params.lane_child {
+                let geom = Geom {
+                    width: 16,
+                    height: 4,
+                    tile_count: 1,
+                    planar: true,
+                };
+                let mut ls = vec![0u8; 193];
+                for (j, v) in ls[1..].iter_mut().enumerate() {
+                    *v = random[j % random.len().max(1)];
+                }
+                assert_eq!(
+                    mix_encode_with_lane_o(params, &ls, geom),
+                    mix_encode_with_lane(params, &ls, geom),
+                    "oracle lane wire diverged"
+                );
+            }
+        }
     }
 }

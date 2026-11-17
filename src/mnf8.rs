@@ -3794,6 +3794,136 @@ mod mnf17_p1a_census {
         println!("P1B-WRITTEN {}", out);
     }
 
+    // ==== MNF17-P1-C6: contemporaneous prod-vs-oracle timings for the
+    // integrated C4-A production path: encode AND decode, medians of 3.
+    #[test]
+    #[ignore]
+    fn p1c6_cohort() {
+        use crate::mix_coder::oracle;
+        use crate::mix_coder::MixParams;
+        let out = std::env::var("MNF17_P1C6_OUT").expect("MNF17_P1C6_OUT");
+        let files: Vec<String> = vec![
+            "testdata/solid_256x256.png".into(),
+            "testdata/photos/forest_224x160_s900002.png".into(),
+            "testdata/screenshot_640x400.png".into(),
+        ];
+        let mut csv =
+            String::from("file,backend,kind_idx,planar,stream_len,e_prod,e_orc,d_prod,d_orc,sha\n");
+        for f in &files {
+            let (pixels, dims) = px_of(f);
+            let cache = crate::mnf6::ProbeCache::new(crate::mnf6::PROBE_CACHE_BUDGET_BYTES);
+            for (kidx, kind) in [PredKind::None, PredKind::Left].iter().enumerate() {
+                for planar in [false, true].iter() {
+                    let med = *kind == PredKind::Med;
+                    let (raw0, st) = build_record_stream(
+                        &pixels,
+                        dims,
+                        true,
+                        true,
+                        *planar,
+                        med,
+                        *kind,
+                        &Coder::Zstd(19),
+                        &cache,
+                    )
+                    .expect("c6 build");
+                    let tile_count = st.modes.len() as u32;
+                    let geom = crate::mix_coder::Geom {
+                        width: dims.width,
+                        height: dims.height,
+                        tile_count,
+                        planar: *planar,
+                    };
+                    for backend in [BACKEND_MIX, BACKEND_MIX5, BACKEND_MIX6, BACKEND_MIX7] {
+                        let (lane, params) = match backend {
+                            BACKEND_MIX => (false, MixParams::BACKEND4),
+                            BACKEND_MIX5 => (false, MixParams::BACKEND5),
+                            BACKEND_MIX6 => (false, MixParams::BACKEND6),
+                            _ => (true, MixParams::BACKEND7),
+                        };
+                        for reference in 0u8..=3 {
+                            let raw = if reference == 0 {
+                                raw0.clone()
+                            } else {
+                                channel_diff_relabel(
+                                    &raw0,
+                                    *planar,
+                                    false,
+                                    dims.width,
+                                    dims.height,
+                                    reference,
+                                )
+                            };
+                            let mut e_p = Vec::new();
+                            let mut e_o = Vec::new();
+                            let mut d_p = Vec::new();
+                            let mut d_o = Vec::new();
+                            let mut wire: Vec<u8> = Vec::new();
+                            for rep in 0..3 {
+                                let t = Instant::now();
+                                let wp = if lane {
+                                    crate::mix_coder::mix_encode_with_lane(&params, &raw, geom)
+                                } else {
+                                    crate::mix_coder::mix_encode_with(&params, &raw)
+                                };
+                                e_p.push(t.elapsed().as_micros() as u64);
+                                let t = Instant::now();
+                                let wo = if lane {
+                                    oracle::mix_encode_with_lane_o(&params, &raw, geom)
+                                } else {
+                                    oracle::mix_encode_with_o(&params, &raw)
+                                };
+                                e_o.push(t.elapsed().as_micros() as u64);
+                                assert_eq!(wp, wo, "C6 encode diverged rep {rep}");
+                                let limit = raw.len();
+                                let t = Instant::now();
+                                let dp = if lane {
+                                    crate::mix_coder::mix_decode_with_lane(
+                                        &params, &wp, limit, geom,
+                                    )
+                                } else {
+                                    crate::mix_coder::mix_decode_with(&params, &wp, limit)
+                                };
+                                d_p.push(t.elapsed().as_micros() as u64);
+                                let t = Instant::now();
+                                let dop = if lane {
+                                    oracle::mix_decode_with_lane_o(&params, &wp, limit, geom)
+                                } else {
+                                    oracle::mix_decode_with_o(&params, &wp, limit)
+                                };
+                                d_o.push(t.elapsed().as_micros() as u64);
+                                match (&dp, &dop) {
+                                    (Ok(g), Ok(w)) => {
+                                        assert_eq!(g, w, "C6 decode diverged rep {rep}")
+                                    }
+                                    (Err(_), Err(_)) => {}
+                                    _ => panic!("C6 decode status diverged rep {rep}"),
+                                }
+                                if rep == 1 {
+                                    wire = wp.clone();
+                                }
+                                let _ = (dp.is_ok(), dop.is_ok());
+                            }
+                            e_p.sort_unstable();
+                            e_o.sort_unstable();
+                            d_p.sort_unstable();
+                            d_o.sort_unstable();
+                            csv.push_str(&format!(
+                                "{f},{backend},{kidx},{planar},{dl},{ep},{eo},{dp},{doo},{sh:016x}\n",
+                                f = f, backend = backend, kidx = kidx, planar = planar,
+                                dl = raw.len(), ep = e_p[1], eo = e_o[1], dp = d_p[1], doo = d_o[1],
+                                sh = fnv64(&wire),
+                            ));
+                        }
+                    }
+                }
+            }
+            std::fs::write(&out, &csv).expect("c6 csv");
+            println!("p1c6 flush {}", f);
+        }
+        println!("P1C6-WRITTEN {}", out);
+    }
+
     // ==== MNF17-P1-C4-A: perf driver for the maintained-sum twin.
     // Same record-arm construction as p1b, trimmed kinds; production
     // and C4-A engines timed interleaved, 3 repeats, medians reported.
