@@ -1,0 +1,6 @@
+backend,arms,full_total_s,writer_share_pct,walk_excl_s,unique_inputs,redundant_arms,redundant_cost_s,redundant_pct
+mix4,320,55.45,1.1,0.000,256,64,8.67,15.6
+mix5,320,54.81,0.8,0.000,256,64,8.71,15.9
+mix6,320,57.57,1.0,0.000,256,64,9.10,15.8
+mix7,256,52.86,1.1,0.075,208,48,7.31,13.8
+ALL-mix,1216,220.70,~1.0,0.075,937,384,33.79,15.3

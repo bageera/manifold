@@ -3617,4 +3617,180 @@ mod mnf17_p1a_census {
         );
         let _ = picks;
     }
+
+    // ==== MNF17-P1-B1/B2/B3: mix-family stage decomposition + layer
+    // identity census (env-gated like the P1-A census: MNF17_P1B_OUT).
+    #[test]
+    #[ignore]
+    fn p1b_decomp() {
+        use crate::mix_coder::p1b;
+        use crate::mix_coder::MixParams;
+        let out = std::env::var("MNF17_P1B_OUT").expect("MNF17_P1B_OUT");
+        let files: Vec<String> = match std::env::var("MNF17_P1A_FILES") {
+            Ok(s) => s.split(',').map(|p| p.trim().to_string()).collect(),
+            Err(_) => vec![
+                "testdata/solid_256x256.png".into(),
+                "testdata/gradient_320x240.png".into(),
+                "testdata/repeat_256x256.png".into(),
+                "testdata/heldout/plaid_192.png".into(),
+                "testdata/noise_256x256.png".into(),
+                "testdata/photos/forest_224x160_s900002.png".into(),
+                "testdata/photos/dusk_160x120_s900003.png".into(),
+                "testdata/screenshot_640x400.png".into(),
+            ],
+        };
+        let mut csv = String::from(
+            "file,backend,stage,kind_idx,planar,ref,data_len,t_full,twin,twin_prep,twin_loop,twin_seal,walk_excl,wire_len,wire_sha16,key_fold16,lane_fold16,model_calls\n",
+        );
+        for f in &files {
+            let (pixels, dims) = px_of(f);
+            let pred_arms = [
+                PredKind::None,
+                PredKind::Med,
+                PredKind::Plane,
+                PredKind::Left,
+            ];
+            let cache = crate::mnf6::ProbeCache::new(crate::mnf6::PROBE_CACHE_BUDGET_BYTES);
+            for (kidx, kind) in pred_arms.iter().enumerate() {
+                for planar in [false, true].iter() {
+                    let med = *kind == PredKind::Med;
+                    // the zstd-19 proxy class's stream: the mix-family pool
+                    let (raw0, st) = build_record_stream(
+                        &pixels,
+                        dims,
+                        true,
+                        true,
+                        *planar,
+                        med,
+                        *kind,
+                        &Coder::Zstd(19),
+                        &cache,
+                    )
+                    .expect("p1b build");
+                    let tile_count = st.modes.len() as u32;
+                    let geom = crate::mix_coder::Geom {
+                        width: dims.width,
+                        height: dims.height,
+                        tile_count,
+                        planar: *planar,
+                    };
+                    for reference in 0u8..=3 {
+                        let raw = if reference == 0 {
+                            raw0.clone()
+                        } else {
+                            channel_diff_relabel(
+                                &raw0,
+                                *planar,
+                                false,
+                                dims.width,
+                                dims.height,
+                                reference,
+                            )
+                        };
+                        for backend in [BACKEND_MIX, BACKEND_MIX5, BACKEND_MIX6] {
+                            let mix_params = match backend {
+                                BACKEND_MIX => MixParams::BACKEND4,
+                                BACKEND_MIX5 => MixParams::BACKEND5,
+                                _ => MixParams::BACKEND6,
+                            };
+                            let t0 = Instant::now();
+                            let wire = crate::mix_coder::mix_encode_with(&mix_params, &raw);
+                            let t_full = t0.elapsed().as_micros() as u64;
+                            let t1 = Instant::now();
+                            let (prep_us, loop_us, seal_us) = p1b::nowriter(&mix_params, &raw);
+                            let t_twin = t1.elapsed().as_micros() as u64;
+                            let data_id = fnv64(&raw);
+                            csv.push_str(&format!(
+                                "{f},{backend},record,{kidx},{planar},{reference},{dl},{tf},{tt},{tp},{tl},{ts},0,{wl},{wh:016x},{id1},{id2},{mc}\n",
+                                f = f, backend = backend, kidx = kidx, planar = planar,
+                                reference = reference, dl = raw.len(), tf = t_full, tt = t_twin,
+                                tp = prep_us, tl = loop_us, ts = seal_us, wl = wire.len(),
+                                wh = fnv64(&wire), id1 = data_id, id2 = data_id, mc = raw.len(),
+                            ));
+                        }
+                        // backend 7 rides the record arms with the lane walk
+                        let t0 = Instant::now();
+                        let wire7 = crate::mix_coder::mix_encode_with_lane(
+                            &MixParams::BACKEND7,
+                            &raw,
+                            geom,
+                        );
+                        let t_full7 = t0.elapsed().as_micros() as u64;
+                        let t1 = Instant::now();
+                        let (prep7, loop7, seal7) =
+                            p1b::nowriter_lane(&MixParams::BACKEND7, &raw, geom);
+                        let t_twin7 = t1.elapsed().as_micros() as u64;
+                        // standalone walk-only replay (grammar traversal exclusive)
+                        let t2 = Instant::now();
+                        let mut lane_fold: u64 = 0xcbf29ce484222325;
+                        let mut w = crate::mix_coder::LaneWalk::new(
+                            geom.width,
+                            geom.height,
+                            geom.tile_count,
+                            geom.planar,
+                        )
+                        .expect("walk");
+                        for &b in &raw {
+                            let cls = w.peek_class();
+                            w.consume(b).expect("walk");
+                            lane_fold = lane_fold.wrapping_mul(0x100000001b3)
+                                ^ (u64::from(cls.unwrap_or(0)) | (u64::from(b) << 8));
+                        }
+                        assert!(w.complete());
+                        let walk_excl = t2.elapsed().as_micros() as u64;
+                        let data_id = fnv64(&raw);
+                        csv.push_str(&format!(
+                            "{f},7,record,{kidx},{planar},{reference},{dl},{tf},{tt},{tp},{tl},{ts},{wk},0,{wl},{wh:016x},{id1},{lf},{mc}\n",
+                            f = f, kidx = kidx, planar = planar, reference = reference,
+                            dl = raw.len(), tf = t_full7, tt = t_twin7, tp = prep7, tl = loop7,
+                            ts = seal7, wk = walk_excl, wl = wire7.len(), wh = fnv64(&wire7),
+                            id1 = data_id, lf = lane_fold, mc = raw.len(),
+                        ));
+                    }
+                }
+            }
+            // token arms: mix 4/5/6 evaluate tokens (geom-less) too
+            for cap in [16usize, tokens::MAX_CANDIDATES] {
+                let (wire0, _ts) = build_token_wire(&pixels, dims, cap).expect("tokens");
+                for backend in [BACKEND_MIX, BACKEND_MIX5, BACKEND_MIX6] {
+                    let mix_params = match backend {
+                        BACKEND_MIX => MixParams::BACKEND4,
+                        BACKEND_MIX5 => MixParams::BACKEND5,
+                        _ => MixParams::BACKEND6,
+                    };
+                    for reference in 0u8..=3 {
+                        let wire = if reference == 0 {
+                            wire0.clone()
+                        } else {
+                            channel_diff_relabel(
+                                &wire0,
+                                false,
+                                true,
+                                dims.width,
+                                dims.height,
+                                reference,
+                            )
+                        };
+                        let t0 = Instant::now();
+                        let w = crate::mix_coder::mix_encode_with(&mix_params, &wire);
+                        let t_full = t0.elapsed().as_micros() as u64;
+                        let t1 = Instant::now();
+                        let (prep_us, loop_us, seal_us) = p1b::nowriter(&mix_params, &wire);
+                        let t_twin = t1.elapsed().as_micros() as u64;
+                        let tok_id = fnv64(&wire);
+                        csv.push_str(&format!(
+                            "{f},{backend},token,0,0,{reference},{dl},{tf},{tt},{tp},{tl},{ts},0,0,{wl},{wh:016x},{id1},{id2},{mc}\n",
+                            f = f, backend = backend, reference = reference, dl = wire.len(),
+                            tf = t_full, tt = t_twin, tp = prep_us, tl = loop_us, ts = seal_us,
+                            wl = w.len(), wh = fnv64(&w), id1 = tok_id, id2 = tok_id,
+                            mc = wire.len(),
+                        ));
+                    }
+                }
+            }
+            std::fs::write(&out, &csv).expect("p1b csv");
+            println!("p1b flush {}", f);
+        }
+        println!("P1B-WRITTEN {}", out);
+    }
 }

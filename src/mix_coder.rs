@@ -1003,3 +1003,108 @@ mod tests {
         );
     }
 }
+
+/// MNF17-P1-B1/B2 research twin (cfg(test) only: excluded from release
+/// builds). Replays mix_encode_with(_lane) byte-for-byte WITHOUT the
+/// entropy writer (encode_symbols), timing and folding each stage.
+/// The writer never feeds back into walk/ctxs/key evolution (verified by
+/// reading both encode paths: the enc output is not an input anywhere),
+/// so t_full - t_twin is an exact exclusive-writer attribution.
+/// Sampled folds index layer identities (indexes only; verify on hit —
+/// hash equality is never treated as proof): key/class per byte, model
+/// vector sampled at first/last word.
+/// MNF17-P1-B1 research twins (cfg(test) only). Verbatim copies of
+/// `mix_encode_with` / `mix_encode_with_lane` with the entropy-writer
+/// call (`enc.encode_symbols`) REMOVED and nothing else changed — no
+/// folds, no branches, no counters — so wall(twin) is wall(full) minus
+/// the writer's exclusive cost (the writer never feeds back into
+/// walk/ctx/key evolution; verified by reading both encode paths).
+/// Identity work lives in the caller, outside these timed bodies.
+#[cfg(test)]
+pub(crate) mod p1b {
+    use super::*;
+    use std::time::Instant;
+
+    fn timed_prep<T>(f: impl FnOnce() -> T) -> (T, u64) {
+        let t = Instant::now();
+        let v = f();
+        (v, t.elapsed().as_micros() as u64)
+    }
+
+    /// backend 4/5/6 form minus writer; returns (prep_us, loop_us, seal_us)
+    pub(crate) fn nowriter(params: &MixParams, data: &[u8]) -> (u64, u64, u64) {
+        let (mut ctxs, prep_us) = timed_prep(|| {
+            let mut ctxs: Vec<MixCtx> = (0..params.nctx)
+                .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+                .collect();
+            build_parent_tree(&mut ctxs, params);
+            ctxs
+        });
+        let enc = DefaultRangeEncoder::new();
+        let mut prev = 0u8;
+        let mut prev2 = 0u8;
+        let mut prev3 = 0u8;
+        let t1 = Instant::now();
+        for &b in data {
+            let c = mix_ctx_key(params, prev, prev2, prev3);
+            let m = ctxs[c]
+                .model(&ctxs, params)
+                .expect("mix model is always buildable");
+            drop(m);
+            ctxs[c].step(b);
+            share_step(&mut ctxs, params, c, b);
+            prev3 = prev2;
+            prev2 = prev;
+            prev = b;
+        }
+        let loop_us = t1.elapsed().as_micros() as u64;
+        let t2 = Instant::now();
+        let _ = enc.into_compressed();
+        (prep_us, loop_us, t2.elapsed().as_micros() as u64)
+    }
+
+    /// backend 7 form minus writer; returns (prep_us, loop_us, seal_us)
+    pub(crate) fn nowriter_lane(params: &MixParams, data: &[u8], geom: Geom) -> (u64, u64, u64) {
+        let (parts, prep_us) = timed_prep(|| {
+            let walk = LaneWalk::new(geom.width, geom.height, geom.tile_count, geom.planar)
+                .expect("valid container geometry");
+            let mut ctxs: Vec<MixCtx> = (0..params.nctx)
+                .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+                .collect();
+            build_parent_tree(&mut ctxs, params);
+            (walk, ctxs)
+        });
+        let (mut walk, mut ctxs) = parts;
+        let enc = DefaultRangeEncoder::new();
+        let mut prev = 0u8;
+        let mut prev2 = 0u8;
+        let mut prev3 = 0u8;
+        let t1 = Instant::now();
+        for &b in data {
+            let cls = walk
+                .peek_class()
+                .expect("byte beyond the record grammar on the encode path");
+            walk.consume(b)
+                .expect("well-formed record stream on the encode path");
+            let base = mix_ctx_key(params, prev, prev2, prev3);
+            let c = if params.lane_child && cls == 1 {
+                base + 20
+            } else {
+                base
+            };
+            let m = ctxs[c]
+                .model(&ctxs, params)
+                .expect("mix model is always buildable");
+            drop(m);
+            ctxs[c].step(b);
+            share_step(&mut ctxs, params, c, b);
+            prev3 = prev2;
+            prev2 = prev;
+            prev = b;
+        }
+        let loop_us = t1.elapsed().as_micros() as u64;
+        let t2 = Instant::now();
+        let _ = enc.into_compressed();
+        (prep_us, loop_us, t2.elapsed().as_micros() as u64)
+    }
+}
