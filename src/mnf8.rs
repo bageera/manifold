@@ -3906,8 +3906,14 @@ mod channel_diff {
                                 (true, _) => Coder::Zlib,
                                 (false, l) => Coder::Zstd(*l as i32),
                             };
+                            // CLI parity: the shipped encode path runs with
+                            // use_geom=false (the binary's default); the
+                            // corpus-lock winner arms are geom-invariant but
+                            // the Hubble arm is not.
+                            // CLI parity: atlas=true, geom=false — the
+                            // shipped binary's defaults ("geom" CLI arm off).
                             let (raw0, st) = build_record_stream(
-                                &pixels, dims, true, true, *planar, med, *kind, &coder, &cache,
+                                &pixels, dims, true, false, *planar, med, *kind, &coder, &cache,
                             )
                             .expect("d5 build");
                             let tile_count = st.modes.len() as u32;
@@ -4107,13 +4113,38 @@ mod channel_diff {
                 let (wsize, wrank) = best.expect("virtual winner");
                 assert_eq!((wsize, wrank), winner, "winner identity {rel}");
                 assert_eq!(best_wire, win1, "winner bytes {rel}");
-                // exact reconstruction from the virtual winner container
-                let (d_dims, d_pixels, _fb) = decode_mnf8(&best_wire).expect("d5 decode");
+                // CLI composition: the MNF9 whole-frame exact arm competes
+                // against the completed MNF8 pick and ships only when
+                // STRICTLY smaller (tie keeps the MNF8 pick).
+                let win1 = if let Some(mnf9_file) = crate::mnf9::encode_exact(&pixels, dims) {
+                    if mnf9_file.len() < win1.len() {
+                        mnf9_file
+                    } else {
+                        win1
+                    }
+                } else {
+                    win1
+                };
+                // exact reconstruction from the shipped container,
+                // dispatched by magic exactly as the CLI decoder does
+                assert!(
+                    win1[0..4] == *b"MNF8" || win1[0..4] == *b"MNF9",
+                    "d5 magic {rel}"
+                );
+                let (d_dims, d_pixels) = if win1[0..4] == *b"MNF9" {
+                    crate::mnf9::decode_mnf9(&win1).expect("d5 decode mnf9")
+                } else {
+                    let (d, px, _) = decode_mnf8(&win1).expect("d5 decode mnf8");
+                    (d, px)
+                };
                 assert_eq!(d_dims, dims, "d5 dims {rel}");
                 assert_eq!(d_pixels, pixels, "d5 recon {rel}");
-                total += wsize;
+                total += win1.len();
                 csv.push_str(&format!("{phase},{rel},{wsize},{wrank},{dom},{wall},1\n"));
-                println!("d5 {phase} {rel}: {wsize} rank {wrank} dom {dom}");
+                println!(
+                    "d5 {phase} {rel}: shipped {shipped} (mnf8 pick {wsize} rank {wrank}) dom {dom}",
+                    shipped = win1.len()
+                );
             }
             println!("d5 phase {phase} total {total}");
             match phase {
