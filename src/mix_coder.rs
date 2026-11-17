@@ -1108,3 +1108,380 @@ pub(crate) mod p1b {
         (prep_us, loop_us, t2.elapsed().as_micros() as u64)
     }
 }
+
+/// MNF17-P1-C4-A research twin (cfg(test) only): the mix coder's model
+/// loop with incrementally MAINTAINED counter sums (`sf`/`ss`) replacing
+/// the per-symbol full-vector reductions. Every mutation site of
+/// `fast`/`slow` tracks its sum inline; rescaling recounts inside its
+/// own sweep. Invariant under test: (sf, ss) == (Σ fast, Σ slow) at
+/// every symbol, for every backend configuration and fixture. The
+/// quantized vector, its corrections and the coder calls are otherwise
+/// byte-identical; wire byte-equality against the production encoders
+/// is asserted by the differential tests.
+#[cfg(test)]
+pub(crate) mod p1c4a {
+    use super::*;
+
+    pub(crate) struct MixCtxA {
+        fast: Vec<u64>,
+        slow: Vec<u64>,
+        log_w: f64,
+        cap_fast: u64,
+        cap_slow: u64,
+        parent: u8,
+        nlocal: u64,
+        sf: u64,
+        ss: u64,
+    }
+
+    impl MixCtxA {
+        pub(crate) fn new(cap_fast: u64, cap_slow: u64) -> Self {
+            Self {
+                fast: vec![1; 256],
+                slow: vec![1; 256],
+                log_w: 0.0,
+                cap_fast,
+                cap_slow,
+                parent: NO_PARENT,
+                nlocal: 0,
+                sf: 256,
+                ss: 256,
+            }
+        }
+
+        /// Same arithmetic as `MixCtx::probs`, reading the maintained sums.
+        pub(crate) fn probs_a(&self) -> Vec<u64> {
+            let tf = self.sf as f64;
+            let ts = self.ss as f64;
+            let wf = 1.0 / (1.0 + (-self.log_w).exp());
+            let mut p: Vec<u64> = self
+                .fast
+                .iter()
+                .zip(&self.slow)
+                .map(|(&cf, &cs)| {
+                    ((wf * (cf as f64 / tf) + (1.0 - wf) * (cs as f64 / ts)) * SCALE as f64) as u64
+                })
+                .collect();
+            let sum: u64 = p.iter().sum();
+            p[0] += SCALE - sum;
+            let mut dense = 0usize;
+            for (i, &v) in p.iter().enumerate() {
+                if v > p[dense] {
+                    dense = i;
+                }
+            }
+            let zeros = p.iter().filter(|&&v| v == 0).count();
+            p[dense] = p[dense].max(1 + zeros as u64);
+            for v in p.iter_mut() {
+                if *v == 0 {
+                    *v = 1;
+                }
+            }
+            p
+        }
+
+        /// Same arithmetic as `MixCtx::probs_with` (the R9 warm mix),
+        /// building the base from the maintained sums.
+        pub(crate) fn probs_with_a(&self, ctxs: &[MixCtxA], params: &MixParams) -> Vec<u64> {
+            let base = self.probs_a();
+            match params.warm_n0 {
+                Some(n0) if self.nlocal < WARM_COLD_WINDOW && self.parent != NO_PARENT => {
+                    let n = self.nlocal as f64;
+                    let lam = n0 as f64 / (n0 as f64 + n);
+                    mix_vecs(&base, &ctxs[usize::from(self.parent)].probs_a(), lam)
+                }
+                _ => base,
+            }
+        }
+
+        pub(crate) fn step_a(&mut self, s: u8) {
+            let si = usize::from(s);
+            let pf = (self.fast[si] as f64 / self.sf as f64).max(1e-9);
+            let ps = (self.slow[si] as f64 / self.ss as f64).max(1e-9);
+            self.log_w = (self.log_w + EWA_LR * (pf.ln() - ps.ln())).clamp(-20.0, 20.0);
+            self.fast[si] += COUNT_INC;
+            self.sf += COUNT_INC;
+            self.slow[si] += COUNT_INC;
+            self.ss += COUNT_INC;
+            self.nlocal = self.nlocal.saturating_add(1);
+            if self.sf > self.cap_fast {
+                let mut acc = 0u64;
+                for c in &mut self.fast {
+                    *c = (*c + 1) >> 1;
+                    acc += *c;
+                }
+                self.sf = acc;
+            }
+            if self.ss > self.cap_slow {
+                let mut acc = 0u64;
+                for c in &mut self.slow {
+                    *c = (*c + 1) >> 1;
+                    acc += *c;
+                }
+                self.ss = acc;
+            }
+        }
+
+        pub(crate) fn model_a(
+            &self,
+            ctxs: &[MixCtxA],
+            params: &MixParams,
+        ) -> Option<ContiguousCategoricalEntropyModel<u32, Vec<u32>, 24>> {
+            let p32: Vec<u32> = self
+                .probs_with_a(ctxs, params)
+                .into_iter()
+                .map(|v| v as u32)
+                .collect();
+            ContiguousCategoricalEntropyModel::<u32, Vec<u32>, 24>::from_nonzero_fixed_point_probabilities(
+                p32, false,
+            )
+            .ok()
+        }
+
+        /// Full-256-vector parity + state parity vs the production ctx.
+        fn verify(&self, p: &MixCtx) {
+            assert_eq!(self.fast, *p_fast(p), "fast counters diverged");
+            assert_eq!(self.slow, *p_slow(p), "slow counters diverged");
+            assert_eq!(self.log_w, p_log_w(p), "EWA weight bit-diverged");
+            assert_eq!(self.nlocal, p_nlocal(p), "nlocal diverged");
+            assert_eq!(
+                self.sf,
+                self.fast.iter().sum::<u64>(),
+                "maintained fast sum violated the conservation invariant"
+            );
+            assert_eq!(
+                self.ss,
+                self.slow.iter().sum::<u64>(),
+                "maintained slow sum violated the conservation invariant"
+            );
+        }
+    }
+
+    // private MixCtx field accessors for the twin (same module tree)
+    fn p_fast(c: &MixCtx) -> &Vec<u64> {
+        &c.fast
+    }
+    fn p_slow(c: &MixCtx) -> &Vec<u64> {
+        &c.slow
+    }
+    fn p_log_w(c: &MixCtx) -> f64 {
+        c.log_w
+    }
+    fn p_nlocal(c: &MixCtx) -> u64 {
+        c.nlocal
+    }
+
+    /// Verbatim copy of `build_parent_tree` for the A contexts.
+    fn build_parent_tree_a(ctxs: &mut [MixCtxA], params: &MixParams) {
+        if params.warm_n0.is_none() {
+            return;
+        }
+        let parented = if params.lane_child {
+            MIX6_NCTX
+        } else {
+            params.nctx
+        };
+        ctxs.iter_mut()
+            .enumerate()
+            .skip(8)
+            .take(parented.saturating_sub(8))
+            .for_each(|(k, ctx)| ctx.parent = (k & 7) as u8);
+        if parented > 16 {
+            ctxs[16].parent = 7;
+            ctxs[17].parent = 7;
+        }
+        if parented > 18 {
+            ctxs[18].parent = 15;
+            ctxs[19].parent = 15;
+        }
+    }
+
+    /// Verbatim copy of `share_step` for the A contexts.
+    fn share_step_a(ctxs: &mut [MixCtxA], params: &MixParams, k: usize, s: u8) {
+        if params.share {
+            let p = ctxs[k].parent;
+            if p != NO_PARENT {
+                let p = usize::from(p);
+                ctxs[p].step_a(s);
+            }
+        }
+    }
+
+    /// The C4-A encode: production `mix_encode_with` with A contexts.
+    pub(crate) fn mix_encode_with_a(params: &MixParams, data: &[u8]) -> Vec<u8> {
+        let mut ctxs: Vec<MixCtxA> = (0..params.nctx)
+            .map(|_| MixCtxA::new(params.cap_fast, params.cap_slow))
+            .collect();
+        build_parent_tree_a(&mut ctxs, params);
+        let mut enc = DefaultRangeEncoder::new();
+        let mut prev = 0u8;
+        let mut prev2 = 0u8;
+        let mut prev3 = 0u8;
+        for &b in data {
+            let c = mix_ctx_key(params, prev, prev2, prev3);
+            let m = ctxs[c]
+                .model_a(&ctxs, params)
+                .expect("mix model with all-nonzero probabilities is always buildable");
+            enc.encode_symbols(std::iter::once((usize::from(b), &m)))
+                .expect("mix encode symbol");
+            ctxs[c].step_a(b);
+            share_step_a(&mut ctxs, params, c, b);
+            prev3 = prev2;
+            prev2 = prev;
+            prev = b;
+        }
+        let compressed = enc.into_compressed().expect("mix seal");
+        let mut out = Vec::with_capacity(compressed.len() * 4 + 4);
+        out.extend_from_slice(
+            &u32::try_from(data.len())
+                .expect("stream len fits u32")
+                .to_le_bytes(),
+        );
+        for w in compressed {
+            out.extend_from_slice(&w.to_le_bytes());
+        }
+        out
+    }
+
+    /// The C4-A backend-7 form (production `mix_encode_with_lane`).
+    pub(crate) fn mix_encode_with_lane_a(params: &MixParams, data: &[u8], geom: Geom) -> Vec<u8> {
+        let mut walk = LaneWalk::new(geom.width, geom.height, geom.tile_count, geom.planar)
+            .expect("valid container geometry");
+        let mut ctxs: Vec<MixCtxA> = (0..params.nctx)
+            .map(|_| MixCtxA::new(params.cap_fast, params.cap_slow))
+            .collect();
+        build_parent_tree_a(&mut ctxs, params);
+        let mut enc = DefaultRangeEncoder::new();
+        let mut prev = 0u8;
+        let mut prev2 = 0u8;
+        let mut prev3 = 0u8;
+        for &b in data {
+            let cls = walk
+                .peek_class()
+                .expect("byte beyond the record grammar on the encode path");
+            walk.consume(b)
+                .expect("well-formed record stream on the encode path");
+            let base = mix_ctx_key(params, prev, prev2, prev3);
+            let c = if params.lane_child && cls == 1 {
+                base + 20
+            } else {
+                base
+            };
+            let m = ctxs[c]
+                .model_a(&ctxs, params)
+                .expect("mix model with all-nonzero probabilities is always buildable");
+            enc.encode_symbols(std::iter::once((usize::from(b), &m)))
+                .expect("mix encode symbol");
+            ctxs[c].step_a(b);
+            share_step_a(&mut ctxs, params, c, b);
+            prev3 = prev2;
+            prev2 = prev;
+            prev = b;
+        }
+        assert!(walk.complete(), "record grammar must consume the stream");
+        let compressed = enc.into_compressed().expect("mix seal");
+        let mut out = Vec::with_capacity(compressed.len() * 4 + 4);
+        out.extend_from_slice(
+            &u32::try_from(data.len())
+                .expect("stream len fits u32")
+                .to_le_bytes(),
+        );
+        for w in compressed {
+            out.extend_from_slice(&w.to_le_bytes());
+        }
+        out
+    }
+
+    // ---- differential fixtures (§4 of the authorization) ----
+
+    fn xorshift(state: &mut u64) -> u8 {
+        *state ^= *state << 13;
+        *state ^= *state >> 7;
+        *state ^= *state << 17;
+        (*state >> 24) as u8
+    }
+
+    const ALL_BACKENDS: [&MixParams; 4] = [
+        &MixParams::BACKEND4,
+        &MixParams::BACKEND5,
+        &MixParams::BACKEND6,
+        &MixParams::BACKEND7,
+    ];
+
+    /// Drive a symbol sequence through BOTH engines symbol-by-symbol,
+    /// asserting per-symbol: maintained-sum invariant, 256/2 state parity,
+    /// and 256/256 quantized-vector parity (warm form when applicable).
+    fn differential(params: &MixParams, stream: &[u8], label: &str) {
+        let mut ref_ctxs: Vec<MixCtx> = (0..params.nctx)
+            .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+            .collect();
+        build_parent_tree(&mut ref_ctxs, params);
+        let mut a_ctxs: Vec<MixCtxA> = (0..params.nctx)
+            .map(|_| MixCtxA::new(params.cap_fast, params.cap_slow))
+            .collect();
+        build_parent_tree_a(&mut a_ctxs, params);
+        let mut prev = 0u8;
+        let mut prev2 = 0u8;
+        let mut prev3 = 0u8;
+        for &b in stream {
+            let c = mix_ctx_key(params, prev, prev2, prev3);
+            let ref_vec = ref_ctxs[c].probs_with(&ref_ctxs, params);
+            let a_vec = a_ctxs[c].probs_with_a(&a_ctxs, params);
+            assert_eq!(a_vec, ref_vec, "{label}: quantized vector 256/256 diverged");
+            ref_ctxs[c].step(b);
+            share_step(&mut ref_ctxs, params, c, b);
+            a_ctxs[c].step_a(b);
+            share_step_a(&mut a_ctxs, params, c, b);
+            for (a, p) in a_ctxs.iter().zip(&ref_ctxs) {
+                a.verify(p);
+            }
+            prev3 = prev2;
+            prev2 = prev;
+            prev = b;
+        }
+    }
+
+    fn wire_parity(params: &MixParams, stream: &[u8], label: &str) {
+        let a = mix_encode_with_a(params, stream);
+        let p = mix_encode_with(params, stream);
+        assert_eq!(a, p, "{label}: C4-A wire diverged from production");
+    }
+
+    #[test]
+    fn c4a_differential_fixtures() {
+        // §4 boundary fixtures; each exercised on all four backends.
+        let uniform: Vec<u8> = (0..4u16)
+            .flat_map(|i| (i as u8..=200u8).step_by(3).collect::<Vec<u8>>())
+            .collect();
+        let dominant = vec![17u8; 4096]; // extreme concentration + EWA clamp
+        let sparse: Vec<u8> = std::iter::repeat_n(0, 512)
+            .chain(std::iter::repeat_n(255, 512))
+            .collect();
+        let zero_slot: Vec<u8> = std::iter::repeat_n(255, 6000).collect(); // slot 0 empty; remainder+dense interplay
+        let slot0_near: Vec<u8> = std::iter::repeat_n(0u8, 3000)
+            .chain(std::iter::repeat_n(1u8, 3000))
+            .collect(); // slot-0 argmax races
+        let thresholds: Vec<u8> = (0..3000u16).map(|i| ((i * 37) & 0xff) as u8).collect(); // fast cap crossings
+        let slow_cap: Vec<u8> = vec![9u8; 40000]; // slow cap halvings
+        let mut st = 0x9e3779b97f4a7c15u64;
+        let random: Vec<u8> = (0..20000).map(|_| xorshift(&mut st)).collect();
+        let mut st2 = 0x12345678deadbeefu64;
+        let random_run: Vec<u8> = (0..20000).map(|_| xorshift(&mut st2)).collect();
+        for (i, params) in ALL_BACKENDS.iter().enumerate() {
+            for (label, stream) in [
+                ("uniform", &uniform),
+                ("dominant", &dominant),
+                ("sparse", &sparse),
+                ("zero_slot", &zero_slot),
+                ("slot0_near", &slot0_near),
+                ("thresholds", &thresholds),
+                ("slow_cap", &slow_cap),
+                ("random_a", &random),
+                ("random_b", &random_run),
+            ] {
+                differential(params, stream, &format!("b{}-{label}", i + 4));
+                wire_parity(params, stream, &format!("b{}-{label}", i + 4));
+            }
+        }
+    }
+}

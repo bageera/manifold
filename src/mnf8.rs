@@ -3793,4 +3793,114 @@ mod mnf17_p1a_census {
         }
         println!("P1B-WRITTEN {}", out);
     }
+
+    // ==== MNF17-P1-C4-A: perf driver for the maintained-sum twin.
+    // Same record-arm construction as p1b, trimmed kinds; production
+    // and C4-A engines timed interleaved, 3 repeats, medians reported.
+    #[test]
+    #[ignore]
+    fn p1c4a_cohort() {
+        use crate::mix_coder::p1c4a;
+        use crate::mix_coder::MixParams;
+        let out = std::env::var("MNF17_P1C4A_OUT").expect("MNF17_P1C4A_OUT");
+        let files: Vec<String> = vec![
+            "testdata/solid_256x256.png".into(),
+            "testdata/photos/forest_224x160_s900002.png".into(),
+            "testdata/screenshot_640x400.png".into(),
+        ];
+        let mut csv = String::from(
+            "file,backend,kind_idx,planar,stream_len,prod_us,c4a_us,prod_len,c4a_len,prod_sha16,c4a_sha16\n",
+        );
+        for f in &files {
+            let (pixels, dims) = px_of(f);
+            let cache = crate::mnf6::ProbeCache::new(crate::mnf6::PROBE_CACHE_BUDGET_BYTES);
+            for (kidx, kind) in [PredKind::None, PredKind::Left].iter().enumerate() {
+                for planar in [false, true].iter() {
+                    let med = *kind == PredKind::Med;
+                    let (raw0, st) = build_record_stream(
+                        &pixels,
+                        dims,
+                        true,
+                        true,
+                        *planar,
+                        med,
+                        *kind,
+                        &Coder::Zstd(19),
+                        &cache,
+                    )
+                    .expect("c4a build");
+                    let tile_count = st.modes.len() as u32;
+                    let geom = crate::mix_coder::Geom {
+                        width: dims.width,
+                        height: dims.height,
+                        tile_count,
+                        planar: *planar,
+                    };
+                    for backend in [BACKEND_MIX, BACKEND_MIX5, BACKEND_MIX6, BACKEND_MIX7] {
+                        let mix_params = match backend {
+                            BACKEND_MIX => MixParams::BACKEND4,
+                            BACKEND_MIX5 => MixParams::BACKEND5,
+                            BACKEND_MIX6 => MixParams::BACKEND6,
+                            _ => MixParams::BACKEND7,
+                        };
+                        for reference in 0u8..=3 {
+                            let raw = if reference == 0 {
+                                raw0.clone()
+                            } else {
+                                channel_diff_relabel(
+                                    &raw0,
+                                    *planar,
+                                    false,
+                                    dims.width,
+                                    dims.height,
+                                    reference,
+                                )
+                            };
+                            let (lane, params) = if backend == BACKEND_MIX7 {
+                                (true, MixParams::BACKEND7)
+                            } else {
+                                (false, mix_params)
+                            };
+                            let mut prod_ms = Vec::new();
+                            let mut a_ms = Vec::new();
+                            let mut prod_w: Vec<Vec<u8>> = Vec::new();
+                            let mut a_w: Vec<Vec<u8>> = Vec::new();
+                            for _rep in 0..3 {
+                                let t0 = Instant::now();
+                                let wp = if lane {
+                                    crate::mix_coder::mix_encode_with_lane(&params, &raw, geom)
+                                } else {
+                                    crate::mix_coder::mix_encode_with(&params, &raw)
+                                };
+                                prod_ms.push(t0.elapsed().as_micros() as u64);
+                                let t1 = Instant::now();
+                                let wa = if lane {
+                                    p1c4a::mix_encode_with_lane_a(&params, &raw, geom)
+                                } else {
+                                    p1c4a::mix_encode_with_a(&params, &raw)
+                                };
+                                a_ms.push(t1.elapsed().as_micros() as u64);
+                                prod_w.push(wp);
+                                a_w.push(wa);
+                            }
+                            prod_ms.sort_unstable();
+                            a_ms.sort_unstable();
+                            assert_eq!(prod_w[1], a_w[1], "c4a wire diverged");
+                            assert_eq!(a_w[0], a_w[1], "c4a wire nondeterministic");
+                            csv.push_str(&format!(
+                                "{f},{backend},{kidx},{planar},{dl},{tp},{ta},{wl},{al},{ph:016x},{ah:016x}\n",
+                                f = f, backend = backend, kidx = kidx, planar = planar,
+                                dl = raw.len(), tp = prod_ms[1], ta = a_ms[1],
+                                wl = prod_w[1].len(), al = a_w[1].len(),
+                                ph = fnv64(&prod_w[1]), ah = fnv64(&a_w[1]),
+                            ));
+                        }
+                    }
+                }
+            }
+            std::fs::write(&out, &csv).expect("c4a csv");
+            println!("p1c4a flush {}", f);
+        }
+        println!("P1C4A-WRITTEN {}", out);
+    }
 }
