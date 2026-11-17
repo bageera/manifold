@@ -3336,3 +3336,285 @@ mod channel_diff {
         }
     }
 }
+
+// ==== MNF17-P1-A: pipeline equivalence-class census (research instrument) ====
+// Records what the Maximum pick actually evaluates and where identical
+// computations sit (identity per the R6.2 tuple: stream -> classes ->
+// geometry -> model -> payload). Env-gated + #[ignore] so the release
+// suite never runs it: MNF17_P1A_OUT=<csv> MNF17_P1A_FILES=<list> \
+// cargo test --release mnf17_p1a_census -- --ignored --nocapture
+#[cfg(test)]
+mod mnf17_p1a_census {
+    use super::*;
+    use crate::mix_coder::LaneWalk;
+    use std::time::Instant;
+
+    fn fnv64(b: &[u8]) -> u64 {
+        let mut h: u64 = 0xcbf29ce484222325;
+        for &x in b {
+            h = (h ^ x as u64).wrapping_mul(0x100000001b3);
+        }
+        h
+    }
+
+    fn px_of(path: &str) -> (Vec<u8>, Dims) {
+        let img = image::open(path).expect("census png").to_rgb8();
+        let (w, h) = (img.width(), img.height());
+        (
+            img.into_raw(),
+            Dims {
+                width: w,
+                height: h,
+            },
+        )
+    }
+
+    #[test]
+    #[ignore]
+    fn p1a_census() {
+        let out = std::env::var("MNF17_P1A_OUT").expect("MNF17_P1A_OUT");
+        let files: Vec<String> = match std::env::var("MNF17_P1A_FILES") {
+            Ok(s) => s.split(',').map(|p| p.trim().to_string()).collect(),
+            Err(_) => vec![
+                "testdata/solid_256x256.png".into(),
+                "testdata/gradient_320x240.png".into(),
+                "testdata/repeat_256x256.png".into(),
+                "testdata/heldout/plaid_192.png".into(),
+                "testdata/noise_256x256.png".into(),
+                "testdata/photos/forest_224x160_s900002.png".into(),
+                "testdata/photos/dusk_160x120_s900003.png".into(),
+                "testdata/screenshot_640x400.png".into(),
+            ],
+        };
+        let mut rows =
+            String::from("file,stage,backend,kind_idx,planar,ref,cap,ident16,us,bytes,note\n");
+        let mut picks = String::new();
+        let t00 = Instant::now();
+        for f in &files {
+            let (pixels, dims) = px_of(f);
+            // ---- L0: the production pick with its shipped D1 memo layer
+            let (res, pm) = encode_mnf8_metrics(&pixels, dims, true, Profile::Maximum);
+            let pick_backend = res.2;
+            picks.push_str(&format!(
+                "{file},{l0_us},{backend},{size},{hits},{misses},{stored},{exh},{th},{tm},{tst},{tex}\n",
+                file = f, l0_us = 0, backend = pick_backend, size = res.0.len(),
+                hits = pm.hits, misses = pm.misses, stored = pm.stored,
+                exh = pm.exhausted_bodies, th = pm.tile_hits, tm = pm.tile_misses,
+                tst = pm.tile_stored, tex = pm.tile_exhausted,
+            ));
+            println!(
+                "census {f}: pick backend {pick_backend} {} B; d1 hits {} misses {} tile {}/{}",
+                res.0.len(),
+                pm.hits,
+                pm.misses,
+                pm.tile_hits,
+                pm.tile_misses
+            );
+            // pick wall: separate run to time it (the pick is deterministic
+            // and its wall = the L0 stage cost attribution)
+            let t0 = Instant::now();
+            let (res2, _) = encode_mnf8_metrics(&pixels, dims, true, Profile::Maximum);
+            let l0_us = t0.elapsed().as_micros() as u64;
+            assert_eq!(res2.0, res.0, "pick determinism");
+            rows.push_str(&format!(
+                "{} ,pick,0,0,0,0,0,{:016x},{}, {},pick_wall+d1\n",
+                f,
+                fnv64(&res2.0),
+                l0_us,
+                res2.0.len()
+            ));
+
+            // ---- the candidate matrix, replayed with the production
+            // shared-construction discipline (mirror of the pick loop)
+            let candidates = backend_candidates();
+            #[allow(clippy::type_complexity)]
+            let mut class_groups: Vec<((bool, u32), Vec<(u32, u32)>)> = Vec::new();
+            for (bidx, (backend, coder)) in candidates.iter().enumerate() {
+                let key = match coder {
+                    Coder::Zlib => (true, 0),
+                    Coder::Zstd(l) => (false, *l as u32),
+                };
+                match class_groups.iter_mut().find(|(k, _)| *k == key) {
+                    Some((_, g)) => g.push((bidx as u32, *backend)),
+                    None => class_groups.push((key, vec![(bidx as u32, *backend)])),
+                }
+            }
+            let pred_arms = [
+                PredKind::None,
+                PredKind::Med,
+                PredKind::Plane,
+                PredKind::Left,
+            ];
+            let cache = crate::mnf6::ProbeCache::new(crate::mnf6::PROBE_CACHE_BUDGET_BYTES);
+            for (kidx, kind) in pred_arms.iter().enumerate() {
+                for (pidx, planar) in [false, true].iter().enumerate() {
+                    let med = *kind == PredKind::Med;
+                    for (class_key, group) in &class_groups {
+                        let coder = match class_key {
+                            (true, _) => Coder::Zlib,
+                            (false, l) => Coder::Zstd(*l as i32),
+                        };
+                        let (h0, m0) = (cache.hits.get(), cache.misses.get());
+                        let t0 = Instant::now();
+                        let (raw0, st) = build_record_stream(
+                            &pixels, dims, true, true, *planar, med, *kind, &coder, &cache,
+                        )
+                        .expect("census build");
+                        let build_us = t0.elapsed().as_micros() as u64;
+                        let raw0_id = fnv64(&raw0);
+                        rows.push_str(&format!(
+                            "{f},build,{}, {},{},0,0 {},{build_us},{},probes {}/{}\n",
+                            group
+                                .iter()
+                                .map(|g| g.1.to_string())
+                                .collect::<Vec<_>>()
+                                .join("+"),
+                            kidx,
+                            pidx,
+                            raw0_id,
+                            raw0.len(),
+                            cache.hits.get() - h0,
+                            cache.misses.get() - m0,
+                        ));
+                        let tile_count = st.modes.len() as u32;
+                        for reference in 0u8..=3 {
+                            let t1 = Instant::now();
+                            let raw_ref = if reference == 0 {
+                                raw0.clone()
+                            } else {
+                                channel_diff_relabel(
+                                    &raw0,
+                                    *planar,
+                                    false,
+                                    dims.width,
+                                    dims.height,
+                                    reference,
+                                )
+                            };
+                            let relabel_us = t1.elapsed().as_micros() as u64;
+                            let raw_id = fnv64(&raw_ref);
+                            rows.push_str(&format!(
+                                "{} ,relabel,0,{},{},{},0,{:016x},{}, {},\n",
+                                f,
+                                kidx,
+                                pidx,
+                                reference,
+                                raw_id,
+                                relabel_us,
+                                raw_ref.len()
+                            ));
+                            let geom = crate::mix_coder::Geom {
+                                width: dims.width,
+                                height: dims.height,
+                                tile_count,
+                                planar: *planar,
+                            };
+                            for &(_bidx, backend) in group {
+                                let t2 = Instant::now();
+                                let payload = backend_compress(backend, &raw_ref, Some(geom))
+                                    .expect("encode");
+                                let enc_us = t2.elapsed().as_micros() as u64;
+                                // backend-7 only: the class-walk layer is
+                                // externally observable (LaneWalk)
+                                let note = if backend == BACKEND_MIX7 {
+                                    let t3 = Instant::now();
+                                    let mut walk = LaneWalk::new(
+                                        geom.width,
+                                        geom.height,
+                                        geom.tile_count,
+                                        geom.planar,
+                                    )
+                                    .expect("walk");
+                                    let mut classes_sha = fnv64(b"init");
+                                    for (pos, b) in raw_ref.iter().enumerate() {
+                                        if let Some(c) = walk.peek_class() {
+                                            classes_sha = (classes_sha
+                                                ^ (c as u64).wrapping_mul(pos as u64 + 1))
+                                            .wrapping_mul(0x100000001b3);
+                                        }
+                                        walk.consume(*b).expect("walk");
+                                    }
+                                    let _ = t3.elapsed().as_micros();
+                                    format!("classes_walked {}", walk.complete())
+                                } else {
+                                    String::new()
+                                };
+                                let payload_id = fnv64(&payload);
+                                rows.push_str(&format!(
+                                    "{} ,encode,{},{},{},{},0,{:016x},{},{} ,{} {:016x}\n",
+                                    f,
+                                    backend,
+                                    kidx,
+                                    pidx,
+                                    reference,
+                                    payload_id,
+                                    enc_us,
+                                    payload.len(),
+                                    note,
+                                    raw_id,
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+            // token arms (backend 7 excluded by design)
+            for (cidx, cap) in [16usize, tokens::MAX_CANDIDATES].iter().enumerate() {
+                let t1 = Instant::now();
+                let (wire0, _ts) = build_token_wire(&pixels, dims, *cap).expect("tokens");
+                let w_id = fnv64(&wire0);
+                rows.push_str(&format!(
+                    "{} ,tokbuild,0,0,0,0,{},{:016x},{}, {},\n",
+                    f,
+                    cap,
+                    w_id,
+                    t1.elapsed().as_micros() as u64,
+                    wire0.len()
+                ));
+                for reference in 0u8..=3 {
+                    let wire = if reference == 0 {
+                        wire0.clone()
+                    } else {
+                        channel_diff_relabel(
+                            &wire0,
+                            false,
+                            true,
+                            dims.width,
+                            dims.height,
+                            reference,
+                        )
+                    };
+                    let wid = fnv64(&wire);
+                    for (bidx, (backend, _)) in candidates.iter().enumerate() {
+                        let _ = bidx;
+                        if *backend == BACKEND_MIX7 {
+                            continue;
+                        }
+                        let t2 = Instant::now();
+                        let payload = backend_compress(*backend, &wire, None).expect("tok");
+                        rows.push_str(&format!(
+                            "{} ,tokencode,{},{},0,{},0 {:016x},{}, {},{:016x}\n",
+                            f,
+                            backend,
+                            cidx,
+                            reference,
+                            fnv64(&payload),
+                            t2.elapsed().as_micros() as u64,
+                            payload.len(),
+                            wid
+                        ));
+                    }
+                }
+            }
+            std::fs::write(&out, &rows).expect("census csv");
+            println!("census flush {}", f);
+        }
+        println!(
+            "CENSUS-WRITTEN {} ({} total {})",
+            out,
+            files.len(),
+            t00.elapsed().as_secs()
+        );
+        let _ = picks;
+    }
+}
