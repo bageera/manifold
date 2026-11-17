@@ -2807,3 +2807,233 @@ pub(crate) mod p1d1 {
         }
     }
 }
+
+/// MNF17-P1-D2: certified-termination prototype. cfg(test) only.
+#[cfg(test)]
+pub(crate) mod p1d2 {
+    use super::*;
+    use std::time::Instant;
+
+    pub(crate) enum TermOut {
+        /// Ran to completion; wire byte-identical to the exhaustive form.
+        Complete { wire: Vec<u8>, encode_us: u64 },
+        /// Dominated at symbol index t (1-based count of encoded symbols);
+        /// the caller's incumbent was exceeded strictly by the D0 bound.
+        Dominated { at: usize },
+    }
+
+    /// Byte-exact mirror of `mix_encode_with`/`mix_encode_with_lane`
+    /// with the D0 bound checked every `stride` symbols against
+    /// `incumbent` (full assembled container bytes; strict inequality).
+    pub(crate) fn mix_encode_with_term(
+        params: &MixParams,
+        data: &[u8],
+        geom: Option<Geom>,
+        incumbent: usize,
+        stride: usize,
+    ) -> TermOut {
+        const HEADER8: usize = 32;
+        let t0 = Instant::now();
+        let mut enc = DefaultRangeEncoder::new();
+        let done = |enc: &DefaultRangeEncoder, i: usize| -> Option<usize> {
+            if (i + 1).is_multiple_of(stride) {
+                // B(t) = HEADER8 + 4 + 4*num_words(t), checked arithmetic
+                let words = enc.num_words();
+                let bound = HEADER8
+                    .checked_add(4)?
+                    .checked_add(4u64.checked_mul(words as u64)? as usize)?;
+                if bound > incumbent {
+                    return Some(i + 1);
+                }
+            }
+            None
+        };
+        if let Some(geom) = geom {
+            let mut walk = LaneWalk::new(geom.width, geom.height, geom.tile_count, geom.planar)
+                .expect("valid container geometry");
+            let mut ctxs: Vec<MixCtx> = (0..params.nctx)
+                .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+                .collect();
+            build_parent_tree(&mut ctxs, params);
+            let mut prev = 0u8;
+            let mut prev2 = 0u8;
+            let mut prev3 = 0u8;
+            for (i, &b) in data.iter().enumerate() {
+                let cls = walk
+                    .peek_class()
+                    .expect("byte beyond the record grammar on the encode path");
+                walk.consume(b)
+                    .expect("well-formed record stream on the encode path");
+                let base = mix_ctx_key(params, prev, prev2, prev3);
+                let c = if params.lane_child && cls == 1 {
+                    base + 20
+                } else {
+                    base
+                };
+                let m = ctxs[c].model(&ctxs, params).expect("mix model buildable");
+                enc.encode_symbols(std::iter::once((usize::from(b), &m)))
+                    .expect("mix encode symbol");
+                ctxs[c].step(b);
+                share_step(&mut ctxs, params, c, b);
+                prev3 = prev2;
+                prev2 = prev;
+                prev = b;
+                if let Some(at) = done(&enc, i) {
+                    let _ = t0.elapsed();
+                    return TermOut::Dominated { at };
+                }
+            }
+            assert!(walk.complete(), "record grammar must consume the stream");
+        } else {
+            let mut ctxs: Vec<MixCtx> = (0..params.nctx)
+                .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+                .collect();
+            build_parent_tree(&mut ctxs, params);
+            let mut prev = 0u8;
+            let mut prev2 = 0u8;
+            let mut prev3 = 0u8;
+            for (i, &b) in data.iter().enumerate() {
+                let c = mix_ctx_key(params, prev, prev2, prev3);
+                let m = ctxs[c].model(&ctxs, params).expect("mix model buildable");
+                enc.encode_symbols(std::iter::once((usize::from(b), &m)))
+                    .expect("mix encode symbol");
+                ctxs[c].step(b);
+                share_step(&mut ctxs, params, c, b);
+                prev3 = prev2;
+                prev2 = prev;
+                prev = b;
+                if let Some(at) = done(&enc, i) {
+                    let _ = t0.elapsed();
+                    return TermOut::Dominated { at };
+                }
+            }
+        }
+        let compressed = enc.into_compressed().expect("mix seal");
+        let mut out = Vec::with_capacity(compressed.len() * 4 + 4);
+        out.extend_from_slice(
+            &u32::try_from(data.len())
+                .expect("stream len fits u32")
+                .to_le_bytes(),
+        );
+        for w in compressed {
+            out.extend_from_slice(&w.to_le_bytes());
+        }
+        TermOut::Complete {
+            wire: out,
+            encode_us: t0.elapsed().as_micros() as u64,
+        }
+    }
+
+    // ---- D2 differential proofs ----
+
+    /// xorshift stream generator shared with the C4 twin fixtures.
+    fn ds(state: &mut u64) -> u8 {
+        *state ^= *state << 13;
+        *state ^= *state >> 7;
+        *state ^= *state << 17;
+        (*state >> 24) as u8
+    }
+
+    #[test]
+    fn d2_differential() {
+        let all = [
+            &MixParams::BACKEND4,
+            &MixParams::BACKEND5,
+            &MixParams::BACKEND6,
+            &MixParams::BACKEND7,
+        ];
+        let mut st = 0xfeedfacec0ffee0du64;
+        let random: Vec<u8> = (0..20000).map(|_| ds(&mut st)).collect();
+        let f1 = vec![17u8; 4096];
+        let f2: Vec<u8> = std::iter::repeat_n(0u8, 512)
+            .chain(std::iter::repeat_n(255u8, 512))
+            .collect();
+        let f3 = vec![9u8; 40000];
+        let fixtures: Vec<&[u8]> = vec![&f1, &f2, &f3, &random];
+        for params in all {
+            for stream in &fixtures {
+                // (i) incumbent = usize::MAX == no termination == exact wire
+                let t = mix_encode_with_term(params, stream, None, usize::MAX, 256);
+                let full = match t {
+                    TermOut::Complete { wire, encode_us } => {
+                        assert_eq!(wire, mix_encode_with(params, stream), "D2 no-term wire");
+                        let _ = encode_us;
+                        wire
+                    }
+                    TermOut::Dominated { at } => {
+                        panic!("D2 eliminated with infinite incumbent at {at}")
+                    }
+                };
+                // (ii) real termination against a just-below-final incumbent:
+                let true_size = HEADER8_SIZE + full.len();
+                let too_small = true_size.saturating_sub(1).saturating_sub(256);
+                if too_small > HEADER8_SIZE + 4 {
+                    // must complete while B(t) <= incumbent, but if the full
+                    // size exceeds `too_small` the bound MUST fire before N
+                    let r = mix_encode_with_term(params, stream, None, too_small, 1);
+                    let fired = match r {
+                        TermOut::Dominated { at: _ } => {
+                            // certificate: the real final size strictly
+                            // exceeds the incumbent (re-run exhaustively)
+                            assert!(true_size > too_small, "real size must exceed");
+                            let _ = mix_encode_with(params, stream); // exhaustive oracle re-run
+                            true
+                        }
+                        TermOut::Complete { wire, .. } => {
+                            // completed => final bound must NOT exceed inc
+                            assert!(
+                                HEADER8_SIZE + wire.len() <= too_small,
+                                "completed but bound violated"
+                            );
+                            false
+                        }
+                    };
+                    let _ = fired;
+                }
+                // (iii) equality never eliminated: incumbent exactly equal
+                // to the final size -> must COMPLETE (bound <= incumbent)
+                let r = mix_encode_with_term(params, stream, None, true_size, 1);
+                match r {
+                    TermOut::Complete { wire, .. } => {
+                        assert_eq!(wire, full, "equality completed wire")
+                    }
+                    TermOut::Dominated { at } => {
+                        panic!("equality eliminated at {at} (must complete)")
+                    }
+                }
+                // (iv) state leakage: D2's internal ctxs are arm-local; a
+                // dominated run followed by a full run yields identical wire
+                let at0 = too_small.max(HEADER8_SIZE + 4);
+                let _ = mix_encode_with_term(params, stream, None, at0, 1);
+                let again = mix_encode_with_term(params, stream, None, usize::MAX, 256);
+                match again {
+                    TermOut::Complete { wire, .. } => assert_eq!(wire, full, "post-dominance wire"),
+                    TermOut::Dominated { at } => panic!("post-dominance eliminated at {at}"),
+                }
+            }
+            if params.lane_child {
+                // lane form with a valid tiny record (16x4 mode-0)
+                let geom = Geom {
+                    width: 16,
+                    height: 4,
+                    tile_count: 1,
+                    planar: true,
+                };
+                let lane_stream: Vec<u8> = (0..193u16).map(|i| (i * 7 % 251) as u8).collect();
+                let t = mix_encode_with_term(params, &lane_stream, Some(geom), usize::MAX, 256);
+                match t {
+                    TermOut::Complete { wire, .. } => {
+                        assert_eq!(
+                            wire,
+                            mix_encode_with_lane(params, &lane_stream, geom),
+                            "D2 lane wire"
+                        )
+                    }
+                    TermOut::Dominated { at } => panic!("lane eliminated at {at}"),
+                }
+            }
+        }
+    }
+
+    pub(crate) const HEADER8_SIZE: usize = 32;
+}

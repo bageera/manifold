@@ -3472,6 +3472,705 @@ mod channel_diff {
         println!("P1D1-WRITTEN {}", out);
     }
 
+    // ==== MNF17-P1-D2/D3: live certified-termination census. Pass 1
+    // completes every arm exhaustively (ground truth only). Strategy
+    // passes evaluate arms in their order with live incumbents and the
+    // D2 bound at stride 256; every Dominated result is verified
+    // against pass-1 truth (strict > incumbent), the winner is
+    // byte-identical to the exhaustive winner, and the ordering
+    // control isolates the order effect. Cheap token arms use the
+    // production 5-backend/filtered-rank semantics.
+    #[test]
+    #[ignore]
+    fn p1d23_census() {
+        use crate::mix_coder::{p1d2, Geom, MixParams};
+        let out = std::env::var("MNF17_P1D23_OUT").expect("MNF17_P1D23_OUT");
+        let files: Vec<String> = match std::env::var("MNF17_P1A_FILES") {
+            Ok(v) => v.split(',').map(|p| p.trim().to_string()).collect(),
+            Err(_) => vec![
+                "testdata/solid_256x256.png".into(),
+                "testdata/gradient_320x240.png".into(),
+                "testdata/screenshot_640x400.png".into(),
+                "testdata/noise_256x256.png".into(),
+                "testdata/repeat_256x256.png".into(),
+                "testdata/heldout/plaid_192.png".into(),
+                "testdata/photos/forest_224x160_s900002.png".into(),
+                "testdata/photos/dusk_160x120_s900003.png".into(),
+            ],
+        };
+        let candidates = backend_candidates();
+        // token-arm backend enumeration: candidates FILTERED, no mix7
+        let token_backends: Vec<(usize, u32)> = candidates
+            .iter()
+            .filter(|(b, _)| *b != BACKEND_MIX7)
+            .enumerate()
+            .map(|(i, (b, _))| (i, *b))
+            .collect();
+        let mut csv = String::from(
+            "file,strategy,backend,kidx,pidx,ref,rank,N,true_size,inc,dominated,at,wall_us,winner\n",
+        );
+        for f in &files {
+            let img = image::open(f).expect("census png").to_rgb8();
+            let (w0, h0) = (img.width(), img.height());
+            let pixels = img.into_raw();
+            let dims = Dims {
+                width: w0,
+                height: h0,
+            };
+            let cache = crate::mnf6::ProbeCache::new(crate::mnf6::PROBE_CACHE_BUDGET_BYTES);
+            let pred_arms = [
+                PredKind::None,
+                PredKind::Med,
+                PredKind::Plane,
+                PredKind::Left,
+            ];
+            #[allow(clippy::type_complexity)]
+            let mut class_groups: Vec<((bool, u32), Vec<(usize, u32)>)> = Vec::new();
+            for (bidx, (backend, coder)) in candidates.iter().enumerate() {
+                let key = match coder {
+                    Coder::Zlib => (true, 0),
+                    Coder::Zstd(l) => (false, *l as u32),
+                };
+                match class_groups.iter_mut().find(|(k, _)| *k == key) {
+                    Some((_, g)) => g.push((bidx, *backend)),
+                    None => class_groups.push((key, vec![(bidx, *backend)])),
+                }
+            }
+            // (kidx, pidx, zlib-class, ref) -> (raw, geom, tile_count)
+            #[allow(clippy::type_complexity)]
+            let mut raws: std::collections::HashMap<
+                (usize, usize, bool, u8),
+                (Vec<u8>, Geom, u32),
+            > = std::collections::HashMap::new();
+            struct Rec {
+                kidx: usize,
+                pidx: usize,
+                backend: u32,
+                reference: u8,
+                rank: usize,
+                n: usize,
+                size: usize,
+                wire: Vec<u8>,
+                token: bool,
+            }
+            let mut rec: Vec<Rec> = Vec::new();
+            for (kidx, kind) in pred_arms.iter().enumerate() {
+                for (pidx, planar) in [false, true].iter().enumerate() {
+                    let med = *kind == PredKind::Med;
+                    for (class_key, group) in &class_groups {
+                        let is_zlib = class_key.0;
+                        let coder = match class_key {
+                            (true, _) => Coder::Zlib,
+                            (false, l) => Coder::Zstd(*l as i32),
+                        };
+                        let (raw0, st) = build_record_stream(
+                            &pixels, dims, true, true, *planar, med, *kind, &coder, &cache,
+                        )
+                        .expect("d23 build");
+                        let tile_count = st.modes.len() as u32;
+                        for reference in 0u8..=3u8 {
+                            let raw = if reference == 0 {
+                                raw0.clone()
+                            } else {
+                                channel_diff_relabel(
+                                    &raw0,
+                                    *planar,
+                                    false,
+                                    dims.width,
+                                    dims.height,
+                                    reference,
+                                )
+                            };
+                            let geom = Geom {
+                                width: dims.width,
+                                height: dims.height,
+                                tile_count,
+                                planar: *planar,
+                            };
+                            raws.entry((kidx, pidx, is_zlib, reference)).or_insert((
+                                raw.clone(),
+                                geom,
+                                tile_count,
+                            ));
+                            let flags = kind.flag_bit()
+                                | if *planar { FLAG_PLANAR } else { 0 }
+                                | (u32::from(reference) << 6);
+                            for &(bidx, backend) in group {
+                                let arm =
+                                    8u32 * kidx as u32 + 2u32 * pidx as u32 + u32::from(reference);
+                                let rank = bidx * 40 + arm as usize;
+                                let is_mix = backend >= BACKEND_MIX;
+                                let (_payload, full) = if is_mix {
+                                    let params = match backend {
+                                        BACKEND_MIX => MixParams::BACKEND4,
+                                        BACKEND_MIX5 => MixParams::BACKEND5,
+                                        BACKEND_MIX6 => MixParams::BACKEND6,
+                                        _ => MixParams::BACKEND7,
+                                    };
+                                    let pay = if backend == BACKEND_MIX7 {
+                                        crate::mix_coder::mix_encode_with_lane(&params, &raw, geom)
+                                    } else {
+                                        crate::mix_coder::mix_encode_with(&params, &raw)
+                                    };
+                                    let cont =
+                                        assemble_mnf8(&pay, dims, tile_count, flags, backend)
+                                            .expect("asm");
+                                    (pay, cont)
+                                } else {
+                                    let pay = backend_compress(backend, &raw, None).expect("cheap");
+                                    let cont =
+                                        assemble_mnf8(&pay, dims, tile_count, flags, backend)
+                                            .expect("asm");
+                                    (pay, cont)
+                                };
+                                rec.push(Rec {
+                                    kidx,
+                                    pidx,
+                                    backend,
+                                    reference,
+                                    rank,
+                                    n: raw.len(),
+                                    size: full.len(),
+                                    wire: full,
+                                    token: false,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            // token arms: per-reference relabel, per-backend compress,
+            // filtered enumerate ranks (production pick-loop semantics)
+            for (cidx, cap) in [(0usize, 16usize), (1usize, tokens::MAX_CANDIDATES)] {
+                let (wire0, _ts) = build_token_wire(&pixels, dims, cap).expect("tok");
+                for reference in 0u8..=3u8 {
+                    let arm = 32u32 + (cidx as u32) * 4 + u32::from(reference);
+                    let wire = if reference == 0 {
+                        wire0.clone()
+                    } else {
+                        channel_diff_relabel(
+                            &wire0,
+                            false,
+                            true,
+                            dims.width,
+                            dims.height,
+                            reference,
+                        )
+                    };
+                    let cols = crate::codec::div_ceil(dims.width, crate::codec::TILE_SIZE);
+                    let rows_n = crate::codec::div_ceil(dims.height, crate::codec::TILE_SIZE);
+                    let tc: u32 = cols.checked_mul(rows_n).expect("tiles");
+                    for (fb, backend) in &token_backends {
+                        let rank = fb * 40 + arm as usize;
+                        let payload = backend_compress(*backend, &wire, None).expect("tok cheap");
+                        let full = assemble_mnf8(
+                            &payload,
+                            dims,
+                            tc,
+                            FLAG_PRED_MED | FLAG_TOKENS | (u32::from(reference) << 6),
+                            *backend,
+                        )
+                        .expect("tok asm");
+                        rec.push(Rec {
+                            kidx: 9,
+                            pidx: 9,
+                            backend: *backend,
+                            reference,
+                            rank,
+                            n: wire.len(),
+                            size: full.len(),
+                            wire: full,
+                            token: true,
+                        });
+                    }
+                }
+            }
+            let winner: (usize, usize) =
+                rec.iter().map(|r| (r.size, r.rank)).min().expect("winner");
+            let mut wires: std::collections::HashMap<usize, Vec<u8>> =
+                std::collections::HashMap::new();
+            for r in &rec {
+                wires.insert(r.rank, r.wire.clone());
+            }
+            for strategy in ["D2", "D3", "ORDCTL"] {
+                let mut order: Vec<usize> = (0..rec.len()).collect();
+                if strategy != "D2" {
+                    order.sort_by_key(|&i| {
+                        let r = &rec[i];
+                        (
+                            if r.backend == BACKEND_ZLIB || r.backend == BACKEND_ZSTD19 {
+                                0u8
+                            } else if r.token {
+                                2
+                            } else {
+                                1
+                            },
+                            r.kidx,
+                            r.backend,
+                            r.reference,
+                            r.rank,
+                        )
+                    });
+                }
+                let mut best: Option<(usize, usize)> = None;
+                let mut best_wire: Vec<u8> = Vec::new();
+                let mut false_elim = 0usize;
+                let mut rows_buf: Vec<String> = Vec::new();
+                for &ri in &order {
+                    let r = &rec[ri];
+                    let inc = best.map(|b| b.0).unwrap_or(usize::MAX);
+                    let is_mix = r.backend >= BACKEND_MIX && !r.token;
+                    let (dominated, at, wall_us) = if is_mix {
+                        let (raw, geom, _tc) = raws
+                            .get(&(r.kidx, r.pidx, false, r.reference))
+                            .expect("raw for mix arm")
+                            .clone();
+                        let params = match r.backend {
+                            BACKEND_MIX => MixParams::BACKEND4,
+                            BACKEND_MIX5 => MixParams::BACKEND5,
+                            BACKEND_MIX6 => MixParams::BACKEND6,
+                            _ => MixParams::BACKEND7,
+                        };
+                        let lane7 = r.backend == BACKEND_MIX7;
+                        let g7 = if lane7 { Some(geom) } else { None::<Geom> };
+                        // ORDCTL = ordering-only: no termination
+                        let eff_inc = if strategy == "ORDCTL" {
+                            usize::MAX
+                        } else {
+                            inc
+                        };
+                        let (dom, at, t) =
+                            match p1d2::mix_encode_with_term(&params, &raw, g7, eff_inc, 256) {
+                                p1d2::TermOut::Complete { wire, encode_us } => {
+                                    let _ = wire;
+                                    (0usize, 0usize, encode_us)
+                                }
+                                p1d2::TermOut::Dominated { at } => (1usize, at, 0),
+                            };
+                        if dom == 1 && !(r.size > inc && inc != usize::MAX) {
+                            false_elim += 1;
+                        }
+                        (dom, at, t)
+                    } else {
+                        (0usize, 0usize, 0)
+                    };
+                    if dominated == 0 {
+                        let (sn, rn) = (r.size, r.rank);
+                        if best.is_none() || (sn, rn) < best.expect("best") {
+                            best = Some((sn, rn));
+                            best_wire = wires.get(&rn).cloned().expect("winner wire");
+                        }
+                    }
+                    rows_buf.push(format!(
+                        "{f},{strategy},{backend},{kidx},{pidx},{reference},{rank},{n},{true_size},{inc},{dominated},{at_str},{wall_us},{winner}\n",
+                        pidx = r.pidx,
+                        at_str = if dominated == 0 { "-".to_string() } else { at.to_string() },
+                        winner = if best == Some(winner) { "WIN" } else { "-" },
+                        backend = r.backend,
+                        kidx = r.kidx,
+                        reference = r.reference,
+                        rank = r.rank,
+                        n = r.n,
+                        true_size = r.size,
+                        strategy = strategy,
+                        f = f,
+                    ));
+                }
+                assert_eq!(best, Some(winner), "winner identity {strategy}");
+                assert_eq!(
+                    best_wire,
+                    *wires.get(&winner.1).expect("wire"),
+                    "winner bytes {strategy}"
+                );
+                assert_eq!(false_elim, 0, "false eliminations {strategy}");
+                for line in rows_buf {
+                    csv.push_str(&line);
+                    csv.push('\n');
+                }
+            }
+            std::fs::write(&out, &csv).expect("d23 csv");
+            println!("p1d23 flush {}", f);
+        }
+        println!("P1D23-WRITTEN {}", out);
+    }
+
+    // ==== MNF17-P1-D5: full-portfolio virtual selector. Enabled =
+    // current candidates; Disabled = backend 7 excluded (phase A).
+    // Virtual selection = D3 order (cheap first) + certified
+    // termination at stride 256; the exhaustive pass-1 winner must
+    // match the virtual winner byte-for-byte, decode must reproduce
+    // the source pixels exactly, and the totals must match the frozen
+    // 768,303 / 810,816 constants. Hubble runs through the same path.
+    #[test]
+    #[ignore]
+    fn p1d5_portfolio() {
+        use crate::mix_coder::{p1d2, Geom, MixParams};
+        let out = std::env::var("MNF17_P1D5_CSV").expect("MNF17_P1D5_CSV");
+        let hubble = std::env::var("MNF17_P1D5_HUBBLE")
+            .unwrap_or_else(|_| "/tmp/hf1_hubble_dec.png".to_string());
+        const ENABLED_TOTAL: usize = 768_303;
+        const DISABLED_TOTAL: usize = 810_816;
+        const HUBBLE_SIZE: usize = 1_438_848;
+        // corpus.lock file list (22 traces) + the 8 non-mix fixtures
+        let lock = std::fs::read_to_string("research/manifests/corpus.lock").expect("lock");
+        let mut corpus: Vec<String> = lock
+            .lines()
+            .filter_map(|l| {
+                l.trim_start()
+                    .strip_prefix("\"file\": \"")
+                    .map(|r| r.to_string())
+            })
+            .map(|r| r[..r.len() - 2].to_string())
+            .collect();
+        corpus.extend(
+            [
+                "testdata/gradient_320x240.png",
+                "testdata/heldout/blob_224x160.png",
+                "testdata/heldout/blocks_192x128.png",
+                "testdata/heldout/plaid_192.png",
+                "testdata/heldout/poster_208x144.png",
+                "testdata/noise_256x256.png",
+                "testdata/repeat_256x256.png",
+                "testdata/solid_256x256.png",
+            ]
+            .iter()
+            .map(|s| s.to_string()),
+        );
+        assert_eq!(corpus.len(), 30, "corpus length");
+        let candidates = backend_candidates();
+        let mut csv = String::from("phase,file,size,win_rank,dom,wall_us\n");
+        for phase in ["enabled", "disabled", "hubble"] {
+            let files: Vec<String> = match phase {
+                "enabled" | "disabled" => corpus.clone(),
+                _ => vec![hubble.clone()],
+            };
+            let mut total = 0usize;
+            for rel in &files {
+                let img = image::open(rel).expect("corpus png").to_rgb8();
+                let (w0, h0) = (img.width(), img.height());
+                let pixels = img.into_raw();
+                let dims = Dims {
+                    width: w0,
+                    height: h0,
+                };
+                let cache = crate::mnf6::ProbeCache::new(crate::mnf6::PROBE_CACHE_BUDGET_BYTES);
+                let pred_arms = [
+                    PredKind::None,
+                    PredKind::Med,
+                    PredKind::Plane,
+                    PredKind::Left,
+                ];
+                #[allow(clippy::type_complexity)]
+                let mut class_groups: Vec<((bool, u32), Vec<(usize, u32)>)> = Vec::new();
+                for (bidx, (backend, coder)) in candidates.iter().enumerate() {
+                    if phase == "disabled" && *backend == BACKEND_MIX7 {
+                        continue;
+                    }
+                    let key = match coder {
+                        Coder::Zlib => (true, 0),
+                        Coder::Zstd(l) => (false, *l as u32),
+                    };
+                    match class_groups.iter_mut().find(|(k, _)| *k == key) {
+                        Some((_, g)) => g.push((bidx, *backend)),
+                        None => class_groups.push((key, vec![(bidx, *backend)])),
+                    }
+                }
+                let token_backends: Vec<(usize, u32)> = candidates
+                    .iter()
+                    .filter(|(b, _)| *b != BACKEND_MIX7)
+                    .enumerate()
+                    .map(|(i, (b, _))| (i, *b))
+                    .collect();
+                #[allow(clippy::type_complexity)]
+                let mut raws: std::collections::HashMap<
+                    (usize, usize, bool, u8),
+                    (Vec<u8>, Geom, u32),
+                > = std::collections::HashMap::new();
+                struct Rec {
+                    kidx: usize,
+                    pidx: usize,
+                    backend: u32,
+                    reference: u8,
+                    rank: usize,
+                    size: usize,
+                    wire: Vec<u8>,
+                    token: bool,
+                }
+                let mut rec: Vec<Rec> = Vec::new();
+                for (kidx, kind) in pred_arms.iter().enumerate() {
+                    for (pidx, planar) in [false, true].iter().enumerate() {
+                        let med = *kind == PredKind::Med;
+                        for (class_key, group) in &class_groups {
+                            let is_zlib = class_key.0;
+                            let coder = match class_key {
+                                (true, _) => Coder::Zlib,
+                                (false, l) => Coder::Zstd(*l as i32),
+                            };
+                            let (raw0, st) = build_record_stream(
+                                &pixels, dims, true, true, *planar, med, *kind, &coder, &cache,
+                            )
+                            .expect("d5 build");
+                            let tile_count = st.modes.len() as u32;
+                            for reference in 0u8..=3u8 {
+                                let raw = if reference == 0 {
+                                    raw0.clone()
+                                } else {
+                                    channel_diff_relabel(
+                                        &raw0,
+                                        *planar,
+                                        false,
+                                        dims.width,
+                                        dims.height,
+                                        reference,
+                                    )
+                                };
+                                let geom = Geom {
+                                    width: dims.width,
+                                    height: dims.height,
+                                    tile_count,
+                                    planar: *planar,
+                                };
+                                raws.entry((kidx, pidx, is_zlib, reference)).or_insert((
+                                    raw.clone(),
+                                    geom,
+                                    tile_count,
+                                ));
+                                let flags = kind.flag_bit()
+                                    | if *planar { FLAG_PLANAR } else { 0 }
+                                    | (u32::from(reference) << 6);
+                                for &(bidx, backend) in group {
+                                    let arm = 8u32 * kidx as u32
+                                        + 2u32 * pidx as u32
+                                        + u32::from(reference);
+                                    let rank = bidx * 40 + arm as usize;
+                                    let is_mix = backend >= BACKEND_MIX;
+                                    let (_pay, full) = if is_mix {
+                                        let params = match backend {
+                                            BACKEND_MIX => MixParams::BACKEND4,
+                                            BACKEND_MIX5 => MixParams::BACKEND5,
+                                            BACKEND_MIX6 => MixParams::BACKEND6,
+                                            _ => MixParams::BACKEND7,
+                                        };
+                                        let p = if backend == BACKEND_MIX7 {
+                                            crate::mix_coder::mix_encode_with_lane(
+                                                &params, &raw, geom,
+                                            )
+                                        } else {
+                                            crate::mix_coder::mix_encode_with(&params, &raw)
+                                        };
+                                        let cont =
+                                            assemble_mnf8(&p, dims, tile_count, flags, backend)
+                                                .expect("asm");
+                                        (p, cont)
+                                    } else {
+                                        let p =
+                                            backend_compress(backend, &raw, None).expect("cheap");
+                                        let cont =
+                                            assemble_mnf8(&p, dims, tile_count, flags, backend)
+                                                .expect("asm");
+                                        (p, cont)
+                                    };
+                                    rec.push(Rec {
+                                        kidx,
+                                        pidx,
+                                        backend,
+                                        reference,
+                                        rank,
+                                        size: full.len(),
+                                        wire: full,
+                                        token: false,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                for (cidx, cap) in [(0usize, 16usize), (1usize, tokens::MAX_CANDIDATES)] {
+                    let (wire0, _ts) = build_token_wire(&pixels, dims, cap).expect("tok");
+                    for reference in 0u8..=3u8 {
+                        let arm = 32u32 + (cidx as u32) * 4 + u32::from(reference);
+                        let wire = if reference == 0 {
+                            wire0.clone()
+                        } else {
+                            channel_diff_relabel(
+                                &wire0,
+                                false,
+                                true,
+                                dims.width,
+                                dims.height,
+                                reference,
+                            )
+                        };
+                        let cols = crate::codec::div_ceil(dims.width, crate::codec::TILE_SIZE);
+                        let rows_n = crate::codec::div_ceil(dims.height, crate::codec::TILE_SIZE);
+                        let tc: u32 = cols.checked_mul(rows_n).expect("tiles");
+                        for (fb, backend) in &token_backends {
+                            let rank = fb * 40 + arm as usize;
+                            let payload =
+                                backend_compress(*backend, &wire, None).expect("tok cheap");
+                            let full = assemble_mnf8(
+                                &payload,
+                                dims,
+                                tc,
+                                FLAG_PRED_MED | FLAG_TOKENS | (u32::from(reference) << 6),
+                                *backend,
+                            )
+                            .expect("tok asm");
+                            rec.push(Rec {
+                                kidx: 9,
+                                pidx: 9,
+                                backend: *backend,
+                                reference,
+                                rank,
+                                size: full.len(),
+                                wire: full,
+                                token: true,
+                            });
+                        }
+                    }
+                }
+                // pass 1: exhaustive winner
+                let winner: (usize, usize) =
+                    rec.iter().map(|r| (r.size, r.rank)).min().expect("winner");
+                let win1 = rec
+                    .iter()
+                    .find(|r| (r.size, r.rank) == winner)
+                    .expect("wire")
+                    .wire
+                    .clone();
+                // pass 2: virtual D3 (cheap first + certified termination)
+                let mut order: Vec<usize> = (0..rec.len()).collect();
+                order.sort_by_key(|&i| {
+                    let r = &rec[i];
+                    (
+                        if r.backend == BACKEND_ZLIB || r.backend == BACKEND_ZSTD19 {
+                            0u8
+                        } else if r.token {
+                            2
+                        } else {
+                            1
+                        },
+                        r.kidx,
+                        r.backend,
+                        r.reference,
+                        r.rank,
+                    )
+                });
+                let mut best: Option<(usize, usize)> = None;
+                let mut best_wire = Vec::new();
+                let mut dom = 0usize;
+                let mut wall = 0u64;
+                for &ri in &order {
+                    let r = &rec[ri];
+                    let inc = best.map(|b| b.0).unwrap_or(usize::MAX);
+                    if r.backend >= BACKEND_MIX && !r.token {
+                        let (raw, geom, _tc) = raws
+                            .get(&(r.kidx, r.pidx, false, r.reference))
+                            .expect("raw")
+                            .clone();
+                        let params = match r.backend {
+                            BACKEND_MIX => MixParams::BACKEND4,
+                            BACKEND_MIX5 => MixParams::BACKEND5,
+                            BACKEND_MIX6 => MixParams::BACKEND6,
+                            _ => MixParams::BACKEND7,
+                        };
+                        let g7 = if r.backend == BACKEND_MIX7 {
+                            Some(geom)
+                        } else {
+                            None::<Geom>
+                        };
+                        match p1d2::mix_encode_with_term(&params, &raw, g7, inc, 256) {
+                            p1d2::TermOut::Complete { wire, encode_us } => {
+                                wall += encode_us;
+                                let _ = wire;
+                                let (sn, rn) = (r.size, r.rank);
+                                if best.is_none() || (sn, rn) < best.expect("best") {
+                                    best = Some((sn, rn));
+                                    best_wire = r.wire.clone();
+                                }
+                            }
+                            p1d2::TermOut::Dominated { .. } => {
+                                dom += 1;
+                                if !(r.size > inc && inc != usize::MAX) {
+                                    panic!("d5 false elimination {rel} rank {rank}", rank = r.rank);
+                                }
+                            }
+                        }
+                    } else {
+                        let (sn, rn) = (r.size, r.rank);
+                        if best.is_none() || (sn, rn) < best.expect("best") {
+                            best = Some((sn, rn));
+                            best_wire = r.wire.clone();
+                        }
+                    }
+                }
+                let (wsize, wrank) = best.expect("virtual winner");
+                assert_eq!((wsize, wrank), winner, "winner identity {rel}");
+                assert_eq!(best_wire, win1, "winner bytes {rel}");
+                // exact reconstruction from the virtual winner container
+                let (d_dims, d_pixels, _fb) = decode_mnf8(&best_wire).expect("d5 decode");
+                assert_eq!(d_dims, dims, "d5 dims {rel}");
+                assert_eq!(d_pixels, pixels, "d5 recon {rel}");
+                total += wsize;
+                csv.push_str(&format!("{phase},{rel},{wsize},{wrank},{dom},{wall},1\n"));
+                println!("d5 {phase} {rel}: {wsize} rank {wrank} dom {dom}");
+            }
+            println!("d5 phase {phase} total {total}");
+            match phase {
+                "enabled" => assert_eq!(total, ENABLED_TOTAL, "enabled total"),
+                "disabled" => assert_eq!(total, DISABLED_TOTAL, "disabled total"),
+                _ => assert_eq!(total, HUBBLE_SIZE, "hubble size"),
+            }
+        }
+        std::fs::write(&out, &csv).expect("d5 csv");
+        println!("P1D5-WRITTEN {out}");
+    }
+
+    // ==== MNF17-P1-D5 debug: per-file production size vs local pass-1.
+    #[test]
+    #[ignore]
+    fn p1d5_ref() {
+        let lock = std::fs::read_to_string("research/manifests/corpus.lock").expect("lock");
+        let mut corpus: Vec<String> = lock
+            .lines()
+            .filter_map(|l| {
+                l.trim_start()
+                    .strip_prefix("\"file\": \"")
+                    .map(|r| r.to_string())
+            })
+            .map(|r| r[..r.len() - 2].to_string())
+            .collect();
+        corpus.extend(
+            [
+                "testdata/gradient_320x240.png",
+                "testdata/heldout/blob_224x160.png",
+                "testdata/heldout/blocks_192x128.png",
+                "testdata/heldout/plaid_192.png",
+                "testdata/heldout/poster_208x144.png",
+                "testdata/noise_256x256.png",
+                "testdata/repeat_256x256.png",
+                "testdata/solid_256x256.png",
+            ]
+            .iter()
+            .map(|s| s.to_string()),
+        );
+        for rel in &corpus {
+            let img = image::open(rel).expect("png").to_rgb8();
+            let (w, h) = (img.width(), img.height());
+            let px = img.into_raw();
+            let (file, _st, _fb) = encode_mnf8(
+                &px,
+                Dims {
+                    width: w,
+                    height: h,
+                },
+                true,
+                Profile::Maximum,
+            );
+            println!("REF {rel} {}", file.len());
+        }
+    }
+
     /// MNF15-P1-D D0 instrument: how many proxy-cost PROBES one pick
     /// runs, and how many are byte-identical repeats (D1's exact-reuse
     /// surface). FNV-1a 64 dedupe over (coder, body); multi-minute.
