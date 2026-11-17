@@ -158,6 +158,24 @@ impl MixParams {
 
 /// The previous-coded-byte magnitude context (0; 1-2; 3-5; 6-11;
 /// 12-24; 25-48; 49-96; 97+) — shared by every backend's key rules.
+#[cfg(test)] // state getters exist only for the C4 research twins
+impl MixCtx {
+    fn get_fast(&self) -> Vec<u64> {
+        self.fast.clone()
+    }
+    fn get_slow(&self) -> Vec<u64> {
+        self.slow.clone()
+    }
+    fn get_log_w(&self) -> f64 {
+        self.log_w
+    }
+    fn get_nlocal(&self) -> u64 {
+        self.nlocal
+    }
+}
+
+/// The previous-coded-byte magnitude context (0; 1-2; 3-5; 6-11;
+/// 12-24; 25-48; 49-96; 97+) — shared by every backend's key rules.
 #[inline]
 pub fn mix_ctx_bucket(prev: u8) -> u8 {
     match prev {
@@ -1240,10 +1258,10 @@ pub(crate) mod p1c4a {
 
         /// Full-256-vector parity + state parity vs the production ctx.
         fn verify(&self, p: &MixCtx) {
-            assert_eq!(self.fast, *p_fast(p), "fast counters diverged");
-            assert_eq!(self.slow, *p_slow(p), "slow counters diverged");
-            assert_eq!(self.log_w, p_log_w(p), "EWA weight bit-diverged");
-            assert_eq!(self.nlocal, p_nlocal(p), "nlocal diverged");
+            assert_eq!(self.fast, p.get_fast(), "fast counters diverged");
+            assert_eq!(self.slow, p.get_slow(), "slow counters diverged");
+            assert_eq!(self.log_w, p.get_log_w(), "EWA weight bit-diverged");
+            assert_eq!(self.nlocal, p.get_nlocal(), "nlocal diverged");
             assert_eq!(
                 self.sf,
                 self.fast.iter().sum::<u64>(),
@@ -1255,20 +1273,6 @@ pub(crate) mod p1c4a {
                 "maintained slow sum violated the conservation invariant"
             );
         }
-    }
-
-    // private MixCtx field accessors for the twin (same module tree)
-    fn p_fast(c: &MixCtx) -> &Vec<u64> {
-        &c.fast
-    }
-    fn p_slow(c: &MixCtx) -> &Vec<u64> {
-        &c.slow
-    }
-    fn p_log_w(c: &MixCtx) -> f64 {
-        c.log_w
-    }
-    fn p_nlocal(c: &MixCtx) -> u64 {
-        c.nlocal
     }
 
     /// Verbatim copy of `build_parent_tree` for the A contexts.
@@ -1483,5 +1487,769 @@ pub(crate) mod p1c4a {
                 wire_parity(params, stream, &format!("b{}-{label}", i + 4));
             }
         }
+    }
+}
+
+/// MNF17-P1-C4-B research twin (cfg(test) only): fused quantization +
+/// sufficient reduction statistics. One sweep over the alphabet computes
+/// the quantized slots together with S (pre-correction sum), the zero
+/// count, and the nonzero argmax with the original lowest-index tie
+/// rule; the slot-0 remainder correction then yields the corrected
+/// argmax/count algebraically:
+///   dense = if q0' >= M_nz { 0 } else { argmax_nz }
+///   Z'    = Z - [q0 == 0] + [q0' == 0]
+/// and a single write-back pass applies the dense bump and zero clamp.
+/// No float reassociation, no changed rounding: per-slot arithmetic and
+/// every correction are the original operations in the original order.
+#[cfg(test)]
+pub(crate) mod p1c4b {
+    use super::*;
+    use std::time::Instant;
+
+    /// The fused `probs()` equivalent. `tf`/`ts` are the counter sums
+    /// (maintained under C4-A, recomputed under single-arm B — both
+    /// must hold the conservation invariant).
+    pub(crate) fn probs_fused(
+        fast: &[u64],
+        slow: &[u64],
+        tf: u64,
+        ts: u64,
+        log_w: f64,
+    ) -> Vec<u64> {
+        let wf = 1.0 / (1.0 + (-log_w).exp());
+        let mut p = vec![0u64; 256];
+        let mut sum = 0u64;
+        let mut zeros = 0usize;
+        for i in 0..256usize {
+            let qi = ((wf * (fast[i] as f64 / tf as f64)
+                + (1.0 - wf) * (slow[i] as f64 / ts as f64))
+                * SCALE as f64) as u64;
+            p[i] = qi;
+            sum += qi;
+            if qi == 0 {
+                zeros += 1;
+            }
+        }
+        let q0 = p[0];
+        let zero0 = usize::from(q0 == 0);
+        let mut best_nz = p[1];
+        let mut arg_nz = 1usize;
+        for (i, &v) in p.iter().enumerate().skip(2) {
+            if v > best_nz {
+                best_nz = v;
+                arg_nz = i;
+            }
+        }
+        // correction
+        let q0c = q0 + (SCALE - sum);
+        zeros -= zero0;
+        zeros += usize::from(q0c == 0);
+        // corrected argmax (ties to the lowest index => slot 0 on >=)
+        let dense_idx = if q0c >= best_nz { 0usize } else { arg_nz };
+        let bump = 1 + zeros as u64;
+        // write-back pass: dense bump + zero clamp (identical semantics)
+        for (i, v) in p.iter_mut().enumerate().skip(1) {
+            if i == dense_idx {
+                *v = (*v).max(bump);
+            } else if *v == 0 {
+                *v = 1;
+            }
+        }
+        if dense_idx == 0 {
+            p[0] = q0c.max(bump);
+        } else if q0c == 0 {
+            p[0] = 1;
+        } else {
+            p[0] = q0c;
+        }
+        p
+    }
+
+    /// The fused `mix_vecs()` equivalent (the R9 warm mix).
+    pub(crate) fn mix_vecs_fused(a: &[u64], b: &[u64], lam: f64) -> Vec<u64> {
+        let mut p = vec![0u64; 256];
+        let mut sum = 0u64;
+        let mut zeros = 0usize;
+        for i in 0..256usize {
+            let qi = ((1.0 - lam) * a[i] as f64 + lam * b[i] as f64) as u64;
+            p[i] = qi;
+            sum += qi;
+            if qi == 0 {
+                zeros += 1;
+            }
+        }
+        let q0 = p[0];
+        let zero0 = usize::from(q0 == 0);
+        let q0c = q0 + (SCALE - sum);
+        zeros -= zero0;
+        zeros += usize::from(q0c == 0);
+        let mut best_nz = p[1];
+        let mut arg_nz = 1usize;
+        for (i, &v) in p.iter().enumerate().skip(2) {
+            if v > best_nz {
+                best_nz = v;
+                arg_nz = i;
+            }
+        }
+        let (dense_idx,) = if q0c >= best_nz { (0usize,) } else { (arg_nz,) };
+        let bump = 1 + zeros as u64;
+        for (i, v) in p.iter_mut().enumerate().skip(1) {
+            if i == dense_idx {
+                *v = (*v).max(bump);
+            } else if *v == 0 {
+                *v = 1;
+            }
+        }
+        if dense_idx == 0 {
+            p[0] = q0c.max(bump);
+        } else if q0c == 0 {
+            p[0] = 1;
+        } else {
+            p[0] = q0c;
+        }
+        p
+    }
+
+    // ---- B engine: recomputed sums + fused reductions ----
+
+    pub(crate) struct MixCtxB {
+        fast: Vec<u64>,
+        slow: Vec<u64>,
+        log_w: f64,
+        cap_fast: u64,
+        cap_slow: u64,
+        parent: u8,
+        nlocal: u64,
+    }
+
+    impl MixCtxB {
+        fn new(cap_fast: u64, cap_slow: u64) -> Self {
+            Self {
+                fast: vec![1; 256],
+                slow: vec![1; 256],
+                log_w: 0.0,
+                cap_fast,
+                cap_slow,
+                parent: NO_PARENT,
+                nlocal: 0,
+            }
+        }
+
+        fn probs_b(&self) -> Vec<u64> {
+            probs_fused(
+                &self.fast,
+                &self.slow,
+                self.fast.iter().sum(),
+                self.slow.iter().sum(),
+                self.log_w,
+            )
+        }
+
+        fn probs_with_b(&self, ctxs: &[MixCtxB], params: &MixParams) -> Vec<u64> {
+            let base = self.probs_b();
+            match params.warm_n0 {
+                Some(n0) if self.nlocal < WARM_COLD_WINDOW && self.parent != NO_PARENT => {
+                    let n = self.nlocal as f64;
+                    let lam = n0 as f64 / (n0 as f64 + n);
+                    mix_vecs_fused(&base, &ctxs[usize::from(self.parent)].probs_b(), lam)
+                }
+                _ => base,
+            }
+        }
+
+        fn step_b(&mut self, s: u8) {
+            let si = usize::from(s);
+            let tf = self.fast.iter().sum::<u64>() as f64;
+            let ts = self.slow.iter().sum::<u64>() as f64;
+            let pf = (self.fast[si] as f64 / tf).max(1e-9);
+            let ps = (self.slow[si] as f64 / ts).max(1e-9);
+            self.log_w = (self.log_w + EWA_LR * (pf.ln() - ps.ln())).clamp(-20.0, 20.0);
+            self.fast[si] += COUNT_INC;
+            self.slow[si] += COUNT_INC;
+            self.nlocal = self.nlocal.saturating_add(1);
+            if self.fast.iter().sum::<u64>() > self.cap_fast {
+                for c in &mut self.fast {
+                    *c = (*c + 1) >> 1;
+                }
+            }
+            if self.slow.iter().sum::<u64>() > self.cap_slow {
+                for c in &mut self.slow {
+                    *c = (*c + 1) >> 1;
+                }
+            }
+        }
+
+        fn model_b(
+            &self,
+            ctxs: &[MixCtxB],
+            params: &MixParams,
+        ) -> Option<ContiguousCategoricalEntropyModel<u32, Vec<u32>, 24>> {
+            ContiguousCategoricalEntropyModel::<u32, Vec<u32>, 24>::from_nonzero_fixed_point_probabilities(
+                self
+                    .probs_with_b(ctxs, params)
+                    .into_iter()
+                    .map(|v| v as u32)
+                    .collect::<Vec<u32>>(),
+                false,
+            )
+            .ok()
+        }
+
+        fn verify(&self, p: &MixCtx) {
+            assert_eq!(self.fast, p.get_fast(), "B: fast counters diverged");
+            assert_eq!(self.slow, p.get_slow(), "B: slow counters diverged");
+            assert_eq!(self.log_w, p.get_log_w(), "B: EWA weight bit-diverged");
+            assert_eq!(self.nlocal, p.get_nlocal(), "B: nlocal diverged");
+        }
+    }
+
+    // ---- D engine (cell AB): C4-A maintained sums + C4-B fused kernels ----
+
+    impl MixCtxAB {
+        fn verify(&self, p: &MixCtx) {
+            assert_eq!(self.fast, p.get_fast(), "AB: fast counters diverged");
+            assert_eq!(self.slow, p.get_slow(), "AB: slow counters diverged");
+            assert_eq!(self.log_w, p.get_log_w(), "AB: EWA weight bit-diverged");
+            assert_eq!(self.nlocal, p.get_nlocal(), "AB: nlocal diverged");
+            assert_eq!(
+                self.sf,
+                self.fast.iter().sum::<u64>(),
+                "AB: fast sum invariant"
+            );
+            assert_eq!(
+                self.ss,
+                self.slow.iter().sum::<u64>(),
+                "AB: slow sum invariant"
+            );
+        }
+    }
+
+    pub(crate) struct MixCtxAB {
+        fast: Vec<u64>,
+        slow: Vec<u64>,
+        log_w: f64,
+        cap_fast: u64,
+        cap_slow: u64,
+        parent: u8,
+        nlocal: u64,
+        sf: u64,
+        ss: u64,
+    }
+
+    impl MixCtxAB {
+        fn new(cap_fast: u64, cap_slow: u64) -> Self {
+            Self {
+                fast: vec![1; 256],
+                slow: vec![1; 256],
+                log_w: 0.0,
+                cap_fast,
+                cap_slow,
+                parent: NO_PARENT,
+                nlocal: 0,
+                sf: 256,
+                ss: 256,
+            }
+        }
+
+        fn probs_ab(&self) -> Vec<u64> {
+            probs_fused(&self.fast, &self.slow, self.sf, self.ss, self.log_w)
+        }
+
+        fn probs_with_ab(&self, ctxs: &[MixCtxAB], params: &MixParams) -> Vec<u64> {
+            let base = self.probs_ab();
+            match params.warm_n0 {
+                Some(n0) if self.nlocal < WARM_COLD_WINDOW && self.parent != NO_PARENT => {
+                    let n = self.nlocal as f64;
+                    let lam = n0 as f64 / (n0 as f64 + n);
+                    mix_vecs_fused(&base, &ctxs[usize::from(self.parent)].probs_ab(), lam)
+                }
+                _ => base,
+            }
+        }
+
+        fn step_ab(&mut self, s: u8) {
+            let si = usize::from(s);
+            let pf = (self.fast[si] as f64 / self.sf as f64).max(1e-9);
+            let ps = (self.slow[si] as f64 / self.ss as f64).max(1e-9);
+            self.log_w = (self.log_w + EWA_LR * (pf.ln() - ps.ln())).clamp(-20.0, 20.0);
+            self.fast[si] += COUNT_INC;
+            self.sf += COUNT_INC;
+            self.slow[si] += COUNT_INC;
+            self.ss += COUNT_INC;
+            self.nlocal = self.nlocal.saturating_add(1);
+            if self.sf > self.cap_fast {
+                let mut acc = 0u64;
+                for c in &mut self.fast {
+                    *c = (*c + 1) >> 1;
+                    acc += *c;
+                }
+                self.sf = acc;
+            }
+            if self.ss > self.cap_slow {
+                let mut acc = 0u64;
+                for c in &mut self.slow {
+                    *c = (*c + 1) >> 1;
+                    acc += *c;
+                }
+                self.ss = acc;
+            }
+        }
+
+        fn model_ab(
+            &self,
+            ctxs: &[MixCtxAB],
+            params: &MixParams,
+        ) -> Option<ContiguousCategoricalEntropyModel<u32, Vec<u32>, 24>> {
+            ContiguousCategoricalEntropyModel::<u32, Vec<u32>, 24>::from_nonzero_fixed_point_probabilities(
+                self
+                    .probs_with_ab(ctxs, params)
+                    .into_iter()
+                    .map(|v| v as u32)
+                    .collect::<Vec<u32>>(),
+                false,
+            )
+            .ok()
+        }
+    }
+
+    fn build_tree_like<T: Parented>(ctxs: &mut [T], params: &MixParams) {
+        if params.warm_n0.is_none() {
+            return;
+        }
+        let parented = if params.lane_child {
+            MIX6_NCTX
+        } else {
+            params.nctx
+        };
+        ctxs.iter_mut()
+            .enumerate()
+            .skip(8)
+            .take(parented.saturating_sub(8))
+            .for_each(|(k, ctx)| ctx.set_parent((k & 7) as u8));
+        if parented > 16 {
+            if let Some(ctx) = ctxs.get_mut(16) {
+                ctx.set_parent(7);
+            }
+            if let Some(ctx) = ctxs.get_mut(17) {
+                ctx.set_parent(7);
+            }
+        }
+        if parented > 18 {
+            if let Some(ctx) = ctxs.get_mut(18) {
+                ctx.set_parent(15);
+            }
+            if let Some(ctx) = ctxs.get_mut(19) {
+                ctx.set_parent(15);
+            }
+        }
+    }
+
+    trait Parented {
+        fn set_parent(&mut self, p: u8);
+        fn parent(&self) -> u8;
+    }
+    impl Parented for MixCtxB {
+        fn set_parent(&mut self, p: u8) {
+            self.parent = p;
+        }
+        fn parent(&self) -> u8 {
+            self.parent
+        }
+    }
+    impl Parented for MixCtxAB {
+        fn set_parent(&mut self, p: u8) {
+            self.parent = p;
+        }
+        fn parent(&self) -> u8 {
+            self.parent
+        }
+    }
+
+    fn share_b<T: Parented + BStepper>(ctxs: &mut [T], params: &MixParams, k: usize, s: u8) {
+        if params.share {
+            let p = ctxs[k].parent();
+            if p != NO_PARENT {
+                let p = usize::from(p);
+                ctxs[p].step_sym(s);
+            }
+        }
+    }
+
+    trait BStepper {
+        fn step_sym(&mut self, s: u8);
+    }
+    impl BStepper for MixCtxB {
+        fn step_sym(&mut self, s: u8) {
+            self.step_b(s);
+        }
+    }
+    impl BStepper for MixCtxAB {
+        fn step_sym(&mut self, s: u8) {
+            self.step_ab(s);
+        }
+    }
+
+    fn encode_like<T: Parented + BStepper + Modelish>(params: &MixParams, data: &[u8]) -> Vec<u8> {
+        let mut ctxs: Vec<T> = (0..params.nctx)
+            .map(|_| T::fresh(params.cap_fast, params.cap_slow))
+            .collect();
+        build_tree_like(&mut ctxs, params);
+        let mut enc = DefaultRangeEncoder::new();
+        let mut prev = 0u8;
+        let mut prev2 = 0u8;
+        let mut prev3 = 0u8;
+        for &b in data {
+            let c = mix_ctx_key(params, prev, prev2, prev3);
+            let m = ctxs[c].build_model(&ctxs, params);
+            enc.encode_symbols(std::iter::once((usize::from(b), &m)))
+                .expect("mix encode symbol");
+            ctxs[c].step_sym(b);
+            share_b(&mut ctxs, params, c, b);
+            prev3 = prev2;
+            prev2 = prev;
+            prev = b;
+        }
+        let compressed = enc.into_compressed().expect("mix seal");
+        let mut out = Vec::with_capacity(compressed.len() * 4 + 4);
+        out.extend_from_slice(
+            &u32::try_from(data.len())
+                .expect("stream len fits u32")
+                .to_le_bytes(),
+        );
+        for w in compressed {
+            out.extend_from_slice(&w.to_le_bytes());
+        }
+        out
+    }
+
+    trait Modelish: Sized {
+        fn fresh(cap_fast: u64, cap_slow: u64) -> Self;
+        fn build_model(
+            &self,
+            ctxs: &[Self],
+            params: &MixParams,
+        ) -> ContiguousCategoricalEntropyModel<u32, Vec<u32>, 24>;
+    }
+    impl Modelish for MixCtxB {
+        fn fresh(cap_fast: u64, cap_slow: u64) -> Self {
+            Self::new(cap_fast, cap_slow)
+        }
+        fn build_model(
+            &self,
+            ctxs: &[Self],
+            params: &MixParams,
+        ) -> ContiguousCategoricalEntropyModel<u32, Vec<u32>, 24> {
+            self.model_b(ctxs, params)
+                .expect("mix model always buildable")
+        }
+    }
+    impl Modelish for MixCtxAB {
+        fn fresh(cap_fast: u64, cap_slow: u64) -> Self {
+            Self::new(cap_fast, cap_slow)
+        }
+        fn build_model(
+            &self,
+            ctxs: &[Self],
+            params: &MixParams,
+        ) -> ContiguousCategoricalEntropyModel<u32, Vec<u32>, 24> {
+            self.model_ab(ctxs, params)
+                .expect("mix model always buildable")
+        }
+    }
+
+    pub(crate) fn mix_encode_with_b(params: &MixParams, data: &[u8]) -> Vec<u8> {
+        encode_like::<MixCtxB>(params, data)
+    }
+    pub(crate) fn mix_encode_with_ab(params: &MixParams, data: &[u8]) -> Vec<u8> {
+        encode_like::<MixCtxAB>(params, data)
+    }
+
+    pub(crate) fn mix_encode_with_lane_b(params: &MixParams, data: &[u8], geom: Geom) -> Vec<u8> {
+        encode_lane_like::<MixCtxB>(params, data, geom)
+    }
+    pub(crate) fn mix_encode_with_lane_ab(params: &MixParams, data: &[u8], geom: Geom) -> Vec<u8> {
+        encode_lane_like::<MixCtxAB>(params, data, geom)
+    }
+
+    fn encode_lane_like<T: Parented + BStepper + Modelish>(
+        params: &MixParams,
+        data: &[u8],
+        geom: Geom,
+    ) -> Vec<u8> {
+        let mut walk = LaneWalk::new(geom.width, geom.height, geom.tile_count, geom.planar)
+            .expect("valid container geometry");
+        let mut ctxs: Vec<T> = (0..params.nctx)
+            .map(|_| T::fresh(params.cap_fast, params.cap_slow))
+            .collect();
+        build_tree_like(&mut ctxs, params);
+        let mut enc = DefaultRangeEncoder::new();
+        let mut prev = 0u8;
+        let mut prev2 = 0u8;
+        let mut prev3 = 0u8;
+        for &b in data {
+            let cls = walk
+                .peek_class()
+                .expect("byte beyond the record grammar on the encode path");
+            walk.consume(b)
+                .expect("well-formed record stream on the encode path");
+            let base = mix_ctx_key(params, prev, prev2, prev3);
+            let c = if params.lane_child && cls == 1 {
+                base + 20
+            } else {
+                base
+            };
+            let m = ctxs[c].build_model(&ctxs, params);
+            enc.encode_symbols(std::iter::once((usize::from(b), &m)))
+                .expect("mix encode symbol");
+            ctxs[c].step_sym(b);
+            share_b(&mut ctxs, params, c, b);
+            prev3 = prev2;
+            prev2 = prev;
+            prev = b;
+        }
+        assert!(walk.complete(), "record grammar must consume the stream");
+        let compressed = enc.into_compressed().expect("mix seal");
+        let mut out = Vec::with_capacity(compressed.len() * 4 + 4);
+        out.extend_from_slice(
+            &u32::try_from(data.len())
+                .expect("stream len fits u32")
+                .to_le_bytes(),
+        );
+        for w in compressed {
+            out.extend_from_slice(&w.to_le_bytes());
+        }
+        out
+    }
+
+    // ---- B/AB differential fixtures (same §4 set as C4-A) ----
+
+    fn xorshift_b(state: &mut u64) -> u8 {
+        *state ^= *state << 13;
+        *state ^= *state >> 7;
+        *state ^= *state << 17;
+        (*state >> 24) as u8
+    }
+
+    #[test]
+    fn c4b_ab_differential_fixtures() {
+        let uniform: Vec<u8> = (0..4u16)
+            .flat_map(|i| (i as u8..=200u8).step_by(3).collect::<Vec<u8>>())
+            .collect();
+        let dominant = vec![17u8; 4096];
+        let sparse: Vec<u8> = std::iter::repeat_n(0, 512)
+            .chain(std::iter::repeat_n(255, 512))
+            .collect();
+        let zero_slot: Vec<u8> = std::iter::repeat_n(255, 6000).collect();
+        let slot0_near: Vec<u8> = std::iter::repeat_n(0u8, 3000)
+            .chain(std::iter::repeat_n(1u8, 3000))
+            .collect();
+        let thresholds: Vec<u8> = (0..3000u16).map(|i| ((i * 37) & 0xff) as u8).collect();
+        let slow_cap: Vec<u8> = vec![9u8; 40000];
+        let mut st = 0x9e3779b97f4a7c15u64;
+        let random: Vec<u8> = (0..20000).map(|_| xorshift_b(&mut st)).collect();
+        let mut st2 = 0x12345678deadbeefu64;
+        let random_run: Vec<u8> = (0..20000).map(|_| xorshift_b(&mut st2)).collect();
+        let all_backends = [
+            &MixParams::BACKEND4,
+            &MixParams::BACKEND5,
+            &MixParams::BACKEND6,
+            &MixParams::BACKEND7,
+        ];
+        for (i, params) in all_backends.iter().enumerate() {
+            for (label, stream) in [
+                ("uniform", &uniform),
+                ("dominant", &dominant),
+                ("sparse", &sparse),
+                ("zero_slot", &zero_slot),
+                ("slot0_near", &slot0_near),
+                ("thresholds", &thresholds),
+                ("slow_cap", &slow_cap),
+                ("random_a", &random),
+                ("random_b", &random_run),
+            ] {
+                // per-symbol kernels: production vs B (recomputed sums)
+                differential_one(params, stream, &format!("B-b{}-{label}", i + 4), false);
+                differential_one(params, stream, &format!("AB-b{}-{label}", i + 4), true);
+                // whole-encode wire parity, plain and (for b7) lane form
+                assert_eq!(
+                    mix_encode_with_b(params, stream),
+                    mix_encode_with(params, stream),
+                    "B wire diverged"
+                );
+                assert_eq!(
+                    mix_encode_with_ab(params, stream),
+                    mix_encode_with(params, stream),
+                    "AB wire diverged"
+                );
+                if params.lane_child {
+                    // a valid mode-0 record (16x4 tile): 1 + 192 bytes
+                    let geom = Geom {
+                        width: 16,
+                        height: 4,
+                        tile_count: 1,
+                        planar: i % 2 == 0,
+                    };
+                    let mut lane_stream = vec![0u8; 193];
+                    for (j, chunk) in lane_stream[1..].chunks_mut(97).enumerate() {
+                        for (j2, v) in chunk.iter_mut().enumerate() {
+                            *v = stream[(j * 97 + j2) % stream.len().max(1)];
+                        }
+                    }
+                    assert_eq!(
+                        mix_encode_with_lane_b(params, &lane_stream, geom),
+                        mix_encode_with_lane(params, &lane_stream, geom),
+                        "B lane wire diverged"
+                    );
+                    assert_eq!(
+                        mix_encode_with_lane_ab(params, &lane_stream, geom),
+                        mix_encode_with_lane(params, &lane_stream, geom),
+                        "AB lane wire diverged"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Drive `stream` through the production engine and the B (or AB)
+    /// engine symbol-by-symbol, comparing states and quantized vectors.
+    fn differential_one(params: &MixParams, stream: &[u8], label: &str, use_ab: bool) {
+        let mut ref_ctxs: Vec<MixCtx> = (0..params.nctx)
+            .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+            .collect();
+        build_parent_tree(&mut ref_ctxs, params);
+        let mut b_ctxs: Vec<MixCtxB> = (0..params.nctx)
+            .map(|_| MixCtxB::new(params.cap_fast, params.cap_slow))
+            .collect();
+        let mut ab_ctxs: Vec<MixCtxAB> = (0..params.nctx)
+            .map(|_| MixCtxAB::new(params.cap_fast, params.cap_slow))
+            .collect();
+        build_tree_like(&mut b_ctxs, params);
+        build_tree_like(&mut ab_ctxs, params);
+        // the reference tree shape mirrors build_tree_like by construction
+        let mut prev = 0u8;
+        let mut prev2 = 0u8;
+        let mut prev3 = 0u8;
+        for &b in stream {
+            let c = mix_ctx_key(params, prev, prev2, prev3);
+            let ref_vec = ref_ctxs[c].probs_with(&ref_ctxs, params);
+            let b_vec = b_ctxs[c].probs_with_b(&b_ctxs, params);
+            assert_eq!(b_vec, ref_vec, "{label}: fused quantized vector diverged");
+            let ab_vec = ab_ctxs[c].probs_with_ab(&ab_ctxs, params);
+            assert_eq!(
+                ab_vec, ref_vec,
+                "{label}: fused(maintained) vector diverged"
+            );
+            ref_ctxs[c].step(b);
+            share_step(&mut ref_ctxs, params, c, b);
+            b_ctxs[c].step_b(b);
+            share_b(&mut b_ctxs, params, c, b);
+            ab_ctxs[c].step_ab(b);
+            share_b(&mut ab_ctxs, params, c, b);
+            for (a, p) in b_ctxs.iter().zip(&ref_ctxs) {
+                a.verify(p);
+            }
+            for (a, p) in ab_ctxs.iter().zip(&ref_ctxs) {
+                a.verify(p);
+            }
+            prev3 = prev2;
+            prev2 = prev;
+            prev = b;
+        }
+        let _ = use_ab;
+    }
+    // ---- C4-C: constructor-path probe (§5: measure the actual costs) ----
+
+    #[test]
+    #[ignore]
+    fn p1c4c_constructor_probe() {
+        // real quantized vectors: snapshot 256 mid-stream model vectors
+        // across the backend-6 warm phase on a real record stream.
+        let params = &MixParams::BACKEND6;
+        let nctx = params.nctx;
+        let mut ctxs: Vec<MixCtx> = (0..nctx)
+            .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+            .collect();
+        build_parent_tree(&mut ctxs, params);
+        let mut state = 0x9e3779b97f4a7c15u64;
+        let mut vecs: Vec<Vec<u32>> = Vec::new();
+        let mut prev = 0u8;
+        let mut prev2 = 0u8;
+        let mut prev3 = 0u8;
+        while vecs.len() < 256 {
+            let mut stream = [0u8; 97];
+            for b in stream.iter_mut() {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                *b = (state >> 24) as u8;
+            }
+            for &b in &stream {
+                let c = mix_ctx_key(params, prev, prev2, prev3);
+                if vecs.len() < 256 {
+                    vecs.push(
+                        ctxs[c]
+                            .probs_with(&ctxs, params)
+                            .iter()
+                            .map(|&v| v as u32)
+                            .collect(),
+                    );
+                }
+                ctxs[c].step(b);
+                share_step(&mut ctxs, params, c, b);
+                prev3 = prev2;
+                prev2 = prev;
+                prev = b;
+            }
+        }
+        const REPS: usize = 2000;
+        // constructor cost
+        let mut t_ctor = 0u64;
+        let mut t_writer = 0u64;
+        let mut t_infer = 0u64;
+        let mut infer_mismatch = 0usize;
+        for rep in 0..REPS {
+            let v = &vecs[rep % vecs.len()];
+            let t0 = Instant::now();
+            let m = ContiguousCategoricalEntropyModel::<u32, Vec<u32>, 24>::from_nonzero_fixed_point_probabilities(
+                v.clone(), false,
+            )
+            .expect("ctor");
+            t_ctor += t0.elapsed().as_micros() as u64;
+            let mut enc = DefaultRangeEncoder::new();
+            let t1 = Instant::now();
+            enc.encode_symbols(std::iter::once((usize::from(200u8), &m)))
+                .expect("writer");
+            t_writer += t1.elapsed().as_micros() as u64;
+            // infer-last variant (vector is already total-2^24 exact; the
+            // 255-prefixed + inferred last must equal the same model)
+            let t2 = Instant::now();
+            let m2 = ContiguousCategoricalEntropyModel::<u32, Vec<u32>, 24>::from_nonzero_fixed_point_probabilities(
+                v[..255].to_vec(), true,
+            );
+            t_infer += t2.elapsed().as_micros() as u64;
+            match m2 {
+                Ok(m2ok) => {
+                    let a = enc.into_compressed().expect("seal a");
+                    let mut e2 = DefaultRangeEncoder::new();
+                    e2.encode_symbols(std::iter::once((usize::from(200u8), &m2ok)))
+                        .expect("writer2");
+                    let b = e2.into_compressed().expect("seal b");
+                    if a != b {
+                        infer_mismatch += 1;
+                    }
+                }
+                Err(()) => infer_mismatch += 1,
+            }
+        }
+        // fused quantization cost (the B kernel) for context
+        let t3 = Instant::now();
+        for v in vecs.iter().take(256) {
+            let _ = v;
+            probs_fused(&[1; 256], &[1; 256], 256, 256, 0.123);
+        }
+        let tq = t3.elapsed().as_micros() as u64;
+        println!(
+            "C4C-PROBE ctor_total_us={t_ctor} ({REPS} builds) writer_total_us={t_writer} infer_total_us={t_infer} infer_mismatch={infer_mismatch} fused_quant_256_us={tq}"
+        );
     }
 }
