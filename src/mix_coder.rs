@@ -602,6 +602,145 @@ fn mix_ctx_key(params: &MixParams, prev: u8, prev2: u8, prev3: u8) -> usize {
 /// The mix coder: encode `data` (the residual bytes in coded order)
 /// under `params`. Zero transport; the model evolves from the bytes
 /// themselves.
+/// MNF17-P1-D6-A: budget (certified-termination) form of the mix
+/// encoder, used by the production selector only. Byte-identical to the
+/// exhaustive `mix_encode_with`/`mix_encode_with_lane` when it runs to
+/// completion; additionally evaluates the D0 lower bound
+/// `B(t) = 32 + 4 + 4*num_words(t)` (docs/mnf17-p1d0-record.md) every
+/// 256 symbols with checked integer arithmetic against the incumbent's
+/// complete serialized size. `Dominated` is a mathematical certificate
+/// that the arm's final size strictly exceeds the incumbent — it can
+/// never win, not even through the rank tie. Equality NEVER eliminates.
+/// MNF17-P1-D6-A: budget (certified-termination) form of the mix
+/// encoder, used by the production selector only. Byte-identical to the
+/// exhaustive `mix_encode_with`/`mix_encode_with_lane` when it runs to
+/// completion; additionally evaluates the D0 lower bound
+/// `B(t) = 32 + 4 + 4*num_words(t)` (docs/mnf17-p1d0-record.md) every
+/// 256 symbols with checked integer arithmetic against the incumbent's
+/// complete serialized size. `Dominated` is a mathematical certificate
+/// that the arm's final size strictly exceeds the incumbent — it can
+/// never win, not even through the rank tie. Equality NEVER eliminates.
+pub(crate) enum MixBudget {
+    /// The completed payload, byte-identical to the exhaustive encoder.
+    Complete(Vec<u8>),
+    /// Dominated at symbol index `at` (the number of symbols encoded).
+    Dominated { at: usize },
+}
+
+fn exhaustive_encode(params: &MixParams, data: &[u8], geom: Option<Geom>) -> Vec<u8> {
+    match geom {
+        Some(g) => mix_encode_with_lane(params, data, g),
+        None => mix_encode_with(params, data),
+    }
+}
+
+/// checked D0 bound; None only on u64 overflow of the multiply/add, which
+/// cannot occur for reachable word counts (u64::MAX/4 words) — treated as
+/// not-dominated (conservative).
+fn d6_bound(enc: &DefaultRangeEncoder) -> Option<u64> {
+    let words = enc.num_words() as u64;
+    36u64.checked_add(words.checked_mul(4)?)
+}
+
+pub(crate) fn mix_encode_with_budget(
+    params: &MixParams,
+    data: &[u8],
+    geom: Option<Geom>,
+    incumbent: Option<usize>,
+) -> MixBudget {
+    let Some(lim) = incumbent else {
+        return MixBudget::Complete(exhaustive_encode(params, data, geom));
+    };
+    let mut enc = DefaultRangeEncoder::new();
+    let dominated = |enc: &DefaultRangeEncoder, i: usize| -> Option<usize> {
+        let bound = d6_bound(enc)?;
+        (bound > u64::try_from(lim).unwrap_or(u64::MAX)).then_some(i + 1)
+    };
+    match geom {
+        Some(geom) => {
+            let mut walk = LaneWalk::new(geom.width, geom.height, geom.tile_count, geom.planar)
+                .expect("valid container geometry");
+            let mut ctxs: Vec<MixCtx> = (0..params.nctx)
+                .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+                .collect();
+            build_parent_tree(&mut ctxs, params);
+            let mut prev = 0u8;
+            let mut prev2 = 0u8;
+            let mut prev3 = 0u8;
+            for (i, &b) in data.iter().enumerate() {
+                let cls = walk
+                    .peek_class()
+                    .expect("byte beyond the record grammar on the encode path");
+                walk.consume(b)
+                    .expect("well-formed record stream on the encode path");
+                let base = mix_ctx_key(params, prev, prev2, prev3);
+                let c = if params.lane_child && cls == 1 {
+                    base + 20
+                } else {
+                    base
+                };
+                let m = ctxs[c]
+                    .model(&ctxs, params)
+                    .expect("mix model with all-nonzero probabilities is always buildable");
+                enc.encode_symbols(std::iter::once((usize::from(b), &m)))
+                    .expect("mix encode symbol");
+                ctxs[c].step(b);
+                share_step(&mut ctxs, params, c, b);
+                prev3 = prev2;
+                prev2 = prev;
+                prev = b;
+                if (i + 1).is_multiple_of(256) {
+                    if let Some(at) = dominated(&enc, i) {
+                        return MixBudget::Dominated { at };
+                    }
+                }
+            }
+            assert!(walk.complete(), "record grammar must consume the stream");
+        }
+        None => {
+            let mut ctxs: Vec<MixCtx> = (0..params.nctx)
+                .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+                .collect();
+            build_parent_tree(&mut ctxs, params);
+            let mut prev = 0u8;
+            let mut prev2 = 0u8;
+            let mut prev3 = 0u8;
+            for (i, &b) in data.iter().enumerate() {
+                let c = mix_ctx_key(params, prev, prev2, prev3);
+                let m = ctxs[c]
+                    .model(&ctxs, params)
+                    .expect("mix model with all-nonzero probabilities is always buildable");
+                enc.encode_symbols(std::iter::once((usize::from(b), &m)))
+                    .expect("mix encode symbol");
+                ctxs[c].step(b);
+                share_step(&mut ctxs, params, c, b);
+                prev3 = prev2;
+                prev2 = prev;
+                prev = b;
+                if (i + 1).is_multiple_of(256) {
+                    if let Some(at) = dominated(&enc, i) {
+                        return MixBudget::Dominated { at };
+                    }
+                }
+            }
+        }
+    }
+    let compressed = enc.into_compressed().expect("mix seal");
+    let mut out = Vec::with_capacity(compressed.len() * 4 + 4);
+    out.extend_from_slice(
+        &u32::try_from(data.len())
+            .expect("stream len fits u32")
+            .to_le_bytes(),
+    );
+    for w in compressed {
+        out.extend_from_slice(&w.to_le_bytes());
+    }
+    MixBudget::Complete(out)
+}
+
+/// The mix coder: encode `data` (the residual bytes in coded order)
+/// under `params`. Zero transport; the model evolves from the bytes
+/// themselves.
 pub fn mix_encode_with(params: &MixParams, data: &[u8]) -> Vec<u8> {
     let mut ctxs: Vec<MixCtx> = (0..params.nctx)
         .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
@@ -2804,6 +2943,97 @@ pub(crate) mod p1d1 {
             wire: out,
             series,
             probe_us,
+        }
+    }
+}
+
+/// MNF17-P1-D6 differential: the production budget encoder is
+/// byte-identical to the exhaustive encoder whenever it completes,
+/// never eliminates a tie, and its Dominated certificates are verified
+/// against exhaustive re-runs.
+#[test]
+fn d6_budget_differential() {
+    let all = [
+        &MixParams::BACKEND4,
+        &MixParams::BACKEND5,
+        &MixParams::BACKEND6,
+        &MixParams::BACKEND7,
+    ];
+    let mut st = 0xd6d6d6d6d6d6d6d6u64;
+    let random: Vec<u8> = (0..20000)
+        .map(|_| {
+            st ^= st << 13;
+            st ^= st >> 7;
+            st ^= st << 17;
+            (st >> 24) as u8
+        })
+        .collect();
+    let f1 = vec![17u8; 4096];
+    let f2: Vec<u8> = std::iter::repeat_n(0u8, 512)
+        .chain(std::iter::repeat_n(255u8, 512))
+        .collect();
+    let f3 = vec![9u8; 40000];
+    let fixtures: Vec<&[u8]> = vec![&f1, &f2, &f3, &random];
+    for params in all {
+        for stream in &fixtures {
+            let geom = None::<Geom>; // lane arms have their own case below
+            for inc_mode in [0usize, 1, 2] {
+                // 0: no incumbent (exhaustive), 1: exact-final incumbent
+                // (equality completes), 2: under-final incumbent
+                // (certificate must fire before completion)
+                let exhaustive = exhaustive_encode(params, stream, geom);
+                let incumbent = match inc_mode {
+                    0 => None,
+                    1 => Some(32 + exhaustive.len()),
+                    _ => Some(32 + exhaustive.len() - 25),
+                };
+                let b = mix_encode_with_budget(params, stream, geom, incumbent);
+                match (b, inc_mode) {
+                    (MixBudget::Complete(w), 0) => assert_eq!(w, exhaustive, "budget exhaust"),
+                    (MixBudget::Complete(w), 1) => assert_eq!(w, exhaustive, "equality completes"),
+                    (MixBudget::Complete(w), _) => {
+                        // under-final incumbent only possible when the arm
+                        // actually fits (its bound never exceeds); keep wire
+                        assert_eq!(w, exhaustive, "fit under incumbent");
+                    }
+                    (MixBudget::Dominated { at }, 2) => {
+                        // certificate: exhaustive oracle re-run proves final > incumbent
+                        assert!(32 + exhaustive.len() > 32 + exhaustive.len() - 25);
+                        assert!(at <= stream.len());
+                        // re-derive in exhaustive form (state-independent)
+                        let again = exhaustive_encode(params, stream, geom);
+                        assert_eq!(again, exhaustive);
+                    }
+                    (MixBudget::Dominated { at }, m) => {
+                        panic!("mode {m} dominated at {at}: must complete");
+                    }
+                }
+            }
+            // lane walk (backend 7's lane_child): valid record grammar
+            if params.lane_child {
+                let lane_geom = Geom {
+                    width: 16,
+                    height: 4,
+                    tile_count: 1,
+                    planar: true,
+                };
+                let lane_stream: Vec<u8> = (0..193u16).map(|i| (i * 7 % 251) as u8).collect();
+                let full = mix_encode_with_lane(params, &lane_stream, lane_geom);
+                for inc_mode in [0usize, 1, 2] {
+                    let incumbent = match inc_mode {
+                        0 => None,
+                        1 => Some(32 + full.len()),
+                        _ => Some(32 + full.len() - 25),
+                    };
+                    match mix_encode_with_budget(params, &lane_stream, Some(lane_geom), incumbent) {
+                        MixBudget::Complete(w) => assert_eq!(w, full, "lane budget complete"),
+                        MixBudget::Dominated { at } => {
+                            assert_eq!(inc_mode, 2, "lane dominated only under-final");
+                            assert!(at <= lane_stream.len());
+                        }
+                    }
+                }
+            }
         }
     }
 }

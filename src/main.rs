@@ -66,6 +66,16 @@ fn encode_cmd(
     let t0 = Instant::now();
     let buf = if let Some(profile) = mnf8 {
         let (buf, st, backend) = encode_mnf8(&src.pixels, dims, use_geom, profile);
+        if std::env::var("MNF17_P1D6_STATS").is_ok() {
+            let d6 = manifold::mnf8::d6_take_stats();
+            println!(
+                "  [d6] dominated={} completed={} dom_symbols={} mix_symbols={}",
+                d6.dominated,
+                d6.completed,
+                d6.dominated_symbols,
+                d6.dominated_symbols + d6.completed_symbols
+            );
+        }
         println!(
             "  [mnf8] backend={} flags={:#04x} literal={} ycocg={} exact={} geom={} color={} (nontrivial transforms: {})",
             backend,

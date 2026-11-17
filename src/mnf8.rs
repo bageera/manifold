@@ -339,6 +339,26 @@ pub(crate) fn encode_mnf8_metrics(
     // p1b_candidate_identity (candidate + tie-rank digests B2/B3), the
     // committed max/balanced pick digests (B4/B6), the corpus anchors.
     let mut best: Option<(usize, u32, Vec<u8>, u32, MnF6Stats, u32)> = None;
+    // D6-A helper lists: cheap arms complete first; mix arms run the
+    // budget (certified-termination) encoder against the live best.
+    let cheap_zstd: Vec<(u32, u32)> = candidates
+        .iter()
+        .enumerate()
+        .filter(|(_, (b, c))| matches!(c, Coder::Zstd(19)) && *b < BACKEND_MIX)
+        .map(|(i, (b, _))| (i as u32, *b))
+        .collect();
+    let cheap_zlib: Vec<(u32, u32)> = candidates
+        .iter()
+        .enumerate()
+        .filter(|(_, (_, c))| matches!(c, Coder::Zlib))
+        .map(|(i, (b, _))| (i as u32, *b))
+        .collect();
+    let mix_backends: Vec<(u32, u32)> = candidates
+        .iter()
+        .enumerate()
+        .filter(|(_, (b, _))| *b >= BACKEND_MIX)
+        .map(|(i, (b, _))| (i as u32, *b))
+        .collect();
     // ADR-004: the three literal-body predictors × (interleaved|planar)
     // as per-file arms, each measured under every backend candidate,
     // complete serialized cost. (PLANAR's own measured value is real:
@@ -371,44 +391,96 @@ pub(crate) fn encode_mnf8_metrics(
         }
         None => crate::mnf6::ProbeCache::new(crate::mnf6::PROBE_CACHE_BUDGET_BYTES),
     };
+    // MNF17-P1-D6-A (docs/mnf17-p1d2d3d45-record.md): certified
+    // termination, production form. Evaluation order = inexpensive
+    // incumbents first: per (predictor, layout) pair the cheap record
+    // arms (zstd19 + zlib) complete before the mix arms, which run a
+    // live-incumbent budget encode (D0 bound, stride 256, checked
+    // arithmetic). Original ranks are INDEPENDENT of this execution
+    // order: selection stays min over (size, rank). A dominated arm is
+    // certified unable to win (strict > incumbent >= final best), so
+    // the winner — and the encoder's bytes — are identical to the
+    // exhaustive selector's (enforced by the d6 gates). No
+    // memoization, no heuristic pruning, no adaptive intervals.
     for (kidx, kind) in pred_arms.iter().enumerate() {
         for (pidx, planar) in [false, true].iter().enumerate() {
             let med = *kind == PredKind::Med;
-            for (class, group) in &classes {
-                let coder = match class {
-                    (true, _) => Coder::Zlib,
-                    (false, level) => Coder::Zstd(*level),
+            let arm_base = (kidx * 8 + pidx * 4) as u32;
+            // --- shared zstd-proxy record stream (build once; zstd19 +
+            // all mix backends use it, P1-B representation-first) ---
+            let (raw0, st) = build_record_stream(
+                pixels,
+                dims,
+                true,
+                use_geom,
+                *planar,
+                med,
+                *kind,
+                &Coder::Zstd(19),
+                &cache,
+            )
+            .expect("encoding an in-memory image cannot fail");
+            let geom7 = crate::mix_coder::Geom {
+                width: dims.width,
+                height: dims.height,
+                tile_count: u32::try_from(st.modes.len()).expect("tile count fits u32"),
+                planar: *planar,
+            };
+            let tile_count = u32::try_from(st.modes.len())
+                .map_err(|_| Error::fmt_msg("too many tiles"))
+                .expect("encoding an in-memory image cannot fail");
+            // cheap zstd19 arm per reference
+            for reference in 0u8..=3 {
+                let flags = kind.flag_bit()
+                    | if *planar { FLAG_PLANAR } else { 0 }
+                    | (u32::from(reference) << 6);
+                let raw = if reference == 0 {
+                    &raw0
+                } else {
+                    &channel_diff_relabel(&raw0, *planar, false, dims.width, dims.height, reference)
                 };
-                // P1-C (docs/mnf15-p1c-record.md): the per-tile sweep is
-                // REFERENCE-BLIND — the ADR-008 REF field is a terminal
-                // channel_diff_relabel pass. One construction per
-                // (kind, layout, proxy class); each REF variant is a
-                // cheap O(len) terminal relabel (ref 0 = the raw stream
-                // untouched, exactly this builder's output).
-                let arm_base = (kidx * 8 + pidx * 4) as u32;
-                let (raw0, st) = build_record_stream(
-                    pixels, dims, true, use_geom, *planar, med, *kind, &coder, &cache,
+                for &(bidx, backend) in &cheap_zstd {
+                    let rank = bidx * 40 + arm_base + u32::from(reference);
+                    let payload = backend_compress(backend, raw, Some(geom7))
+                        .expect("encoding an in-memory image cannot fail");
+                    let file = assemble_mnf8(&payload, dims, tile_count, flags, backend)
+                        .expect("encoding an in-memory image cannot fail");
+                    let size = file.len();
+                    let better = match &best {
+                        None => true,
+                        Some((bsize, brank, ..)) => (size, rank) < (*bsize, *brank),
+                    };
+                    if better {
+                        best = Some((size, rank, file, flags, st.clone(), backend));
+                    }
+                }
+            }
+            // zlib proxy class: its own stream and stats
+            {
+                let (raw0z, stz) = build_record_stream(
+                    pixels,
+                    dims,
+                    true,
+                    use_geom,
+                    *planar,
+                    med,
+                    *kind,
+                    &Coder::Zlib,
+                    &cache,
                 )
                 .expect("encoding an in-memory image cannot fail");
-                // ADR-008 (v1.12): the reference-channel field 0..3 — none,
-                // G (v1.11's bit-6 semantic), R, B — per-file at complete
-                // serialized cost (the C2 gate's table).
-                let geom7 = crate::mix_coder::Geom {
-                    width: dims.width,
-                    height: dims.height,
-                    tile_count: u32::try_from(st.modes.len()).expect("tile count fits u32"),
-                    planar: *planar,
-                };
+                let tile_countz = u32::try_from(stz.modes.len())
+                    .map_err(|_| Error::fmt_msg("too many tiles"))
+                    .expect("encoding an in-memory image cannot fail");
                 for reference in 0u8..=3 {
                     let flags = kind.flag_bit()
                         | if *planar { FLAG_PLANAR } else { 0 }
                         | (u32::from(reference) << 6);
-                    let arm = arm_base + u32::from(reference);
                     let raw = if reference == 0 {
-                        &raw0
+                        &raw0z
                     } else {
                         &channel_diff_relabel(
-                            &raw0,
+                            &raw0z,
                             *planar,
                             false,
                             dims.width,
@@ -416,13 +488,75 @@ pub(crate) fn encode_mnf8_metrics(
                             reference,
                         )
                     };
-                    for &(bidx, backend) in group {
-                        let rank = bidx * 40 + arm;
-                        let payload = backend_compress(backend, raw, Some(geom7))
+                    for &(bidx, backend) in &cheap_zlib {
+                        let rank = bidx * 40 + arm_base + u32::from(reference);
+                        let payload = backend_compress(backend, raw, None)
                             .expect("encoding an in-memory image cannot fail");
-                        let tile_count = u32::try_from(st.modes.len())
-                            .map_err(|_| Error::fmt_msg("too many tiles"))
+                        let file = assemble_mnf8(&payload, dims, tile_countz, flags, backend)
                             .expect("encoding an in-memory image cannot fail");
+                        let size = file.len();
+                        let better = match &best {
+                            None => true,
+                            Some((bsize, brank, ..)) => (size, rank) < (*bsize, *brank),
+                        };
+                        if better {
+                            best = Some((size, rank, file, flags, stz.clone(), backend));
+                        }
+                    }
+                }
+            }
+            // mix arms: budget form with the live incumbent (cheap zstd19
+            // of this pair + everything completed before it). Completion
+            // is byte-identical to the exhaustive encoder; domination is
+            // the D0 certificate.
+            for reference in 0u8..=3 {
+                let flags = kind.flag_bit()
+                    | if *planar { FLAG_PLANAR } else { 0 }
+                    | (u32::from(reference) << 6);
+                let raw = if reference == 0 {
+                    &raw0
+                } else {
+                    &channel_diff_relabel(&raw0, *planar, false, dims.width, dims.height, reference)
+                };
+                for &(bidx, backend) in &mix_backends {
+                    let rank = bidx * 40 + arm_base + u32::from(reference);
+                    let params = match backend {
+                        BACKEND_MIX => MixParamsRef::BACKEND4,
+                        BACKEND_MIX5 => MixParamsRef::BACKEND5,
+                        BACKEND_MIX6 => MixParamsRef::BACKEND6,
+                        _ => MixParamsRef::BACKEND7,
+                    };
+                    // MNF17_P1D6_EXHAUSTIVE=1: instrument — every mix arm
+                    // runs to completion (the exhaustive oracle path).
+                    // Byte-neutral: dominated arms can never win.
+                    let inc = if std::env::var("MNF17_P1D6_EXHAUSTIVE").is_ok() {
+                        None
+                    } else {
+                        best.as_ref().map(|(s, ..)| *s)
+                    };
+                    let budget = if backend == BACKEND_MIX7 {
+                        mix_budget_with(&params, raw, Some(geom7), inc)
+                    } else {
+                        mix_budget_with(&params, raw, None, inc)
+                    };
+                    let mut payload_done: Option<Vec<u8>> = None;
+                    match budget {
+                        crate::mix_coder::MixBudget::Complete(payload) => {
+                            let mut d6 = D6.lock().expect("d6 stats");
+                            d6.completed += 1;
+                            d6.completed_symbols += raw.len() as u64;
+                            payload_done = Some(payload);
+                        }
+                        crate::mix_coder::MixBudget::Dominated { at } => {
+                            let mut d6 = D6.lock().expect("d6 stats");
+                            d6.dominated += 1;
+                            d6.dominated_symbols += at as u64;
+                            let frac = (at * 4).saturating_div(raw.len().max(1));
+                            let bucket = usize::from(u8::try_from(frac.min(3)).unwrap_or(3));
+                            d6.dominated_position[bucket] += 1;
+                        }
+                    }
+                    if let Some(payload) = payload_done {
                         let file = assemble_mnf8(&payload, dims, tile_count, flags, backend)
                             .expect("encoding an in-memory image cannot fail");
                         let size = file.len();
@@ -504,6 +638,43 @@ pub(crate) fn encode_mnf8_metrics(
             tile_exhausted: cache.tile_exhausted.get(),
         },
     )
+}
+
+use crate::mix_coder::mix_encode_with_budget as mix_budget_with;
+use std::sync::Mutex;
+type MixParamsRef = crate::mix_coder::MixParams;
+
+/// D6 production integration counters (per process = per file at the
+/// CLI): candidate counts and symbol work actually performed. Never
+/// consulted to build output; printed only when the caller asks.
+#[derive(Default)]
+pub struct D6Stats {
+    /// Mix arms certified dominated (D0 bound, strict > incumbent).
+    pub dominated: u64,
+    /// Mix arms that ran to completion.
+    pub completed: u64,
+    /// Symbols encoded by DOMINATED arms before their certificate.
+    pub dominated_symbols: u64,
+    /// Symbols encoded by COMPLETED mix arms (the full stream length).
+    pub completed_symbols: u64,
+    /// Termination position of dominated arms, as a fraction of the
+    /// stream (0: under 25% of symbols, .., 3: over 75%).
+    pub dominated_position: [u64; 4],
+}
+
+/// Live D6 counters (process-local; the CLI prints and resets them).
+pub static D6: Mutex<D6Stats> = Mutex::new(D6Stats {
+    dominated: 0,
+    completed: 0,
+    dominated_symbols: 0,
+    completed_symbols: 0,
+    dominated_position: [0; 4],
+});
+
+/// Snapshot and reset the D6 counters.
+pub fn d6_take_stats() -> D6Stats {
+    let mut st = D6.lock().expect("d6 stats");
+    std::mem::take(&mut *st)
 }
 
 /// The image-wide literal-body predictor (ADR-004): which causal rule
@@ -4155,6 +4326,63 @@ mod channel_diff {
         }
         std::fs::write(&out, &csv).expect("d5 csv");
         println!("P1D5-WRITTEN {out}");
+    }
+
+    // ==== MNF17-P1-D6-B: production pick (certified termination) vs
+    // the exhaustive instrument (MNF17_P1D6_EXHAUSTIVE=1) on fixtures.
+    #[test]
+    fn d6_pick_parity() {
+        let fixtures: Vec<(&str, Dims, Vec<u8>)> = vec![
+            // a flat image: many equal-size candidates (tie ranks) +
+            // the degenerate certificate case
+            (
+                "flat",
+                Dims {
+                    width: 96,
+                    height: 64,
+                },
+                vec![7u8; 96 * 64 * 3],
+            ),
+            (
+                // gradient: strong termination regime
+                "grad",
+                Dims {
+                    width: 192,
+                    height: 128,
+                },
+                (0..192 * 128 * 3).map(|i| ((i / 3) % 256) as u8).collect(),
+            ),
+            (
+                // pseudo-random texture: weak termination (must stay exact)
+                "rand",
+                Dims {
+                    width: 96,
+                    height: 64,
+                },
+                {
+                    let mut st = 0x9e3779b97f4a7c15u64;
+                    (0..96 * 64 * 3)
+                        .map(|_| {
+                            st ^= st << 13;
+                            st ^= st >> 7;
+                            st ^= st << 17;
+                            (st >> 8) as u8
+                        })
+                        .collect()
+                },
+            ),
+        ];
+        for (name, dims, px) in fixtures {
+            std::env::remove_var("MNF17_P1D6_EXHAUSTIVE");
+            let (picked, _) = encode_mnf8_metrics(&px, dims, false, Profile::Maximum);
+            let d6 = d6_take_stats();
+            std::env::set_var("MNF17_P1D6_EXHAUSTIVE", "1");
+            let (orb, _) = encode_mnf8_metrics(&px, dims, false, Profile::Maximum);
+            std::env::remove_var("MNF17_P1D6_EXHAUSTIVE");
+            assert_eq!(picked.0, orb.0, "d6 pick parity {name}");
+            assert_eq!(picked.2, orb.2, "d6 pick parity backend {name}");
+            let _ = d6;
+        }
     }
 
     // ==== MNF17-P1-D5 debug: per-file production size vs local pass-1.
