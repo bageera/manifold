@@ -4817,6 +4817,522 @@ mod channel_diff {
     }
 }
 
+// ==== MNF17-N1: native entropy-stream acquisition (research instrument) ====
+// BZ16-N1: for each cohort fixture, enumerate the production candidate
+// matrix (winner-reconciled against the actual pick), then walk every
+// record-stream byte with the decoder-available residual geometry: per byte
+// its class (the LaneWalk rule, asserted equal to LaneWalk::peek_class),
+// lane (0 = value plane, 1/2 = the two difference planes), the global pixel
+// index and the CAUSAL left/upper residual symbols of the same lane
+// (0-padded at plane edges — the BZ16 pad; an explicitly defined causal
+// representation per the N1 memo). The geometry comes from the record
+// grammar itself (PlaneWalk mirrors LaneWalk::consume + record_shape; its
+// classes are asserted equal against the real LaneWalk). Token arms are
+// INELIGIBLE in this pass (their per-tag wire layout needs its own walker
+// — recorded, not silent). Mode-3 bit-packed bodies and framing/meta/law
+// bytes carry no geometry (lane 255, no features) — disclosed, not shaped.
+// Env-gated + #[ignore]: MNF17_N1_OUT=<csv> MNF17_N1_DIR=<bin> \
+//   MNF17_N1_HUBBLE=<decoded.png> MNF17_N1_FILES=<list> \
+//   cargo test --release mnf17_n1_acquisition -- --ignored --nocapture
+#[cfg(test)]
+mod mnf17_n1_acquisition {
+    use super::*;
+    use crate::mix_coder::{Geom, LaneWalk};
+    use std::io::Write;
+
+    fn fnv64(b: &[u8]) -> u64 {
+        let mut h: u64 = 0xcbf29ce484222325;
+        for &x in b {
+            h = (h ^ x as u64).wrapping_mul(0x100000001b3);
+        }
+        h
+    }
+
+    fn px_of(path: &str) -> (Vec<u8>, Dims) {
+        let img = image::open(path).expect("acquisition png").to_rgb8();
+        let (w, h) = (img.width(), img.height());
+        (
+            img.into_raw(),
+            Dims {
+                width: w,
+                height: h,
+            },
+        )
+    }
+
+    /// The N1 geometry walker: LaneWalk's state machine byte-for-byte plus
+    /// the residual-plane layout (lane, pixel, causal left/upper read from
+    /// the same lane's already-decoded bytes).
+    struct PlaneWalk {
+        planar: bool,
+        width: u32,
+        height: u32,
+        grid_cols: u32,
+        next_tile: u32,
+        tile_count: u32,
+        tw: usize,
+        th: usize,
+        meta_left: usize,
+        body_left: u64,
+        body_pos: u64,
+        all_zero: bool,
+        /// Per-tile lane planes: [value, d1, d2], row-major tile-local.
+        lanes: [Vec<u8>; 3],
+        bx: usize,
+        by: usize,
+    }
+
+    impl PlaneWalk {
+        fn new(width: u32, height: u32, tile_count: u32, planar: bool) -> Self {
+            PlaneWalk {
+                planar,
+                width,
+                height,
+                grid_cols: width.div_ceil(crate::codec::TILE_SIZE),
+                next_tile: 0,
+                tile_count,
+                tw: 0,
+                th: 0,
+                meta_left: 0,
+                body_left: 0,
+                body_pos: 0,
+                all_zero: false,
+                lanes: [Vec::new(), Vec::new(), Vec::new()],
+                bx: 0,
+                by: 0,
+            }
+        }
+
+        fn record_shape(mode: u8, np: u64) -> Option<(usize, u64)> {
+            let nb = np as usize * 3;
+            match mode {
+                0 => Some((0, nb as u64)),
+                1 | 4 => Some((4, nb as u64)),
+                2 | 5 => Some((5, nb as u64)),
+                3 => {
+                    let n9 = (np * 9).div_ceil(8);
+                    Some((0, np + 2 * n9))
+                }
+                6 => Some((crate::laws::PLANAR_LAW_BYTES, nb as u64)),
+                7 => Some((crate::laws::BILINEAR_LAW_BYTES, nb as u64)),
+                8 => Some((3, nb as u64)),
+                _ => None,
+            }
+        }
+
+        fn np(&self) -> u64 {
+            u64::from(self.tw as u32) * u64::from(self.th as u32)
+        }
+
+        fn peek_class(&self) -> Option<u8> {
+            if self.meta_left == 0 && self.body_left == 0 {
+                if self.next_tile >= self.tile_count {
+                    return None;
+                }
+                return Some(0);
+            }
+            if self.meta_left > 0 || self.all_zero {
+                return Some(0);
+            }
+            if self.planar {
+                Some(if self.body_pos < self.np() { 0 } else { 1 })
+            } else if self.body_pos.is_multiple_of(3) {
+                Some(0)
+            } else {
+                Some(1)
+            }
+        }
+
+        fn consume(&mut self, b: u8) -> Option<()> {
+            if self.meta_left == 0 && self.body_left == 0 {
+                if self.next_tile >= self.tile_count {
+                    return None;
+                }
+                let tile = self.next_tile as usize;
+                self.bx = (tile % self.grid_cols as usize) * crate::codec::TILE_SIZE as usize;
+                self.by = (tile / self.grid_cols as usize) * crate::codec::TILE_SIZE as usize;
+                self.tw = (crate::codec::TILE_SIZE as usize).min(self.width as usize - self.bx);
+                self.th = (crate::codec::TILE_SIZE as usize).min(self.height as usize - self.by);
+                self.next_tile += 1;
+                self.body_pos = 0;
+                let np = self.np();
+                let (meta, body) = Self::record_shape(b, np)?;
+                self.meta_left = meta;
+                self.body_left = body;
+                self.all_zero = b == 3;
+                self.lanes = [
+                    vec![0u8; np as usize],
+                    vec![0u8; np as usize],
+                    vec![0u8; np as usize],
+                ];
+                return Some(());
+            }
+            if self.meta_left > 0 {
+                self.meta_left -= 1;
+                return Some(());
+            }
+            self.body_pos += 1;
+            self.body_left -= 1;
+            Some(())
+        }
+
+        /// The body byte's lane + tile-local pixel at the byte's own 0-based
+        /// index. Returns (lane, row, col).
+        fn lane_of(&self) -> Option<(usize, usize, usize)> {
+            if self.body_left == 0 || self.meta_left > 0 || self.all_zero {
+                return None; // boundary (mode byte) / meta / packed bits
+            }
+            let pos = self.body_pos as usize;
+            if self.planar {
+                let np = self.np() as usize;
+                if pos < np {
+                    Some((0, pos / self.tw, pos % self.tw))
+                } else if pos < 2 * np {
+                    let k = pos - np;
+                    Some((1, k / self.tw, k % self.tw))
+                } else {
+                    let k = pos - 2 * np;
+                    Some((2, k / self.tw, k % self.tw))
+                }
+            } else {
+                let sub = pos % 3;
+                let k = pos / 3;
+                Some((sub, k / self.tw, k % self.tw))
+            }
+        }
+
+        fn complete(&self) -> bool {
+            self.next_tile == self.tile_count && self.meta_left == 0 && self.body_left == 0
+        }
+
+        /// Feed the byte with plane bookkeeping: (class, lane, global pixel
+        /// idx, causal left, causal upper) from the decoded prefix, store,
+        /// then consume. Lane 255 = no geometry (framing/meta/packed).
+        fn eat(&mut self, b: u8) -> Option<(u8, u8, u32, u8, u8)> {
+            let class = self.peek_class().expect("grammar class");
+            match self.lane_of() {
+                Some((lane, row, col)) => {
+                    let left = if col > 0 {
+                        self.lanes[lane][row * self.tw + col - 1]
+                    } else {
+                        0
+                    };
+                    let upper = if row > 0 {
+                        self.lanes[lane][(row - 1) * self.tw + col]
+                    } else {
+                        0
+                    };
+                    let pix = (self.by + row) as u32 * self.width + (self.bx + col) as u32;
+                    self.consume(b).expect("well-formed");
+                    self.lanes[lane][row * self.tw + col] = b;
+                    Some((class, lane as u8, pix, left, upper))
+                }
+                None => {
+                    self.consume(b).expect("well-formed");
+                    Some((class, 0xFF, 0xFFFF_FFFF, 0, 0))
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn n1_acquisition() {
+        let out = std::env::var("MNF17_N1_OUT").expect("MNF17_N1_OUT");
+        let dir = std::env::var("MNF17_N1_DIR").expect("MNF17_N1_DIR");
+        std::fs::create_dir_all(&dir).expect("n1 dir");
+        let mut files: Vec<String> = vec![
+            "testdata/solid_256x256.png".into(),
+            "testdata/gradient_320x240.png".into(),
+            "testdata/repeat_256x256.png".into(),
+            "testdata/screenshot_640x400.png".into(),
+            "testdata/noise_256x256.png".into(),
+            "testdata/photos/forest_224x160_s900002.png".into(),
+            "testdata/heldout-photos/terrain_160x120_s3100000.png".into(),
+        ];
+        if let Ok(h) = std::env::var("MNF17_N1_HUBBLE") {
+            files.push(h);
+        }
+        if let Ok(list) = std::env::var("MNF17_N1_FILES") {
+            files = list.split(',').map(|p| p.trim().to_string()).collect();
+        }
+        let mut summary = String::from(
+            "file,arm_idx,kind,planar,coder,reference,stream_fnv,raw_len,selected_backend,emitted,eligible,eligible_upto,mix4,mix5,mix6,mix7,zstd19,zlib\n",
+        );
+
+        for f in &files {
+            let (pixels, dims) = px_of(f);
+            let (res, _pm) = encode_mnf8_metrics(&pixels, dims, true, Profile::Maximum);
+            let (pick_payload, _, pick_backend) = &res;
+
+            let candidates = backend_candidates();
+            let coder_classes: Vec<(&str, Coder)> =
+                vec![("zstd19", Coder::Zstd(19)), ("zlib", Coder::Zlib)];
+            let pred_arms = [
+                ("none", PredKind::None),
+                ("med", PredKind::Med),
+                ("plane", PredKind::Plane),
+                ("left", PredKind::Left),
+            ];
+            let cache = crate::mnf6::ProbeCache::new(crate::mnf6::PROBE_CACHE_BUDGET_BYTES);
+            struct ArmRow {
+                kind: &'static str,
+                planar: bool,
+                coder: &'static str,
+                reference: u8,
+                stream_fnv: u64,
+                raw_len: usize,
+                tile_count: u32,
+                payloads: [usize; 6],
+                selected: Option<usize>,
+            }
+            let mut arms: Vec<ArmRow> = Vec::new(); // arm rows
+            let mut arm_streams: Vec<Vec<u8>> = Vec::new();
+            for (kind_name, kind) in &pred_arms {
+                let med = *kind == PredKind::Med;
+                for planar in [false, true] {
+                    for (coder_name, coder) in &coder_classes {
+                        let (raw0, st) = build_record_stream(
+                            &pixels, dims, true, true, planar, med, *kind, coder, &cache,
+                        )
+                        .expect("n1 build");
+                        let tile_count = st.modes.len() as u32;
+                        for reference in 0u8..=3u8 {
+                            let raw = if reference == 0 {
+                                raw0.clone()
+                            } else {
+                                channel_diff_relabel(
+                                    &raw0,
+                                    planar,
+                                    false,
+                                    dims.width,
+                                    dims.height,
+                                    reference,
+                                )
+                            };
+                            let mut payloads = [0usize; 6];
+                            let mut selected = None;
+                            for (bidx, (backend, _)) in candidates.iter().enumerate() {
+                                let geom = Geom {
+                                    width: dims.width,
+                                    height: dims.height,
+                                    tile_count,
+                                    planar,
+                                };
+                                let payload = backend_compress(*backend, &raw, Some(geom))
+                                    .expect("n1 encode");
+                                let flags = kind.flag_bit()
+                                    | if planar { FLAG_PLANAR } else { 0 }
+                                    | (u32::from(reference) << 6);
+                                let file =
+                                    assemble_mnf8(&payload, dims, tile_count, flags, *backend)
+                                        .expect("n1 assemble");
+                                if selected.is_none() && file == *pick_payload {
+                                    selected = Some(bidx);
+                                    println!(
+                                        "n1 {f}: SELECTED arm {kind_name} {planar} {coder_name} ref{reference} backend {backend} ({} B)",
+                                        payload.len()
+                                    );
+                                }
+                                payloads[bidx] = payload.len();
+                            }
+                            arms.push(ArmRow {
+                                kind: kind_name,
+                                planar,
+                                coder: coder_name,
+                                reference,
+                                stream_fnv: fnv64(&raw),
+                                raw_len: raw.len(),
+                                tile_count,
+                                payloads,
+                                selected,
+                            });
+                            arm_streams.push(raw);
+                        }
+                    }
+                }
+            }
+            // ---- token arms (A1: backend-7 excluded by design; the
+            // token wire itself is backend-independent) — acquired for
+            // identity + payload accounting, INELIGIBLE for geometry (their
+            // per-tag wire layout needs its own walker; recorded). ----
+            for (tokname, cap) in [("token16", 16usize), ("tokenmax", tokens::MAX_CANDIDATES)] {
+                let (wire0, _ts) = build_token_wire(&pixels, dims, cap).expect("token wire");
+                for reference in 0u8..=3u8 {
+                    let flags = FLAG_PRED_MED | FLAG_TOKENS | (u32::from(reference) << 6);
+                    let wire = if reference == 0 {
+                        wire0.clone()
+                    } else {
+                        channel_diff_relabel(
+                            &wire0,
+                            false,
+                            true,
+                            dims.width,
+                            dims.height,
+                            reference,
+                        )
+                    };
+                    let mut payloads = [0usize; 6];
+                    let mut selected = None;
+                    for (bidx, (backend, _)) in candidates.iter().enumerate() {
+                        if *backend == BACKEND_MIX7 {
+                            continue;
+                        }
+                        let payload = backend_compress(*backend, &wire, None).expect("n1 token");
+                        let file = assemble_mnf8(
+                            &payload,
+                            dims,
+                            dims.width.div_ceil(TILE_SIZE),
+                            flags,
+                            *backend,
+                        )
+                        .expect("n1 assemble");
+                        if selected.is_none() && file == *pick_payload {
+                            selected = Some(bidx);
+                            println!(
+                                "n1 {f}: SELECTED token arm {tokname} ref{reference} backend {backend} ({} B)",
+                                payload.len()
+                            );
+                        }
+                        payloads[bidx] = payload.len();
+                    }
+                    arms.push(ArmRow {
+                        kind: tokname,
+                        planar: false,
+                        coder: "wire",
+                        reference,
+                        stream_fnv: fnv64(&wire),
+                        raw_len: wire.len(),
+                        tile_count: dims.width.div_ceil(TILE_SIZE)
+                            * dims.height.div_ceil(TILE_SIZE),
+                        payloads,
+                        selected,
+                    });
+                    arm_streams.push(wire);
+                }
+            }
+
+            // winner reconciliation: the production pick must appear exactly
+            // once as a distinct STREAM — collapsed only on exact byte
+            // equality of the raw stream (the assembled-file match fires on
+            // byte-identical wire/shared arms; fnv alone is indexing, never
+            // identity). Contexts/geometry differing keeps separate
+            // replay identities (arms stay enumerated in the ledger).
+            {
+                let mut seen: Vec<usize> = Vec::new(); // indices of distinct selected arms
+                for (i, a) in arms
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, a)| a.selected.is_some())
+                {
+                    if seen.iter().all(|&j| arm_streams[j] != arm_streams[i]) {
+                        seen.push(i);
+                    }
+                }
+                assert_eq!(
+                    seen.len(),
+                    1,
+                    "winner reconciliation: the pick must match exactly one distinct stream ({f})"
+                );
+            }
+            let selected_arm = arms
+                .iter()
+                .position(|a| a.selected.is_some())
+                .expect("selected arm");
+            let mut closest: Option<usize> = None;
+            for (i, a) in arms.iter().enumerate() {
+                if i == selected_arm {
+                    continue;
+                }
+                let best = a.payloads.iter().copied().min().unwrap_or(usize::MAX);
+                match closest {
+                    None => closest = Some(i),
+                    Some(j) => {
+                        let bj = arms[j].payloads.iter().copied().min().unwrap_or(0);
+                        if best < bj {
+                            closest = Some(i);
+                        }
+                    }
+                }
+            }
+            for (i, label) in [
+                (selected_arm, "winner"),
+                (closest.unwrap_or(usize::MAX), "closest_declined"),
+            ] {
+                if i >= arms.len() {
+                    continue;
+                }
+                let a = &arms[i];
+                let raw = &arm_streams[i];
+                let mut walk = LaneWalk::new(dims.width, dims.height, a.tile_count, a.planar)
+                    .expect("lane walk");
+                let mut pwalk = PlaneWalk::new(dims.width, dims.height, a.tile_count, a.planar);
+                let mut bin = Vec::with_capacity(raw.len() * 9 + 64);
+                // Eligibility: the walk tracks geometry until the record
+                // grammar cannot parse it (flag-laden record shapes outside
+                // the 9-mode lane table — production mix7 on such streams is
+                // dominated early and never walks them). From the first
+                // rejection on, bytes carry lane 255 / class 255 per the
+                // memo's no-invented-geometry rule; the header records the
+                // eligible prefix. The ineligible tail's bytes are still
+                // present (for N2's context-only replay).
+                let mut eligible = true;
+                let mut eligible_until = raw.len();
+                for (pos, &b) in raw.iter().enumerate() {
+                    if !eligible {
+                        bin.extend_from_slice(b"N1IN");
+                        continue;
+                    }
+                    let Some(cls_lw) = walk.peek_class() else {
+                        eligible = false;
+                        eligible_until = pos;
+                        continue;
+                    };
+                    if walk.consume(b).is_none() {
+                        eligible = false;
+                        eligible_until = pos;
+                        continue;
+                    }
+                    let (cls, lane, pix, left, upper) = pwalk.eat(b).expect("plane walk");
+                    assert_eq!(cls, cls_lw, "class mirror drift at pos {pos}");
+                    bin.push(b);
+                    bin.push(cls);
+                    bin.push(lane);
+                    bin.push(left);
+                    bin.push(upper);
+                    bin.extend_from_slice(&pix.to_le_bytes());
+                }
+                if eligible {
+                    assert!(walk.complete(), "grammar consumed {f} {label}");
+                    assert!(pwalk.complete(), "plane walk consumed {f} {label}");
+                }
+                bin.extend_from_slice(&(eligible_until as u32).to_le_bytes());
+                let path = format!(
+                    "{dir}/n1-{}-{}-{}-planar{}-ref{}.bin",
+                    f.split('/').last().unwrap().trim_end_matches(".png"),
+                    a.kind,
+                    a.coder,
+                    a.planar as u8,
+                    a.reference
+                );
+                std::fs::File::create(&path)
+                    .and_then(|mut h| h.write_all(&bin))
+                    .expect("n1 binary write");
+                summary.push_str(&format!(
+                    "{0},{1},{2},{3},{4},{5},{6:016x},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17}\n",
+                    f, i, a.kind, a.planar, a.coder, a.reference, a.stream_fnv,
+                    a.raw_len, a.selected.map(|b| candidates[b].0).unwrap_or(0),
+                    label, eligible, eligible_until, a.payloads[0], a.payloads[1],
+                    a.payloads[2], a.payloads[3], a.payloads[4], a.payloads[5],
+                ));
+            }
+        }
+        std::fs::File::create(&out)
+            .and_then(|mut h| h.write_all(summary.as_bytes()))
+            .expect("n1 summary write");
+    }
+}
+
 // ==== MNF17-P1-A: pipeline equivalence-class census (research instrument) ====
 // Records what the Maximum pick actually evaluates and where identical
 // computations sit (identity per the R6.2 tuple: stream -> classes ->

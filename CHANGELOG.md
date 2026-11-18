@@ -1,5 +1,23 @@
 # Changelog
 
+## Research — MNF17-N1: native entropy-stream acquisition complete (2026-11-18, not a release)
+
+The seven-file screening cohort's production entropy streams are acquired
+with genuine decoder-available geometry
+([docs/mnf17-n1-record.md](docs/mnf17-n1-record.md)): per fixture, the
+instrument enumerates the production candidate matrix, reconciles the
+actual pick by assembled-file identity — collapsed to exactly one distinct
+stream via exact byte comparison (token wires shared across coder labels
+stay separately ledgered) — and emits winner + closest-declined binaries
+(`N1G2`): per-byte symbol, class (per-byte-asserted against the production
+`LaneWalk`), lane, causal left/upper residual and global pixel index, with
+per-arm eligibility markers and the full six-backend payload ledger. All
+seven winner streams are fully geometry-eligible; the declined token16
+arms carry no record-grammar geometry and stay ineligible by
+construction. Hubble follows per the authorization. N2 (six-arm replay)
+and N3 (cost harness + complete-wire accounting) are next; production
+integration remains untouched research-side.
+
 ## Research — BZ16-R2H-E: clamp-polarity reconciled to the recovered asymmetric clamp, S = 2^Q (2026-11-18, not a release)
 
 Operator-memo directive
