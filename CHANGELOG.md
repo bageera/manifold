@@ -1,5 +1,23 @@
 # Changelog
 
+## Research — BZ16-R2: in-repo numerical parity prototype, R2-A..G exercised (2026-11-18, not a release)
+
+The R2 gate (exact Python–Rust integer parity) is executed in-repo: a scalar
+Python reference engine (pure ints/lists, no NumPy — the I6 dual-implementation
+methodology) plus an independent Rust twin, both over the frozen LUT
+([docs/bz16-r2-record.md](docs/bz16-r2-record.md) carries the full pinned
+specification with provenance split). Every subgate passes: per-position parity
+of energies (R2-A), LUT indices incl. clamp boundaries (R2-B), full
+256-entry frequency vectors (R2-C), gradient carries (R2-D), adaptive state
+through the complete 16,384-update run (R2-E), cumulative intervals (R2-F),
+and an independent end-to-end decode via a carry-less CACM87 instrument
+(R2-G — full streams, window bit counts equal in both languages). Boundary:
+this confirms determinism/portability of the *pinned* model across two
+independent implementations; parity with the accepted research-env reference
+(and the memo's 36 golden vectors + 9 digests) stays PENDING the delivered
+artifacts, whose contract format is now pinned. No production-surface edits;
+BZ16-N replay CONDITIONAL, promotion HOLD.
+
 ## Research — BZ16-R1: Boltzmann frozen LUT + preliminary Q12 bounds confirmed in Rust (2026-11-18, not a release)
 
 The BZ16 Python research (long-stream precision, independent probability

@@ -25,14 +25,11 @@ const SCALE: f64 = (1u32 << 24) as f64; // 16_777_216
 fn round_half_even(x: f64) -> f64 {
     let fl = x.floor();
     let frac = x - fl;
-    if frac > 0.5 {
+    let up = frac > 0.5 || (frac == 0.5 && (fl as i64) % 2 != 0);
+    if up {
         fl + 1.0
-    } else if frac < 0.5 {
-        fl
-    } else if (fl as i64) % 2 == 0 {
-        fl
     } else {
-        fl + 1.0
+        fl
     }
 }
 
@@ -68,14 +65,13 @@ fn main() {
     assert_eq!(max, 16_777_216, "max value");
     assert_eq!(min, 2, "min value (max represented energy 4096/256 = 16)");
     assert_eq!(lut[4096], 2, "last entry");
-    assert!(lut.iter().all(|&v| v <= u32::MAX), "all entries fit u32");
-    assert_eq!(
-        lut.iter().any(|&v| v == 1),
-        false,
-        "no clamped entries (min claims 2)"
+    assert!(
+        lut.iter().all(|&v| v <= lut[0]),
+        "all entries within the frozen max"
     );
     let le_bytes: Vec<u8> = lut.iter().flat_map(|v| v.to_le_bytes()).collect();
     assert_eq!(le_bytes.len(), 16_388, "binary table size");
+    assert!(!lut.contains(&1), "no clamped entries (min claims 2)");
     println!(
         "R1.1 LUT: {}, {} B, max {}, min {}, fnv1a-le {:016x}",
         N_ENTRIES,
@@ -93,10 +89,16 @@ fn main() {
     // Energy accumulator: 3 features * (4 * Q12_max) * (2 * dist_max)
     let energy_bound: i64 = (3i64 * 4 * 4096) * (2 * 2048);
     assert_eq!(energy_bound, 201_326_592, "energy accumulator bound");
-    assert!(energy_bound < i32::MAX as i64, "bound fits i32 (memo: use i64 anyway)");
+    assert!(
+        energy_bound < i32::MAX as i64,
+        "bound fits i32 (memo: use i64 anyway)"
+    );
     // Gradient-update numerator: 32768 * 4096 * 4096 * 3
     let gradient_numerator: u64 = 32768u64 * 4096 * 4096 * 3;
-    assert_eq!(gradient_numerator, 1_649_267_441_664, "gradient numerator bound");
+    assert_eq!(
+        gradient_numerator, 1_649_267_441_664,
+        "gradient numerator bound"
+    );
     assert!(gradient_numerator < 1u64 << 63, "bound fits i64");
     // The typed path must not wrap: plain i64/u64 multiplication (panics on
     // overflow in debug, checked by construction in release asserts above).
@@ -106,12 +108,19 @@ fn main() {
     );
 
     // ---- R1.3: proposed Rust type mapping (memo §5) ----
-    let q12_coeff_max: i32 = 4096; // Q12 bounded coefficients
-    let dist_max: u16 = 2 * 2048; // circular distance (max 4096)
-    assert!(q12_coeff_max <= i32::MAX, "Q12 coefficients fit i32");
-    assert!(dist_max <= u16::MAX, "circular distance fits u16"); // 4096 <= 65535
-    let _ = (energy_bound as i64) * (dist_max as i64); // products stay in i64 range
-    println!("R1.3 types: i32 coeffs (4096), u16 distance (4096), i64 energy, u32 frequencies: OK");
+    // Named bounds in the i64 domain; representability asserted against the
+    // type limits they map onto.
+    let q12_coeff_bound: i64 = 4 * 4096; // memo-conservative |c| bound
+    let dist_bound: i64 = 2 * 2048; // circular distance bound
+    assert!(
+        q12_coeff_bound <= i32::MAX as i64,
+        "Q12 coefficients fit i32"
+    );
+    assert!(dist_bound <= u16::MAX as i64, "circular distance fits u16");
+    let _ = energy_bound * dist_bound; // products stay in i64 range
+    println!(
+        "R1.3 types: i32 coeffs (<=16384), u16 distance (<=4096), i64 energy, u32 frequencies: OK"
+    );
 
     // ---- self-checks of the instrument itself (would fail if the logic breaks) ----
     assert_eq!(round_half_even(0.5), 0.0, "half-to-even parity");
