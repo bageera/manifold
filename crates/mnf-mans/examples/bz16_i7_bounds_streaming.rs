@@ -314,10 +314,13 @@ fn main() {
     assert_eq!(grad_x16, 26_388_279_066_624);
     // normalization products (post-policy): counters ≤ COUNTER_CAP ⇒
     // n·sum_to for the counter branch ≤ COUNTER_CAP·2^15 = 2^31 exactly; the
-    // weight branch ≤ W_SUM·W_SUM·4 = 2^44; mixture branch ≤ 256·32,768·32,768
-    // = 2^38 exactly — all at least 2^26 inside i64.
+    // weight branch: Σposts ≤ 2^33 → n·sum_to ≤ 2^49; mixture branch ≤
+    // 256·32,768·32,768 = 2^38 exactly — all live-asserted far inside i64.
     assert_eq!(COUNTER_CAP * FREQ_SUM, 1i64 << 31);
-    assert!(W_SUM * W_SUM * 4 < 1i64 << 44);
+    // weight branch: Σposts ≤ 4·(W_SUM·FREQ_SUM) = 2^33; its n·sum_to
+    // product ≤ 2^49
+    assert_eq!(4 * W_SUM * FREQ_SUM, 1i64 << 33);
+    assert_eq!(4 * W_SUM * FREQ_SUM * W_SUM, 1i64 << 49);
     assert_eq!(256 * FREQ_SUM * FREQ_SUM, 1i64 << 38);
     // weight-domain products: w·x ≤ 65,536·32,768 = 2^31 exactly
     assert_eq!(W_SUM * FREQ_SUM, 1i64 << 31);
