@@ -11,7 +11,7 @@ the pick; ADR-008's FLAG_CHANNEL_DIFF selects the per-pixel
 [g, r−g, b−g] residual organization when it wins the pick; the v1.12
 REF field generalizes bit 6 to a 2-bit reference selector (G/R/B
 per-file); the mix-coder backends 4-6 (v1.13-v1.15) add rate-aware
-entropy arms to the pick; backend 7 (v1.17.0): native structural entropy coding from decoder-accessible lane classes)) — release v1.15.0, v1.16.0 encoder-performance (P1), v1.17.0 structural-entropy (backend 7) · hardened decoders
+entropy arms to the pick; backend 7 (v1.17.0): native structural entropy coding from decoder-accessible lane classes)) — release v1.15.0, v1.16.0 encoder-performance (P1), v1.17.0 structural-entropy (backend 7), v1.17.1 certified computational optimization (P1: same wire, ×1.61 encoding) · hardened decoders
 (bounded, checksummed, canonical, fuzzed) · independently validated ·
 normative format spec at
 [docs/format.md](docs/format.md)
@@ -29,7 +29,12 @@ heavy band, the cold-mix live-parent schedule) takes it to **810,816 B
 v1.17.0 is the shipping baseline (backend 7 — the native structural
 entropy-coding arm from decoder-accessible lane classes — takes the
 corpus to **768,303 B (−5.24%: 23/30 selections, 0 regressions**, Hubble
-1,438,848 B); v1.16.0 (the P1 encoder-performance release: same
+1,438,848 B); v1.17.1 keeps that baseline byte-for-byte (768,303 B,
+Hubble 1,438,848 B, regret 0 B) and adds the MNF17-P1 computational
+release: **counter conservation + certified candidate termination
+discover the same optimal description with ×1.61 less encoding CPU
+(−38.0%, 520.5 → 322.8 s matched over the 30-file corpus; ~200 M symbol
+evaluations certified away)**; v1.16.0 (the P1 encoder-performance release: same
 compression and wire, encoding up to 2.72×/5.74× faster on the corpus)
 preceded it;
 the MNF14-CS1 coastline-scaling probe closed the shared-rule and

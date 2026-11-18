@@ -1,0 +1,3 @@
+=== final_parity (release, versioned tree) ===
+{"phase_A": {"total": 810816, "mismatches": [], "recon": 30}, "phase_B": {"total": 768303, "mismatches": [], "recon": 30}, "hubble_final": {"size": 1438848, "sha16": "b2a8a10915239c99", "byte_identical": true}, "FINAL_PARITY": "PASS"}
+PARITY-EXIT:0

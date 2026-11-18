@@ -1,0 +1,158 @@
+[C autumn_160x120_s3100006.png]   [mnf8] backend=7 flags=0x51 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C autumn_160x120_s3100006.png] encode [mnf8] /tmp/d6_C.mnf: 20960 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 8183 ms
+[C autumn_160x120_s3100006.png]         8.50 real         8.02 user         0.12 sys
+[C autumn_160x120_s3100006.png]            101892096  maximum resident set size
+[C] size=autumn_160x120_s3100006.png:20960
+[C dusk_160x120_s3100003.png]   [mnf8] backend=7 flags=0x10 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C dusk_160x120_s3100003.png] encode [mnf8] /tmp/d6_C.mnf: 13532 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 8235 ms
+[C dusk_160x120_s3100003.png]         8.24 real         8.04 user         0.12 sys
+[C dusk_160x120_s3100003.png]            101679104  maximum resident set size
+[C] size=dusk_160x120_s3100003.png:13532
+[C dusk_224x160_s3100002.png]   [mnf8] backend=7 flags=0x51 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C dusk_224x160_s3100002.png] encode [mnf8] /tmp/d6_C.mnf: 41836 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 15142 ms
+[C dusk_224x160_s3100002.png]        15.15 real        14.87 user         0.20 sys
+[C dusk_224x160_s3100002.png]            103366656  maximum resident set size
+[C] size=dusk_224x160_s3100002.png:41836
+[C forest_192x144_s3100001.png]   [mnf8] backend=7 flags=0xa1 literal=108 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C forest_192x144_s3100001.png] encode [mnf8] /tmp/d6_C.mnf: 30380 bytes, 192x144 px, 108 tiles, atlas=true, geom=false, 11715 ms
+[C forest_192x144_s3100001.png]        11.72 real        11.44 user         0.16 sys
+[C forest_192x144_s3100001.png]            102612992  maximum resident set size
+[C] size=forest_192x144_s3100001.png:30380
+[C forest_224x160_s3100005.png]   [mnf8] backend=7 flags=0x61 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C forest_224x160_s3100005.png] encode [mnf8] /tmp/d6_C.mnf: 36712 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 15425 ms
+[C forest_224x160_s3100005.png]        15.43 real        14.94 user         0.27 sys
+[C forest_224x160_s3100005.png]            102678528  maximum resident set size
+[C] size=forest_224x160_s3100005.png:36712
+[C forest_224x160_s3100008.png]   [mnf8] backend=7 flags=0x10 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C forest_224x160_s3100008.png] encode [mnf8] /tmp/d6_C.mnf: 23300 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 16349 ms
+[C forest_224x160_s3100008.png]        16.35 real        15.72 user         0.28 sys
+[C forest_224x160_s3100008.png]            102023168  maximum resident set size
+[C] size=forest_224x160_s3100008.png:23300
+[C ocean_192x144_s3100007.png]   [mnf8] backend=7 flags=0x61 literal=108 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C ocean_192x144_s3100007.png] encode [mnf8] /tmp/d6_C.mnf: 29180 bytes, 192x144 px, 108 tiles, atlas=true, geom=false, 12102 ms
+[C ocean_192x144_s3100007.png]        12.10 real        11.71 user         0.19 sys
+[C ocean_192x144_s3100007.png]            102055936  maximum resident set size
+[C] size=ocean_192x144_s3100007.png:29180
+[C sand_192x144_s3100004.png]   [mnf8] backend=7 flags=0x61 literal=108 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C sand_192x144_s3100004.png] encode [mnf8] /tmp/d6_C.mnf: 32408 bytes, 192x144 px, 108 tiles, atlas=true, geom=false, 11904 ms
+[C sand_192x144_s3100004.png]        11.91 real        11.65 user         0.17 sys
+[C sand_192x144_s3100004.png]            102072320  maximum resident set size
+[C] size=sand_192x144_s3100004.png:32408
+[C slate_160x120_s3100009.png]   [mnf8] backend=7 flags=0xa1 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C slate_160x120_s3100009.png] encode [mnf8] /tmp/d6_C.mnf: 19948 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 8414 ms
+[C slate_160x120_s3100009.png]         8.42 real         8.22 user         0.12 sys
+[C slate_160x120_s3100009.png]            101859328  maximum resident set size
+[C] size=slate_160x120_s3100009.png:19948
+[C terrain_160x120_s3100000.png]   [mnf8] backend=7 flags=0x10 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C terrain_160x120_s3100000.png] encode [mnf8] /tmp/d6_C.mnf: 13236 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 8403 ms
+[C terrain_160x120_s3100000.png]         8.41 real         8.23 user         0.11 sys
+[C terrain_160x120_s3100000.png]            101744640  maximum resident set size
+[C] size=terrain_160x120_s3100000.png:13236
+[C document_200x280.png]   [mnf8] backend=7 flags=0xe0 literal=234 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C document_200x280.png] encode [mnf8] /tmp/d6_C.mnf: 480 bytes, 200x280 px, 234 tiles, atlas=true, geom=false, 10031 ms
+[C document_200x280.png]        10.03 real         9.72 user         0.21 sys
+[C document_200x280.png]            102858752  maximum resident set size
+[C] size=document_200x280.png:480
+[C autumn_192x144_s900001.png]   [mnf8] backend=7 flags=0x10 literal=108 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C autumn_192x144_s900001.png] encode [mnf8] /tmp/d6_C.mnf: 18464 bytes, 192x144 px, 108 tiles, atlas=true, geom=false, 12086 ms
+[C autumn_192x144_s900001.png]        12.09 real        11.84 user         0.18 sys
+[C autumn_192x144_s900001.png]            102383616  maximum resident set size
+[C] size=autumn_192x144_s900001.png:18464
+[C dusk_160x120_s900003.png]   [mnf8] backend=7 flags=0x51 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C dusk_160x120_s900003.png] encode [mnf8] /tmp/d6_C.mnf: 18972 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 8218 ms
+[C dusk_160x120_s900003.png]         8.22 real         8.06 user         0.11 sys
+[C dusk_160x120_s900003.png]            101859328  maximum resident set size
+[C] size=dusk_160x120_s900003.png:18972
+[C forest_224x160_s900002.png]   [mnf8] backend=7 flags=0x61 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C forest_224x160_s900002.png] encode [mnf8] /tmp/d6_C.mnf: 40692 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 15686 ms
+[C forest_224x160_s900002.png]        15.69 real        15.14 user         0.28 sys
+[C forest_224x160_s900002.png]            102612992  maximum resident set size
+[C] size=forest_224x160_s900002.png:40692
+[C ocean_192x144_s900007.png]   [mnf8] backend=7 flags=0x51 literal=108 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C ocean_192x144_s900007.png] encode [mnf8] /tmp/d6_C.mnf: 30896 bytes, 192x144 px, 108 tiles, atlas=true, geom=false, 11984 ms
+[C ocean_192x144_s900007.png]        11.99 real        11.73 user         0.17 sys
+[C ocean_192x144_s900007.png]            102367232  maximum resident set size
+[C] size=ocean_192x144_s900007.png:30896
+[C sand_160x120_s900000.png]   [mnf8] backend=7 flags=0xe1 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C sand_160x120_s900000.png] encode [mnf8] /tmp/d6_C.mnf: 22520 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 8337 ms
+[C sand_160x120_s900000.png]         8.34 real         8.13 user         0.14 sys
+[C sand_160x120_s900000.png]            102039552  maximum resident set size
+[C] size=sand_160x120_s900000.png:22520
+[C slate_192x144_s900004.png]   [mnf8] backend=7 flags=0xd1 literal=108 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C slate_192x144_s900004.png] encode [mnf8] /tmp/d6_C.mnf: 32392 bytes, 192x144 px, 108 tiles, atlas=true, geom=false, 12279 ms
+[C slate_192x144_s900004.png]        12.28 real        11.75 user         0.24 sys
+[C slate_192x144_s900004.png]            102203392  maximum resident set size
+[C] size=slate_192x144_s900004.png:32392
+[C slate_224x160_s900008.png]   [mnf8] backend=7 flags=0x51 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C slate_224x160_s900008.png] encode [mnf8] /tmp/d6_C.mnf: 45212 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 15335 ms
+[C slate_224x160_s900008.png]        15.34 real        14.91 user         0.25 sys
+[C slate_224x160_s900008.png]            102989824  maximum resident set size
+[C] size=slate_224x160_s900008.png:45212
+[C stone_160x120_s900006.png]   [mnf8] backend=7 flags=0xd1 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C stone_160x120_s900006.png] encode [mnf8] /tmp/d6_C.mnf: 12328 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 8510 ms
+[C stone_160x120_s900006.png]         8.51 real         8.34 user         0.13 sys
+[C stone_160x120_s900006.png]            101957632  maximum resident set size
+[C] size=stone_160x120_s900006.png:12328
+[C terrain_160x120_s900009.png]   [mnf8] backend=7 flags=0x61 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C terrain_160x120_s900009.png] encode [mnf8] /tmp/d6_C.mnf: 21152 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 8389 ms
+[C terrain_160x120_s900009.png]         8.39 real         8.23 user         0.11 sys
+[C terrain_160x120_s900009.png]            101957632  maximum resident set size
+[C] size=terrain_160x120_s900009.png:21152
+[C terrain_224x160_s900005.png]   [mnf8] backend=7 flags=0x51 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C terrain_224x160_s900005.png] encode [mnf8] /tmp/d6_C.mnf: 36884 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 15904 ms
+[C terrain_224x160_s900005.png]        15.91 real        15.59 user         0.23 sys
+[C terrain_224x160_s900005.png]            103317504  maximum resident set size
+[C] size=terrain_224x160_s900005.png:36884
+[C screenshot_640x400.png]   [mnf8] backend=7 flags=0xd0 literal=1000 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C screenshot_640x400.png] encode [mnf8] /tmp/d6_C.mnf: 472 bytes, 640x400 px, 1000 tiles, atlas=true, geom=false, 21032 ms
+[C screenshot_640x400.png]        21.03 real        20.61 user         0.23 sys
+[C screenshot_640x400.png]            110149632  maximum resident set size
+[C] size=screenshot_640x400.png:472
+[C gradient_320x240.png]   [mnf8] backend=1 flags=0x20 literal=300 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C gradient_320x240.png] encode [mnf8] /tmp/d6_C.mnf: 254 bytes, 320x240 px, 300 tiles, atlas=true, geom=false, 3789 ms
+[C gradient_320x240.png]         3.79 real         3.52 user         0.26 sys
+[C gradient_320x240.png]            105234432  maximum resident set size
+[C] size=gradient_320x240.png:254
+[C blob_224x160.png]   [mnf8] backend=1 flags=0x21 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C blob_224x160.png] encode [mnf8] /tmp/d6_C.mnf: 5986 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 9336 ms
+[C blob_224x160.png]         9.35 real         9.13 user         0.15 sys
+[C blob_224x160.png]            102547456  maximum resident set size
+[C] size=blob_224x160.png:5986
+[C blocks_192x128.png]   [mnf8] backend=1 flags=0x0c literal=391 ycocg=0 exact=639 geom=0 color=0 (nontrivial transforms: 0)
+[C blocks_192x128.png] encode [mnf8] /tmp/d6_C.mnf: 1277 bytes, 192x128 px, 96 tiles, atlas=true, geom=false, 4877 ms
+[C blocks_192x128.png]         4.88 real         4.73 user         0.12 sys
+[C blocks_192x128.png]            101695488  maximum resident set size
+[C] size=blocks_192x128.png:1277
+[C plaid_192.png]   [mnf8] backend=7 flags=0x11 literal=144 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C plaid_192.png] encode [mnf8] /tmp/d6_C.mnf: 20440 bytes, 192x192 px, 144 tiles, atlas=true, geom=false, 14376 ms
+[C plaid_192.png]        14.38 real        14.04 user         0.22 sys
+[C plaid_192.png]            102825984  maximum resident set size
+[C] size=plaid_192.png:20440
+[C poster_208x144.png]   [mnf8] backend=1 flags=0x60 literal=117 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C poster_208x144.png] encode [mnf8] /tmp/d6_C.mnf: 1141 bytes, 208x144 px, 117 tiles, atlas=true, geom=false, 1761 ms
+[C poster_208x144.png]         1.76 real         1.71 user         0.04 sys
+[C poster_208x144.png]            101220352  maximum resident set size
+[C] size=poster_208x144.png:1141
+[C noise_256x256.png]   [mnf8] backend=1 flags=0x00 literal=256 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C noise_256x256.png] encode [mnf8] /tmp/d6_C.mnf: 196912 bytes, 256x256 px, 256 tiles, atlas=true, geom=false, 30126 ms
+[C noise_256x256.png]        30.13 real        29.37 user         0.46 sys
+[C noise_256x256.png]            107511808  maximum resident set size
+[C] size=noise_256x256.png:196912
+[C repeat_256x256.png]   [mnf8] backend=1 flags=0x21 literal=256 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C repeat_256x256.png] encode [mnf8] /tmp/d6_C.mnf: 301 bytes, 256x256 px, 256 tiles, atlas=true, geom=false, 1151 ms
+[C repeat_256x256.png]         1.15 real         1.13 user         0.01 sys
+[C repeat_256x256.png]             94371840  maximum resident set size
+[C] size=repeat_256x256.png:301
+[C solid_256x256.png]   [mnf8] backend=1 flags=0x04 literal=256 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C solid_256x256.png] encode [mnf8] /tmp/d6_C.mnf: 36 bytes, 256x256 px, 256 tiles, atlas=true, geom=false, 2342 ms
+[C solid_256x256.png]         2.34 real         2.30 user         0.03 sys
+[C solid_256x256.png]             92667904  maximum resident set size
+[C] size=solid_256x256.png:36
+[C] CORPUS_TOTAL=768303
+[C HUBBLE]   [mnf8] backend=7 flags=0x45 literal=653 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[C HUBBLE] encode [mnf8] /tmp/d6_C_hb.mnf: 1438848 bytes, 1000x872 px, 3465 tiles, atlas=true, geom=false, 384806 ms
+[C HUBBLE]       384.82 real       375.48 user         6.64 sys
+[C HUBBLE]            132792320  maximum resident set size
+b2a8a10915239c99
+ARMCDONE
+EXIT:0

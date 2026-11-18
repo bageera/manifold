@@ -188,6 +188,47 @@ the refine-package/children accounting decomposition showing
 per-child accounting recorded. S4/S5 conditional; no wire changes, no
 new backend identifiers; the 810,816-byte anchor stands.
 
+## v1.17.1 — Certified computational optimization: same wire, 38.0% less encoding CPU (MNF17-P1 promoted; 2026-11-17)
+
+The first release of the MNF17-P1 program ("discover the optimal
+description with less computation"). No wire-format, entropy-mathematics,
+public-API or decoder change — the encoder spends less work finding the
+exact same bytes. Two mechanisms, each independently measured against
+matched contemporaneous arm builds (docs/mnf17-p1c5c7-record.md,
+docs/mnf17-p1d2d3d45-record.md, docs/mnf17-p1d6-record.md):
+
+- **Counter conservation (C4-A → C5–C7)**: `MixCtx` maintains the exact
+  probability-model counter sums incrementally instead of recomputing
+  them. Encoder ×1.136 (458.1 s vs 520.5 s user CPU over the standard
+  30-file corpus); decoder ×1.141 (51.04 s vs 58.25 s, cohort medians
+  of 3); +640 B evaluation-state cost.
+- **Certified candidate termination (P1-D0–D6)**: Maximum-profile mix
+  arms evaluate the D0 lower bound B(t) = 32 + 4 + 4·num_words(t) every
+  256 symbols against the incumbent's complete serialized size and stop
+  when B(t) exceeds it strictly — a mathematical certificate that the
+  candidate cannot win the (size, rank) pick, not a heuristic; equality
+  never eliminates (rank ties preserved); candidate ranks are
+  independent of execution order; inexpensive zstd/zlib incumbents
+  complete first per pair. Measured attribution ×1.420 (322.8 s vs
+  458.1 s); 199,746,476 of 480,825,632 candidate mix symbols certified
+  away (41.5%). Hubble arms avoid 5.5% of their ~2.62M-symbol streams —
+  candidate elimination is not computational elimination, and the
+  photograph regime is quantified with per-arm counters in the D6
+  record. Noise: 0.89× vs v1.17.0 (accepted: ~+0.5 s on an unfavorable
+  workload; no noise-sensitive disable path was introduced).
+
+- **Aggregate (matched three-arm runs, user CPU)**: v1.17.0 520.5 s →
+  v1.17.1 322.8 s = **×1.61 (−38.0%)**; up to ×19 on structured
+  fixtures (repeat). Corpus **768,303 B unchanged**, disabled portfolio
+  810,816 B unchanged, Hubble 1,438,848 B unchanged (payload digest
+  `b2a8a10915239c99` re-verified), wire parity 60/60 + Hubble
+  reconstruction exact, compression regret **0 B**, peak RSS ~31 MB
+  unchanged. Production instrumentation remains env-gated
+  (`MNF17_P1D6_STATS`, `MNF17_P1D6_EXHAUSTIVE`), read once per process,
+  and byte-neutral — exhaustive-instrument pick parity is asserted by
+  the `d6_pick_parity` gate, and the held-out fixtures joined the
+  full-corpus parity sweep.
+
 ## v1.17.0 — Backend 7: structural entropy coding joins the pick (MNF16-X1-L promoted; 2026-11-15)
 
 Introduces **backend 7**, a structural entropy-coding backend in the

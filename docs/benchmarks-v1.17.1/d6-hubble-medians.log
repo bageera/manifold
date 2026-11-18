@@ -1,0 +1,20 @@
+[C run1]       380.54 real       371.75 user         6.23 sys
+[C run1]            133496832  maximum resident set size
+[C run1] sha=b2a8a10915239c995be69ae6614ca3a0341e01bd63f0b65505d74794cd6103ad  /tmp/d6_med_C.mnf
+[B run1]       380.09 real       371.68 user         6.19 sys
+[B run1]            134234112  maximum resident set size
+[B run1] sha=b2a8a10915239c995be69ae6614ca3a0341e01bd63f0b65505d74794cd6103ad  /tmp/d6_med_B.mnf
+[C run2]       377.44 real       368.25 user         5.82 sys
+[C run2]            133414912  maximum resident set size
+[C run2] sha=b2a8a10915239c995be69ae6614ca3a0341e01bd63f0b65505d74794cd6103ad  /tmp/d6_med_C.mnf
+[B run2]       390.65 real       380.24 user         6.87 sys
+[B run2]            134053888  maximum resident set size
+[B run2] sha=b2a8a10915239c995be69ae6614ca3a0341e01bd63f0b65505d74794cd6103ad  /tmp/d6_med_B.mnf
+[C run3]       384.52 real       375.91 user         6.38 sys
+[C run3]            137134080  maximum resident set size
+[C run3] sha=b2a8a10915239c995be69ae6614ca3a0341e01bd63f0b65505d74794cd6103ad  /tmp/d6_med_C.mnf
+[B run3]       391.03 real       381.24 user         6.86 sys
+[B run3]            140001280  maximum resident set size
+[B run3] sha=b2a8a10915239c995be69ae6614ca3a0341e01bd63f0b65505d74794cd6103ad  /tmp/d6_med_B.mnf
+MED-DONE
+EXIT:0

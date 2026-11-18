@@ -132,12 +132,25 @@ Hubble (separate stress measurement, 1000×872 = 872,000 pixels):
 | B | 377.8 | 1.15× |
 | C | 375.5 | 1.16× |
 
-Hubble's certified termination saves ~0.6% of its encode time despite the
-95.31% candidate-domination rate — the certificate fires late on
-photograph-like content (the D1 census predicted 8–24% symbol-work on
-photos; Hubble's arms die in their final strata). This is exactly the
-candidate-vs-computation distinction the authorization asked D6 to
-establish: **candidate rates are not time.**
+Hubble's candidate-domination rate (97.7%) converts to far less wall:
+the certificate fires in the photograph arms' final strata, and the
+single-pass chain measurement (B 377.8 vs C 375.5 user s) under-read
+the true benefit. A matched median series of 3 alternating-order runs
+of the same arm binaries (`docs/benchmarks-v1.17.1/d6-hubble-medians.log`,
+every run reproducing the frozen Hubble digest `b2a8a10915239c99`):
+
+| arm | user s (median of 3) |
+| --- | --- |
+| B — exhaustive (C4-A) | 380.24 |
+| C — D6 (termination + C4-A) | 371.75 |
+
+Certified termination saves **8.5 s = 2.3% of Hubble's encode** despite
+the ~97.7% candidate-domination rate — the avoided 18.6 M symbols are
+worth ~14.6 s at the measured 0.785 µs/symbol marginal rate, and the
+residual gap vs the median delta is composition uncertainty (per-pair
+build costs vary; the probe measured one representative pair). This is
+exactly the candidate-vs-computation distinction the authorization
+asked D6 to establish: **candidate rates are not time.**
 
 Decode (same byte-identical containers, three decoders):
 
@@ -150,12 +163,13 @@ Decode (same byte-identical containers, three decoders):
 Decode is unaffected by D6 (identical decoder; C−B = run noise) and the
 already-shipped C4-A decode gain (1.14×) is confirmed contemporaneously.
 
-Peak RSS (encode, `/usr/bin/time -l maximum resident`): arm A ≈ B ≈ C at
-~31 MB (mixed), decode ≤ 18 MB. The D6 pick loop keeps the same
-representation-first one-stream-per-class discipline; `raw.len()` of the
-held zstd-proxy stream plus the live zlib stream are simultaneously live
-per pair (bounded, as before, by the corpus's stream shapes); no corpus-level
-or Hubble RSS regression was measured.
+Peak RSS (encode, `/usr/bin/time -l maximum resident`): standard corpus
+~31 MB arm A ≈ B ≈ C; Hubble ~130–136 MB (A 135.9, B 130.9, C 132.8 —
+C is +1.9 MB vs B, within run-to-run RSS); decode ≤ 18.6 MB. The D6
+pick loop keeps the same representation-first one-stream-per-class
+discipline; `raw.len()` of the held zstd-proxy stream plus the live
+zlib stream are simultaneously live per pair, and no corpus-level or
+Hubble RSS regression was measured.
 
 ## D6 candidate and symbol accounting (MNF17_P1D6_STATS)
 

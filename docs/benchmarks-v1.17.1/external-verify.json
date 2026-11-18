@@ -1,0 +1,46 @@
+=== external fixtures ===
+{
+ "bin": "/Users/jonbethea/projects/blacktech/manifold/target/release/manifold",
+ "fixtures": [
+  {
+   "fixture": "checker_external_101.png",
+   "size": 107,
+   "sha16": "a2af40fb953c208c",
+   "v1170_sha16": "a2af40fb953c208c"
+  },
+  {
+   "fixture": "document_external_176x220.png",
+   "size": 151,
+   "sha16": "7c67cd56da7e87dc",
+   "v1170_sha16": "7c67cd56da7e87dc"
+  },
+  {
+   "fixture": "flat_external_96.png",
+   "size": 36,
+   "sha16": "ef6ebb470ea7c476",
+   "v1170_sha16": "ef6ebb470ea7c476"
+  },
+  {
+   "fixture": "grad_external_320x201.png",
+   "size": 626,
+   "sha16": "773673f14e2bd092",
+   "v1170_sha16": "773673f14e2bd092"
+  },
+  {
+   "fixture": "noise_external_128.png",
+   "size": 49261,
+   "sha16": "5ce93dc94a02e361",
+   "v1170_sha16": "5ce93dc94a02e361"
+  },
+  {
+   "fixture": "photo_external_208x181.png",
+   "size": 57148,
+   "sha16": "bef9d9ba1e959bfc",
+   "v1170_sha16": "bef9d9ba1e959bfc"
+  }
+ ],
+ "recon_fail": [],
+ "wire_fail": [],
+ "EXTERNAL_VERIFY": "PASS"
+}
+EXTERNAL-EXIT:0

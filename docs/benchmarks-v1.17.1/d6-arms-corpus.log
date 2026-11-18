@@ -1,0 +1,1768 @@
+=== D6-B: final_parity on the D6 tree (arm C) ===
+{"phase_A": {"total": 810816, "mismatches": [], "recon": 30}, "phase_B": {"total": 768303, "mismatches": [], "recon": 30}, "hubble_final": {"size": 1438848, "sha16": "b2a8a10915239c99", "byte_identical": true}, "FINAL_PARITY": "PASS"}
+PARITY-EXIT:0
+=== D6-C arm C ===
+--- build C ---
+    Finished `release` profile [optimized] target(s) in 0.17s
+--- encode corpus C ---
+[C autumn_160x120_s3100006.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C autumn_160x120_s3100006.png]         0.00 real         0.00 user         0.00 sys
+[C autumn_160x120_s3100006.png]              1196032  maximum resident set size
+[C autumn_160x120_s3100006.png]                    0  average shared memory size
+[C autumn_160x120_s3100006.png]                    0  average unshared data size
+[C autumn_160x120_s3100006.png]                    0  average unshared stack size
+[C autumn_160x120_s3100006.png]                  217  page reclaims
+[C autumn_160x120_s3100006.png]                    1  page faults
+[C autumn_160x120_s3100006.png]                    0  block input operations
+[C autumn_160x120_s3100006.png]                    0  block output operations
+[C autumn_160x120_s3100006.png]                    0  messages sent
+[C autumn_160x120_s3100006.png]                    0  messages received
+[C autumn_160x120_s3100006.png]                    0  signals received
+[C autumn_160x120_s3100006.png]                    0  voluntary context switches
+[C autumn_160x120_s3100006.png]                    9  involuntary context switches
+[C autumn_160x120_s3100006.png]             10936368  instructions retired
+[C autumn_160x120_s3100006.png]               884928  peak memory footprint
+[C autumn_160x120_s3100006.png] size=
+[C dusk_160x120_s3100003.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C dusk_160x120_s3100003.png]         0.00 real         0.00 user         0.00 sys
+[C dusk_160x120_s3100003.png]              1196032  maximum resident set size
+[C dusk_160x120_s3100003.png]                    0  average shared memory size
+[C dusk_160x120_s3100003.png]                    0  average unshared data size
+[C dusk_160x120_s3100003.png]                    0  average unshared stack size
+[C dusk_160x120_s3100003.png]                  217  page reclaims
+[C dusk_160x120_s3100003.png]                    1  page faults
+[C dusk_160x120_s3100003.png]                    0  block input operations
+[C dusk_160x120_s3100003.png]                    0  block output operations
+[C dusk_160x120_s3100003.png]                    0  messages sent
+[C dusk_160x120_s3100003.png]                    0  messages received
+[C dusk_160x120_s3100003.png]                    0  signals received
+[C dusk_160x120_s3100003.png]                    0  voluntary context switches
+[C dusk_160x120_s3100003.png]                   11  involuntary context switches
+[C dusk_160x120_s3100003.png]             11123252  instructions retired
+[C dusk_160x120_s3100003.png]               884928  peak memory footprint
+[C dusk_160x120_s3100003.png] size=
+[C dusk_224x160_s3100002.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C dusk_224x160_s3100002.png]         0.00 real         0.00 user         0.00 sys
+[C dusk_224x160_s3100002.png]              1196032  maximum resident set size
+[C dusk_224x160_s3100002.png]                    0  average shared memory size
+[C dusk_224x160_s3100002.png]                    0  average unshared data size
+[C dusk_224x160_s3100002.png]                    0  average unshared stack size
+[C dusk_224x160_s3100002.png]                  217  page reclaims
+[C dusk_224x160_s3100002.png]                    1  page faults
+[C dusk_224x160_s3100002.png]                    0  block input operations
+[C dusk_224x160_s3100002.png]                    0  block output operations
+[C dusk_224x160_s3100002.png]                    0  messages sent
+[C dusk_224x160_s3100002.png]                    0  messages received
+[C dusk_224x160_s3100002.png]                    0  signals received
+[C dusk_224x160_s3100002.png]                    0  voluntary context switches
+[C dusk_224x160_s3100002.png]                   11  involuntary context switches
+[C dusk_224x160_s3100002.png]             10818257  instructions retired
+[C dusk_224x160_s3100002.png]               884928  peak memory footprint
+[C dusk_224x160_s3100002.png] size=
+[C forest_192x144_s3100001.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C forest_192x144_s3100001.png]         0.00 real         0.00 user         0.00 sys
+[C forest_192x144_s3100001.png]              1196032  maximum resident set size
+[C forest_192x144_s3100001.png]                    0  average shared memory size
+[C forest_192x144_s3100001.png]                    0  average unshared data size
+[C forest_192x144_s3100001.png]                    0  average unshared stack size
+[C forest_192x144_s3100001.png]                  217  page reclaims
+[C forest_192x144_s3100001.png]                    1  page faults
+[C forest_192x144_s3100001.png]                    0  block input operations
+[C forest_192x144_s3100001.png]                    0  block output operations
+[C forest_192x144_s3100001.png]                    0  messages sent
+[C forest_192x144_s3100001.png]                    0  messages received
+[C forest_192x144_s3100001.png]                    0  signals received
+[C forest_192x144_s3100001.png]                    0  voluntary context switches
+[C forest_192x144_s3100001.png]                    6  involuntary context switches
+[C forest_192x144_s3100001.png]             10718130  instructions retired
+[C forest_192x144_s3100001.png]              5310283  cycles elapsed
+[C forest_192x144_s3100001.png]               884928  peak memory footprint
+[C forest_192x144_s3100001.png] size=
+[C forest_224x160_s3100005.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C forest_224x160_s3100005.png]         0.00 real         0.00 user         0.00 sys
+[C forest_224x160_s3100005.png]              1196032  maximum resident set size
+[C forest_224x160_s3100005.png]                    0  average shared memory size
+[C forest_224x160_s3100005.png]                    0  average unshared data size
+[C forest_224x160_s3100005.png]                    0  average unshared stack size
+[C forest_224x160_s3100005.png]                  217  page reclaims
+[C forest_224x160_s3100005.png]                    1  page faults
+[C forest_224x160_s3100005.png]                    0  block input operations
+[C forest_224x160_s3100005.png]                    0  block output operations
+[C forest_224x160_s3100005.png]                    0  messages sent
+[C forest_224x160_s3100005.png]                    0  messages received
+[C forest_224x160_s3100005.png]                    0  signals received
+[C forest_224x160_s3100005.png]                    0  voluntary context switches
+[C forest_224x160_s3100005.png]                    6  involuntary context switches
+[C forest_224x160_s3100005.png]             10715226  instructions retired
+[C forest_224x160_s3100005.png]              5244984  cycles elapsed
+[C forest_224x160_s3100005.png]               884928  peak memory footprint
+[C forest_224x160_s3100005.png] size=
+[C forest_224x160_s3100008.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C forest_224x160_s3100008.png]         0.00 real         0.00 user         0.00 sys
+[C forest_224x160_s3100008.png]              1196032  maximum resident set size
+[C forest_224x160_s3100008.png]                    0  average shared memory size
+[C forest_224x160_s3100008.png]                    0  average unshared data size
+[C forest_224x160_s3100008.png]                    0  average unshared stack size
+[C forest_224x160_s3100008.png]                  217  page reclaims
+[C forest_224x160_s3100008.png]                    1  page faults
+[C forest_224x160_s3100008.png]                    0  block input operations
+[C forest_224x160_s3100008.png]                    0  block output operations
+[C forest_224x160_s3100008.png]                    0  messages sent
+[C forest_224x160_s3100008.png]                    0  messages received
+[C forest_224x160_s3100008.png]                    0  signals received
+[C forest_224x160_s3100008.png]                    0  voluntary context switches
+[C forest_224x160_s3100008.png]                    7  involuntary context switches
+[C forest_224x160_s3100008.png]             10739561  instructions retired
+[C forest_224x160_s3100008.png]               884928  peak memory footprint
+[C forest_224x160_s3100008.png] size=
+[C ocean_192x144_s3100007.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C ocean_192x144_s3100007.png]         0.00 real         0.00 user         0.00 sys
+[C ocean_192x144_s3100007.png]              1196032  maximum resident set size
+[C ocean_192x144_s3100007.png]                    0  average shared memory size
+[C ocean_192x144_s3100007.png]                    0  average unshared data size
+[C ocean_192x144_s3100007.png]                    0  average unshared stack size
+[C ocean_192x144_s3100007.png]                  217  page reclaims
+[C ocean_192x144_s3100007.png]                    1  page faults
+[C ocean_192x144_s3100007.png]                    0  block input operations
+[C ocean_192x144_s3100007.png]                    0  block output operations
+[C ocean_192x144_s3100007.png]                    0  messages sent
+[C ocean_192x144_s3100007.png]                    0  messages received
+[C ocean_192x144_s3100007.png]                    0  signals received
+[C ocean_192x144_s3100007.png]                    0  voluntary context switches
+[C ocean_192x144_s3100007.png]                    6  involuntary context switches
+[C ocean_192x144_s3100007.png]             10728763  instructions retired
+[C ocean_192x144_s3100007.png]              5398999  cycles elapsed
+[C ocean_192x144_s3100007.png]               884928  peak memory footprint
+[C ocean_192x144_s3100007.png] size=
+[C sand_192x144_s3100004.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C sand_192x144_s3100004.png]         0.00 real         0.00 user         0.00 sys
+[C sand_192x144_s3100004.png]              1196032  maximum resident set size
+[C sand_192x144_s3100004.png]                    0  average shared memory size
+[C sand_192x144_s3100004.png]                    0  average unshared data size
+[C sand_192x144_s3100004.png]                    0  average unshared stack size
+[C sand_192x144_s3100004.png]                  217  page reclaims
+[C sand_192x144_s3100004.png]                    1  page faults
+[C sand_192x144_s3100004.png]                    0  block input operations
+[C sand_192x144_s3100004.png]                    0  block output operations
+[C sand_192x144_s3100004.png]                    0  messages sent
+[C sand_192x144_s3100004.png]                    0  messages received
+[C sand_192x144_s3100004.png]                    0  signals received
+[C sand_192x144_s3100004.png]                    0  voluntary context switches
+[C sand_192x144_s3100004.png]                    5  involuntary context switches
+[C sand_192x144_s3100004.png]             10686572  instructions retired
+[C sand_192x144_s3100004.png]               884928  peak memory footprint
+[C sand_192x144_s3100004.png] size=
+[C slate_160x120_s3100009.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C slate_160x120_s3100009.png]         0.00 real         0.00 user         0.00 sys
+[C slate_160x120_s3100009.png]              1196032  maximum resident set size
+[C slate_160x120_s3100009.png]                    0  average shared memory size
+[C slate_160x120_s3100009.png]                    0  average unshared data size
+[C slate_160x120_s3100009.png]                    0  average unshared stack size
+[C slate_160x120_s3100009.png]                  219  page reclaims
+[C slate_160x120_s3100009.png]                    1  page faults
+[C slate_160x120_s3100009.png]                    0  block input operations
+[C slate_160x120_s3100009.png]                    0  block output operations
+[C slate_160x120_s3100009.png]                    0  messages sent
+[C slate_160x120_s3100009.png]                    0  messages received
+[C slate_160x120_s3100009.png]                    0  signals received
+[C slate_160x120_s3100009.png]                    0  voluntary context switches
+[C slate_160x120_s3100009.png]                    6  involuntary context switches
+[C slate_160x120_s3100009.png]             10730914  instructions retired
+[C slate_160x120_s3100009.png]               884928  peak memory footprint
+[C slate_160x120_s3100009.png] size=
+[C terrain_160x120_s3100000.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C terrain_160x120_s3100000.png]         0.00 real         0.00 user         0.00 sys
+[C terrain_160x120_s3100000.png]              1196032  maximum resident set size
+[C terrain_160x120_s3100000.png]                    0  average shared memory size
+[C terrain_160x120_s3100000.png]                    0  average unshared data size
+[C terrain_160x120_s3100000.png]                    0  average unshared stack size
+[C terrain_160x120_s3100000.png]                  219  page reclaims
+[C terrain_160x120_s3100000.png]                    1  page faults
+[C terrain_160x120_s3100000.png]                    0  block input operations
+[C terrain_160x120_s3100000.png]                    0  block output operations
+[C terrain_160x120_s3100000.png]                    0  messages sent
+[C terrain_160x120_s3100000.png]                    0  messages received
+[C terrain_160x120_s3100000.png]                    0  signals received
+[C terrain_160x120_s3100000.png]                    0  voluntary context switches
+[C terrain_160x120_s3100000.png]                    9  involuntary context switches
+[C terrain_160x120_s3100000.png]             10771613  instructions retired
+[C terrain_160x120_s3100000.png]              5193805  cycles elapsed
+[C terrain_160x120_s3100000.png]               884928  peak memory footprint
+[C terrain_160x120_s3100000.png] size=
+[C document_200x280.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C document_200x280.png]         0.00 real         0.00 user         0.00 sys
+[C document_200x280.png]              1196032  maximum resident set size
+[C document_200x280.png]                    0  average shared memory size
+[C document_200x280.png]                    0  average unshared data size
+[C document_200x280.png]                    0  average unshared stack size
+[C document_200x280.png]                  219  page reclaims
+[C document_200x280.png]                    1  page faults
+[C document_200x280.png]                    0  block input operations
+[C document_200x280.png]                    0  block output operations
+[C document_200x280.png]                    0  messages sent
+[C document_200x280.png]                    0  messages received
+[C document_200x280.png]                    0  signals received
+[C document_200x280.png]                    0  voluntary context switches
+[C document_200x280.png]                    7  involuntary context switches
+[C document_200x280.png]             10797798  instructions retired
+[C document_200x280.png]              5872129  cycles elapsed
+[C document_200x280.png]               884928  peak memory footprint
+[C document_200x280.png] size=
+[C autumn_192x144_s900001.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C autumn_192x144_s900001.png]         0.00 real         0.00 user         0.00 sys
+[C autumn_192x144_s900001.png]              1196032  maximum resident set size
+[C autumn_192x144_s900001.png]                    0  average shared memory size
+[C autumn_192x144_s900001.png]                    0  average unshared data size
+[C autumn_192x144_s900001.png]                    0  average unshared stack size
+[C autumn_192x144_s900001.png]                  217  page reclaims
+[C autumn_192x144_s900001.png]                    1  page faults
+[C autumn_192x144_s900001.png]                    0  block input operations
+[C autumn_192x144_s900001.png]                    0  block output operations
+[C autumn_192x144_s900001.png]                    0  messages sent
+[C autumn_192x144_s900001.png]                    0  messages received
+[C autumn_192x144_s900001.png]                    0  signals received
+[C autumn_192x144_s900001.png]                    0  voluntary context switches
+[C autumn_192x144_s900001.png]                    9  involuntary context switches
+[C autumn_192x144_s900001.png]             10761708  instructions retired
+[C autumn_192x144_s900001.png]              5318465  cycles elapsed
+[C autumn_192x144_s900001.png]               884928  peak memory footprint
+[C autumn_192x144_s900001.png] size=
+[C dusk_160x120_s900003.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C dusk_160x120_s900003.png]         0.00 real         0.00 user         0.00 sys
+[C dusk_160x120_s900003.png]              1196032  maximum resident set size
+[C dusk_160x120_s900003.png]                    0  average shared memory size
+[C dusk_160x120_s900003.png]                    0  average unshared data size
+[C dusk_160x120_s900003.png]                    0  average unshared stack size
+[C dusk_160x120_s900003.png]                  219  page reclaims
+[C dusk_160x120_s900003.png]                    1  page faults
+[C dusk_160x120_s900003.png]                    0  block input operations
+[C dusk_160x120_s900003.png]                    0  block output operations
+[C dusk_160x120_s900003.png]                    0  messages sent
+[C dusk_160x120_s900003.png]                    0  messages received
+[C dusk_160x120_s900003.png]                    0  signals received
+[C dusk_160x120_s900003.png]                    0  voluntary context switches
+[C dusk_160x120_s900003.png]                   13  involuntary context switches
+[C dusk_160x120_s900003.png]             10858819  instructions retired
+[C dusk_160x120_s900003.png]               884928  peak memory footprint
+[C dusk_160x120_s900003.png] size=
+[C forest_224x160_s900002.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C forest_224x160_s900002.png]         0.00 real         0.00 user         0.00 sys
+[C forest_224x160_s900002.png]              1196032  maximum resident set size
+[C forest_224x160_s900002.png]                    0  average shared memory size
+[C forest_224x160_s900002.png]                    0  average unshared data size
+[C forest_224x160_s900002.png]                    0  average unshared stack size
+[C forest_224x160_s900002.png]                  219  page reclaims
+[C forest_224x160_s900002.png]                    1  page faults
+[C forest_224x160_s900002.png]                    0  block input operations
+[C forest_224x160_s900002.png]                    0  block output operations
+[C forest_224x160_s900002.png]                    0  messages sent
+[C forest_224x160_s900002.png]                    0  messages received
+[C forest_224x160_s900002.png]                    0  signals received
+[C forest_224x160_s900002.png]                    0  voluntary context switches
+[C forest_224x160_s900002.png]                    7  involuntary context switches
+[C forest_224x160_s900002.png]             10762216  instructions retired
+[C forest_224x160_s900002.png]               884928  peak memory footprint
+[C forest_224x160_s900002.png] size=
+[C ocean_192x144_s900007.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C ocean_192x144_s900007.png]         0.00 real         0.00 user         0.00 sys
+[C ocean_192x144_s900007.png]              1196032  maximum resident set size
+[C ocean_192x144_s900007.png]                    0  average shared memory size
+[C ocean_192x144_s900007.png]                    0  average unshared data size
+[C ocean_192x144_s900007.png]                    0  average unshared stack size
+[C ocean_192x144_s900007.png]                  219  page reclaims
+[C ocean_192x144_s900007.png]                    1  page faults
+[C ocean_192x144_s900007.png]                    0  block input operations
+[C ocean_192x144_s900007.png]                    0  block output operations
+[C ocean_192x144_s900007.png]                    0  messages sent
+[C ocean_192x144_s900007.png]                    0  messages received
+[C ocean_192x144_s900007.png]                    0  signals received
+[C ocean_192x144_s900007.png]                    0  voluntary context switches
+[C ocean_192x144_s900007.png]                    4  involuntary context switches
+[C ocean_192x144_s900007.png]             10710069  instructions retired
+[C ocean_192x144_s900007.png]              5086331  cycles elapsed
+[C ocean_192x144_s900007.png]               884928  peak memory footprint
+[C ocean_192x144_s900007.png] size=
+[C sand_160x120_s900000.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C sand_160x120_s900000.png]         0.00 real         0.00 user         0.00 sys
+[C sand_160x120_s900000.png]              1196032  maximum resident set size
+[C sand_160x120_s900000.png]                    0  average shared memory size
+[C sand_160x120_s900000.png]                    0  average unshared data size
+[C sand_160x120_s900000.png]                    0  average unshared stack size
+[C sand_160x120_s900000.png]                  219  page reclaims
+[C sand_160x120_s900000.png]                    1  page faults
+[C sand_160x120_s900000.png]                    0  block input operations
+[C sand_160x120_s900000.png]                    0  block output operations
+[C sand_160x120_s900000.png]                    0  messages sent
+[C sand_160x120_s900000.png]                    0  messages received
+[C sand_160x120_s900000.png]                    0  signals received
+[C sand_160x120_s900000.png]                    0  voluntary context switches
+[C sand_160x120_s900000.png]                   11  involuntary context switches
+[C sand_160x120_s900000.png]             10815575  instructions retired
+[C sand_160x120_s900000.png]              5391874  cycles elapsed
+[C sand_160x120_s900000.png]               884928  peak memory footprint
+[C sand_160x120_s900000.png] size=
+[C slate_192x144_s900004.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C slate_192x144_s900004.png]         0.00 real         0.00 user         0.00 sys
+[C slate_192x144_s900004.png]              1196032  maximum resident set size
+[C slate_192x144_s900004.png]                    0  average shared memory size
+[C slate_192x144_s900004.png]                    0  average unshared data size
+[C slate_192x144_s900004.png]                    0  average unshared stack size
+[C slate_192x144_s900004.png]                  217  page reclaims
+[C slate_192x144_s900004.png]                    1  page faults
+[C slate_192x144_s900004.png]                    0  block input operations
+[C slate_192x144_s900004.png]                    0  block output operations
+[C slate_192x144_s900004.png]                    0  messages sent
+[C slate_192x144_s900004.png]                    0  messages received
+[C slate_192x144_s900004.png]                    0  signals received
+[C slate_192x144_s900004.png]                    0  voluntary context switches
+[C slate_192x144_s900004.png]                    8  involuntary context switches
+[C slate_192x144_s900004.png]             10731388  instructions retired
+[C slate_192x144_s900004.png]               884928  peak memory footprint
+[C slate_192x144_s900004.png] size=
+[C slate_224x160_s900008.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C slate_224x160_s900008.png]         0.00 real         0.00 user         0.00 sys
+[C slate_224x160_s900008.png]              1196032  maximum resident set size
+[C slate_224x160_s900008.png]                    0  average shared memory size
+[C slate_224x160_s900008.png]                    0  average unshared data size
+[C slate_224x160_s900008.png]                    0  average unshared stack size
+[C slate_224x160_s900008.png]                  219  page reclaims
+[C slate_224x160_s900008.png]                    1  page faults
+[C slate_224x160_s900008.png]                    0  block input operations
+[C slate_224x160_s900008.png]                    0  block output operations
+[C slate_224x160_s900008.png]                    0  messages sent
+[C slate_224x160_s900008.png]                    0  messages received
+[C slate_224x160_s900008.png]                    0  signals received
+[C slate_224x160_s900008.png]                    0  voluntary context switches
+[C slate_224x160_s900008.png]                    8  involuntary context switches
+[C slate_224x160_s900008.png]             10769887  instructions retired
+[C slate_224x160_s900008.png]              5180972  cycles elapsed
+[C slate_224x160_s900008.png]               884928  peak memory footprint
+[C slate_224x160_s900008.png] size=
+[C stone_160x120_s900006.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C stone_160x120_s900006.png]         0.00 real         0.00 user         0.00 sys
+[C stone_160x120_s900006.png]              1196032  maximum resident set size
+[C stone_160x120_s900006.png]                    0  average shared memory size
+[C stone_160x120_s900006.png]                    0  average unshared data size
+[C stone_160x120_s900006.png]                    0  average unshared stack size
+[C stone_160x120_s900006.png]                  219  page reclaims
+[C stone_160x120_s900006.png]                    1  page faults
+[C stone_160x120_s900006.png]                    0  block input operations
+[C stone_160x120_s900006.png]                    0  block output operations
+[C stone_160x120_s900006.png]                    0  messages sent
+[C stone_160x120_s900006.png]                    0  messages received
+[C stone_160x120_s900006.png]                    0  signals received
+[C stone_160x120_s900006.png]                    0  voluntary context switches
+[C stone_160x120_s900006.png]                    5  involuntary context switches
+[C stone_160x120_s900006.png]             10842976  instructions retired
+[C stone_160x120_s900006.png]              6384708  cycles elapsed
+[C stone_160x120_s900006.png]               884928  peak memory footprint
+[C stone_160x120_s900006.png] size=
+[C terrain_160x120_s900009.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C terrain_160x120_s900009.png]         0.00 real         0.00 user         0.00 sys
+[C terrain_160x120_s900009.png]              1196032  maximum resident set size
+[C terrain_160x120_s900009.png]                    0  average shared memory size
+[C terrain_160x120_s900009.png]                    0  average unshared data size
+[C terrain_160x120_s900009.png]                    0  average unshared stack size
+[C terrain_160x120_s900009.png]                  219  page reclaims
+[C terrain_160x120_s900009.png]                    1  page faults
+[C terrain_160x120_s900009.png]                    0  block input operations
+[C terrain_160x120_s900009.png]                    0  block output operations
+[C terrain_160x120_s900009.png]                    0  messages sent
+[C terrain_160x120_s900009.png]                    0  messages received
+[C terrain_160x120_s900009.png]                    0  signals received
+[C terrain_160x120_s900009.png]                    0  voluntary context switches
+[C terrain_160x120_s900009.png]                    8  involuntary context switches
+[C terrain_160x120_s900009.png]             10753024  instructions retired
+[C terrain_160x120_s900009.png]              5148134  cycles elapsed
+[C terrain_160x120_s900009.png]               884928  peak memory footprint
+[C terrain_160x120_s900009.png] size=
+[C terrain_224x160_s900005.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C terrain_224x160_s900005.png]         0.00 real         0.00 user         0.00 sys
+[C terrain_224x160_s900005.png]              1196032  maximum resident set size
+[C terrain_224x160_s900005.png]                    0  average shared memory size
+[C terrain_224x160_s900005.png]                    0  average unshared data size
+[C terrain_224x160_s900005.png]                    0  average unshared stack size
+[C terrain_224x160_s900005.png]                  219  page reclaims
+[C terrain_224x160_s900005.png]                    1  page faults
+[C terrain_224x160_s900005.png]                    0  block input operations
+[C terrain_224x160_s900005.png]                    0  block output operations
+[C terrain_224x160_s900005.png]                    0  messages sent
+[C terrain_224x160_s900005.png]                    0  messages received
+[C terrain_224x160_s900005.png]                    0  signals received
+[C terrain_224x160_s900005.png]                    0  voluntary context switches
+[C terrain_224x160_s900005.png]                    4  involuntary context switches
+[C terrain_224x160_s900005.png]             10713972  instructions retired
+[C terrain_224x160_s900005.png]              5265084  cycles elapsed
+[C terrain_224x160_s900005.png]               884928  peak memory footprint
+[C terrain_224x160_s900005.png] size=
+[C screenshot_640x400.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C screenshot_640x400.png]         0.00 real         0.00 user         0.00 sys
+[C screenshot_640x400.png]              1196032  maximum resident set size
+[C screenshot_640x400.png]                    0  average shared memory size
+[C screenshot_640x400.png]                    0  average unshared data size
+[C screenshot_640x400.png]                    0  average unshared stack size
+[C screenshot_640x400.png]                  217  page reclaims
+[C screenshot_640x400.png]                    1  page faults
+[C screenshot_640x400.png]                    0  block input operations
+[C screenshot_640x400.png]                    0  block output operations
+[C screenshot_640x400.png]                    0  messages sent
+[C screenshot_640x400.png]                    0  messages received
+[C screenshot_640x400.png]                    0  signals received
+[C screenshot_640x400.png]                    0  voluntary context switches
+[C screenshot_640x400.png]                   15  involuntary context switches
+[C screenshot_640x400.png]             10802545  instructions retired
+[C screenshot_640x400.png]               884928  peak memory footprint
+[C screenshot_640x400.png] size=
+[C gradient_320x240.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C gradient_320x240.png]         0.00 real         0.00 user         0.00 sys
+[C gradient_320x240.png]              1196032  maximum resident set size
+[C gradient_320x240.png]                    0  average shared memory size
+[C gradient_320x240.png]                    0  average unshared data size
+[C gradient_320x240.png]                    0  average unshared stack size
+[C gradient_320x240.png]                  219  page reclaims
+[C gradient_320x240.png]                    1  page faults
+[C gradient_320x240.png]                    0  block input operations
+[C gradient_320x240.png]                    0  block output operations
+[C gradient_320x240.png]                    0  messages sent
+[C gradient_320x240.png]                    0  messages received
+[C gradient_320x240.png]                    0  signals received
+[C gradient_320x240.png]                    0  voluntary context switches
+[C gradient_320x240.png]                    6  involuntary context switches
+[C gradient_320x240.png]             10752200  instructions retired
+[C gradient_320x240.png]               884928  peak memory footprint
+[C gradient_320x240.png] size=
+[C blob_224x160.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C blob_224x160.png]         0.00 real         0.00 user         0.00 sys
+[C blob_224x160.png]              1196032  maximum resident set size
+[C blob_224x160.png]                    0  average shared memory size
+[C blob_224x160.png]                    0  average unshared data size
+[C blob_224x160.png]                    0  average unshared stack size
+[C blob_224x160.png]                  219  page reclaims
+[C blob_224x160.png]                    1  page faults
+[C blob_224x160.png]                    0  block input operations
+[C blob_224x160.png]                    0  block output operations
+[C blob_224x160.png]                    0  messages sent
+[C blob_224x160.png]                    0  messages received
+[C blob_224x160.png]                    0  signals received
+[C blob_224x160.png]                    0  voluntary context switches
+[C blob_224x160.png]                    2  involuntary context switches
+[C blob_224x160.png]             10697004  instructions retired
+[C blob_224x160.png]              5182616  cycles elapsed
+[C blob_224x160.png]               884928  peak memory footprint
+[C blob_224x160.png] size=
+[C blocks_192x128.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C blocks_192x128.png]         0.00 real         0.00 user         0.00 sys
+[C blocks_192x128.png]              1212416  maximum resident set size
+[C blocks_192x128.png]                    0  average shared memory size
+[C blocks_192x128.png]                    0  average unshared data size
+[C blocks_192x128.png]                    0  average unshared stack size
+[C blocks_192x128.png]                  220  page reclaims
+[C blocks_192x128.png]                    1  page faults
+[C blocks_192x128.png]                    0  block input operations
+[C blocks_192x128.png]                    0  block output operations
+[C blocks_192x128.png]                    0  messages sent
+[C blocks_192x128.png]                    0  messages received
+[C blocks_192x128.png]                    0  signals received
+[C blocks_192x128.png]                    0  voluntary context switches
+[C blocks_192x128.png]                    4  involuntary context switches
+[C blocks_192x128.png]             10748270  instructions retired
+[C blocks_192x128.png]               901312  peak memory footprint
+[C blocks_192x128.png] size=
+[C plaid_192.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C plaid_192.png]         0.00 real         0.00 user         0.00 sys
+[C plaid_192.png]              1196032  maximum resident set size
+[C plaid_192.png]                    0  average shared memory size
+[C plaid_192.png]                    0  average unshared data size
+[C plaid_192.png]                    0  average unshared stack size
+[C plaid_192.png]                  219  page reclaims
+[C plaid_192.png]                    1  page faults
+[C plaid_192.png]                    0  block input operations
+[C plaid_192.png]                    0  block output operations
+[C plaid_192.png]                    0  messages sent
+[C plaid_192.png]                    0  messages received
+[C plaid_192.png]                    0  signals received
+[C plaid_192.png]                    0  voluntary context switches
+[C plaid_192.png]                    9  involuntary context switches
+[C plaid_192.png]             10775524  instructions retired
+[C plaid_192.png]               884928  peak memory footprint
+[C plaid_192.png] size=
+[C poster_208x144.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C poster_208x144.png]         0.00 real         0.00 user         0.00 sys
+[C poster_208x144.png]              1196032  maximum resident set size
+[C poster_208x144.png]                    0  average shared memory size
+[C poster_208x144.png]                    0  average unshared data size
+[C poster_208x144.png]                    0  average unshared stack size
+[C poster_208x144.png]                  217  page reclaims
+[C poster_208x144.png]                    1  page faults
+[C poster_208x144.png]                    0  block input operations
+[C poster_208x144.png]                    0  block output operations
+[C poster_208x144.png]                    0  messages sent
+[C poster_208x144.png]                    0  messages received
+[C poster_208x144.png]                    0  signals received
+[C poster_208x144.png]                    0  voluntary context switches
+[C poster_208x144.png]                    6  involuntary context switches
+[C poster_208x144.png]             10718159  instructions retired
+[C poster_208x144.png]               884928  peak memory footprint
+[C poster_208x144.png] size=
+[C noise_256x256.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C noise_256x256.png]         0.00 real         0.00 user         0.00 sys
+[C noise_256x256.png]              1196032  maximum resident set size
+[C noise_256x256.png]                    0  average shared memory size
+[C noise_256x256.png]                    0  average unshared data size
+[C noise_256x256.png]                    0  average unshared stack size
+[C noise_256x256.png]                  219  page reclaims
+[C noise_256x256.png]                    1  page faults
+[C noise_256x256.png]                    0  block input operations
+[C noise_256x256.png]                    0  block output operations
+[C noise_256x256.png]                    0  messages sent
+[C noise_256x256.png]                    0  messages received
+[C noise_256x256.png]                    0  signals received
+[C noise_256x256.png]                    0  voluntary context switches
+[C noise_256x256.png]                    8  involuntary context switches
+[C noise_256x256.png]             10781258  instructions retired
+[C noise_256x256.png]               884928  peak memory footprint
+[C noise_256x256.png] size=
+[C repeat_256x256.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C repeat_256x256.png]         0.00 real         0.00 user         0.00 sys
+[C repeat_256x256.png]              1196032  maximum resident set size
+[C repeat_256x256.png]                    0  average shared memory size
+[C repeat_256x256.png]                    0  average unshared data size
+[C repeat_256x256.png]                    0  average unshared stack size
+[C repeat_256x256.png]                  219  page reclaims
+[C repeat_256x256.png]                    1  page faults
+[C repeat_256x256.png]                    0  block input operations
+[C repeat_256x256.png]                    0  block output operations
+[C repeat_256x256.png]                    0  messages sent
+[C repeat_256x256.png]                    0  messages received
+[C repeat_256x256.png]                    0  signals received
+[C repeat_256x256.png]                    0  voluntary context switches
+[C repeat_256x256.png]                    7  involuntary context switches
+[C repeat_256x256.png]             10767308  instructions retired
+[C repeat_256x256.png]               884928  peak memory footprint
+[C repeat_256x256.png] size=
+[C solid_256x256.png] env: /tmp/d6arm_C/manifold: No such file or directory
+[C solid_256x256.png]         0.00 real         0.00 user         0.00 sys
+[C solid_256x256.png]              1196032  maximum resident set size
+[C solid_256x256.png]                    0  average shared memory size
+[C solid_256x256.png]                    0  average unshared data size
+[C solid_256x256.png]                    0  average unshared stack size
+[C solid_256x256.png]                  217  page reclaims
+[C solid_256x256.png]                    1  page faults
+[C solid_256x256.png]                    0  block input operations
+[C solid_256x256.png]                    0  block output operations
+[C solid_256x256.png]                    0  messages sent
+[C solid_256x256.png]                    0  messages received
+[C solid_256x256.png]                    0  signals received
+[C solid_256x256.png]                    0  voluntary context switches
+[C solid_256x256.png]                    9  involuntary context switches
+[C solid_256x256.png]             10744865  instructions retired
+[C solid_256x256.png]               884928  peak memory footprint
+[C solid_256x256.png] size=
+[C] CORPUS_TOTAL=0
+--- hubble C ---
+[C HUBBLE]         0.00 real         0.00 user         0.00 sys
+[C HUBBLE]              1196032  maximum resident set size
+=== D6-C arm B ===
+--- build B ---
+    Finished `release` profile [optimized] target(s) in 13.99s
+--- encode corpus B ---
+[B autumn_160x120_s3100006.png]   [mnf8] backend=7 flags=0x51 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B autumn_160x120_s3100006.png] encode [mnf8] /tmp/d6_B.mnf: 20960 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 8373 ms
+[B autumn_160x120_s3100006.png]         8.61 real         8.25 user         0.10 sys
+[B autumn_160x120_s3100006.png]            101810176  maximum resident set size
+[B autumn_160x120_s3100006.png]                    0  average shared memory size
+[B autumn_160x120_s3100006.png]                    0  average unshared data size
+[B autumn_160x120_s3100006.png]                    0  average unshared stack size
+[B autumn_160x120_s3100006.png]                 6527  page reclaims
+[B autumn_160x120_s3100006.png]                    2  page faults
+[B autumn_160x120_s3100006.png]                    0  block input operations
+[B autumn_160x120_s3100006.png]                    0  block output operations
+[B autumn_160x120_s3100006.png]                    0  messages sent
+[B autumn_160x120_s3100006.png]                    0  messages received
+[B autumn_160x120_s3100006.png]                    0  signals received
+[B autumn_160x120_s3100006.png]                    6  voluntary context switches
+[B autumn_160x120_s3100006.png]                 3395  involuntary context switches
+[B autumn_160x120_s3100006.png]         119932574521  instructions retired
+[B autumn_160x120_s3100006.png]          27417985129  cycles elapsed
+[B autumn_160x120_s3100006.png]             99647920  peak memory footprint
+[B autumn_160x120_s3100006.png] size=20960
+[B dusk_160x120_s3100003.png]   [mnf8] backend=7 flags=0x10 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B dusk_160x120_s3100003.png] encode [mnf8] /tmp/d6_B.mnf: 13532 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 8434 ms
+[B dusk_160x120_s3100003.png]         8.44 real         8.31 user         0.10 sys
+[B dusk_160x120_s3100003.png]            101646336  maximum resident set size
+[B dusk_160x120_s3100003.png]                    0  average shared memory size
+[B dusk_160x120_s3100003.png]                    0  average unshared data size
+[B dusk_160x120_s3100003.png]                    0  average unshared stack size
+[B dusk_160x120_s3100003.png]                11696  page reclaims
+[B dusk_160x120_s3100003.png]                    1  page faults
+[B dusk_160x120_s3100003.png]                    0  block input operations
+[B dusk_160x120_s3100003.png]                    0  block output operations
+[B dusk_160x120_s3100003.png]                    0  messages sent
+[B dusk_160x120_s3100003.png]                    0  messages received
+[B dusk_160x120_s3100003.png]                    0  signals received
+[B dusk_160x120_s3100003.png]                    2  voluntary context switches
+[B dusk_160x120_s3100003.png]                 3196  involuntary context switches
+[B dusk_160x120_s3100003.png]         121962029913  instructions retired
+[B dusk_160x120_s3100003.png]          27813700713  cycles elapsed
+[B dusk_160x120_s3100003.png]            100237720  peak memory footprint
+[B dusk_160x120_s3100003.png] size=13532
+[B dusk_224x160_s3100002.png]   [mnf8] backend=7 flags=0x51 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B dusk_224x160_s3100002.png] encode [mnf8] /tmp/d6_B.mnf: 41836 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 15708 ms
+[B dusk_224x160_s3100002.png]        15.71 real        15.48 user         0.18 sys
+[B dusk_224x160_s3100002.png]            102973440  maximum resident set size
+[B dusk_224x160_s3100002.png]                    0  average shared memory size
+[B dusk_224x160_s3100002.png]                    0  average unshared data size
+[B dusk_224x160_s3100002.png]                    0  average unshared stack size
+[B dusk_224x160_s3100002.png]                11783  page reclaims
+[B dusk_224x160_s3100002.png]                    1  page faults
+[B dusk_224x160_s3100002.png]                    0  block input operations
+[B dusk_224x160_s3100002.png]                    0  block output operations
+[B dusk_224x160_s3100002.png]                    0  messages sent
+[B dusk_224x160_s3100002.png]                    0  messages received
+[B dusk_224x160_s3100002.png]                    0  signals received
+[B dusk_224x160_s3100002.png]                    2  voluntary context switches
+[B dusk_224x160_s3100002.png]                 6421  involuntary context switches
+[B dusk_224x160_s3100002.png]         221954180426  instructions retired
+[B dusk_224x160_s3100002.png]          51806030081  cycles elapsed
+[B dusk_224x160_s3100002.png]            101237168  peak memory footprint
+[B dusk_224x160_s3100002.png] size=41836
+[B forest_192x144_s3100001.png]   [mnf8] backend=7 flags=0xa1 literal=108 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B forest_192x144_s3100001.png] encode [mnf8] /tmp/d6_B.mnf: 30380 bytes, 192x144 px, 108 tiles, atlas=true, geom=false, 11941 ms
+[B forest_192x144_s3100001.png]        11.95 real        11.77 user         0.13 sys
+[B forest_192x144_s3100001.png]            102055936  maximum resident set size
+[B forest_192x144_s3100001.png]                    0  average shared memory size
+[B forest_192x144_s3100001.png]                    0  average unshared data size
+[B forest_192x144_s3100001.png]                    0  average unshared stack size
+[B forest_192x144_s3100001.png]                 6532  page reclaims
+[B forest_192x144_s3100001.png]                   10  page faults
+[B forest_192x144_s3100001.png]                    0  block input operations
+[B forest_192x144_s3100001.png]                    0  block output operations
+[B forest_192x144_s3100001.png]                    0  messages sent
+[B forest_192x144_s3100001.png]                    0  messages received
+[B forest_192x144_s3100001.png]                    0  signals received
+[B forest_192x144_s3100001.png]                    3  voluntary context switches
+[B forest_192x144_s3100001.png]                 5077  involuntary context switches
+[B forest_192x144_s3100001.png]         171868061970  instructions retired
+[B forest_192x144_s3100001.png]            100860312  peak memory footprint
+[B forest_192x144_s3100001.png] size=30380
+[B forest_224x160_s3100005.png]   [mnf8] backend=7 flags=0x61 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B forest_224x160_s3100005.png] encode [mnf8] /tmp/d6_B.mnf: 36712 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 15531 ms
+[B forest_224x160_s3100005.png]        15.53 real        15.32 user         0.16 sys
+[B forest_224x160_s3100005.png]            102924288  maximum resident set size
+[B forest_224x160_s3100005.png]                    0  average shared memory size
+[B forest_224x160_s3100005.png]                    0  average unshared data size
+[B forest_224x160_s3100005.png]                    0  average unshared stack size
+[B forest_224x160_s3100005.png]                 6593  page reclaims
+[B forest_224x160_s3100005.png]                    2  page faults
+[B forest_224x160_s3100005.png]                    0  block input operations
+[B forest_224x160_s3100005.png]                    0  block output operations
+[B forest_224x160_s3100005.png]                    0  messages sent
+[B forest_224x160_s3100005.png]                    0  messages received
+[B forest_224x160_s3100005.png]                    0  signals received
+[B forest_224x160_s3100005.png]                    4  voluntary context switches
+[B forest_224x160_s3100005.png]                 6582  involuntary context switches
+[B forest_224x160_s3100005.png]         222917240419  instructions retired
+[B forest_224x160_s3100005.png]            101728664  peak memory footprint
+[B forest_224x160_s3100005.png] size=36712
+[B forest_224x160_s3100008.png]   [mnf8] backend=7 flags=0x10 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B forest_224x160_s3100008.png] encode [mnf8] /tmp/d6_B.mnf: 23300 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 16237 ms
+[B forest_224x160_s3100008.png]        16.24 real        15.75 user         0.28 sys
+[B forest_224x160_s3100008.png]            102596608  maximum resident set size
+[B forest_224x160_s3100008.png]                    0  average shared memory size
+[B forest_224x160_s3100008.png]                    0  average unshared data size
+[B forest_224x160_s3100008.png]                    0  average unshared stack size
+[B forest_224x160_s3100008.png]                38598  page reclaims
+[B forest_224x160_s3100008.png]                    2  page faults
+[B forest_224x160_s3100008.png]                    0  block input operations
+[B forest_224x160_s3100008.png]                    0  block output operations
+[B forest_224x160_s3100008.png]                    0  messages sent
+[B forest_224x160_s3100008.png]                    0  messages received
+[B forest_224x160_s3100008.png]                    0  signals received
+[B forest_224x160_s3100008.png]                    2  voluntary context switches
+[B forest_224x160_s3100008.png]                20349  involuntary context switches
+[B forest_224x160_s3100008.png]         228542941952  instructions retired
+[B forest_224x160_s3100008.png]          52923195884  cycles elapsed
+[B forest_224x160_s3100008.png]            101712304  peak memory footprint
+[B forest_224x160_s3100008.png] size=23300
+[B ocean_192x144_s3100007.png]   [mnf8] backend=7 flags=0x61 literal=108 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B ocean_192x144_s3100007.png] encode [mnf8] /tmp/d6_B.mnf: 29180 bytes, 192x144 px, 108 tiles, atlas=true, geom=false, 12551 ms
+[B ocean_192x144_s3100007.png]        12.55 real        12.06 user         0.25 sys
+[B ocean_192x144_s3100007.png]            102137856  maximum resident set size
+[B ocean_192x144_s3100007.png]                    0  average shared memory size
+[B ocean_192x144_s3100007.png]                    0  average unshared data size
+[B ocean_192x144_s3100007.png]                    0  average unshared stack size
+[B ocean_192x144_s3100007.png]                12481  page reclaims
+[B ocean_192x144_s3100007.png]                    4  page faults
+[B ocean_192x144_s3100007.png]                    0  block input operations
+[B ocean_192x144_s3100007.png]                    0  block output operations
+[B ocean_192x144_s3100007.png]                    0  messages sent
+[B ocean_192x144_s3100007.png]                    0  messages received
+[B ocean_192x144_s3100007.png]                    0  signals received
+[B ocean_192x144_s3100007.png]                    2  voluntary context switches
+[B ocean_192x144_s3100007.png]                26913  involuntary context switches
+[B ocean_192x144_s3100007.png]         173035402950  instructions retired
+[B ocean_192x144_s3100007.png]            100811184  peak memory footprint
+[B ocean_192x144_s3100007.png] size=29180
+[B sand_192x144_s3100004.png]   [mnf8] backend=7 flags=0x61 literal=108 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B sand_192x144_s3100004.png] encode [mnf8] /tmp/d6_B.mnf: 32408 bytes, 192x144 px, 108 tiles, atlas=true, geom=false, 12421 ms
+[B sand_192x144_s3100004.png]        12.42 real        11.96 user         0.23 sys
+[B sand_192x144_s3100004.png]            102088704  maximum resident set size
+[B sand_192x144_s3100004.png]                    0  average shared memory size
+[B sand_192x144_s3100004.png]                    0  average unshared data size
+[B sand_192x144_s3100004.png]                    0  average unshared stack size
+[B sand_192x144_s3100004.png]                 7283  page reclaims
+[B sand_192x144_s3100004.png]                    2  page faults
+[B sand_192x144_s3100004.png]                    0  block input operations
+[B sand_192x144_s3100004.png]                    0  block output operations
+[B sand_192x144_s3100004.png]                    0  messages sent
+[B sand_192x144_s3100004.png]                    0  messages received
+[B sand_192x144_s3100004.png]                    0  signals received
+[B sand_192x144_s3100004.png]                    2  voluntary context switches
+[B sand_192x144_s3100004.png]                24773  involuntary context switches
+[B sand_192x144_s3100004.png]         171885820396  instructions retired
+[B sand_192x144_s3100004.png]            101171632  peak memory footprint
+[B sand_192x144_s3100004.png] size=32408
+[B slate_160x120_s3100009.png]   [mnf8] backend=7 flags=0xa1 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B slate_160x120_s3100009.png] encode [mnf8] /tmp/d6_B.mnf: 19948 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 8827 ms
+[B slate_160x120_s3100009.png]         8.83 real         8.39 user         0.22 sys
+[B slate_160x120_s3100009.png]            101498880  maximum resident set size
+[B slate_160x120_s3100009.png]                    0  average shared memory size
+[B slate_160x120_s3100009.png]                    0  average unshared data size
+[B slate_160x120_s3100009.png]                    0  average unshared stack size
+[B slate_160x120_s3100009.png]                27946  page reclaims
+[B slate_160x120_s3100009.png]                    4  page faults
+[B slate_160x120_s3100009.png]                    0  block input operations
+[B slate_160x120_s3100009.png]                    0  block output operations
+[B slate_160x120_s3100009.png]                    0  messages sent
+[B slate_160x120_s3100009.png]                    0  messages received
+[B slate_160x120_s3100009.png]                    0  signals received
+[B slate_160x120_s3100009.png]                    2  voluntary context switches
+[B slate_160x120_s3100009.png]                21116  involuntary context switches
+[B slate_160x120_s3100009.png]         120758074948  instructions retired
+[B slate_160x120_s3100009.png]          28332858408  cycles elapsed
+[B slate_160x120_s3100009.png]            100336048  peak memory footprint
+[B slate_160x120_s3100009.png] size=19948
+[B terrain_160x120_s3100000.png]   [mnf8] backend=7 flags=0x10 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B terrain_160x120_s3100000.png] encode [mnf8] /tmp/d6_B.mnf: 13236 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 8830 ms
+[B terrain_160x120_s3100000.png]         8.83 real         8.45 user         0.17 sys
+[B terrain_160x120_s3100000.png]            101498880  maximum resident set size
+[B terrain_160x120_s3100000.png]                    0  average shared memory size
+[B terrain_160x120_s3100000.png]                    0  average unshared data size
+[B terrain_160x120_s3100000.png]                    0  average unshared stack size
+[B terrain_160x120_s3100000.png]                17605  page reclaims
+[B terrain_160x120_s3100000.png]                    2  page faults
+[B terrain_160x120_s3100000.png]                    0  block input operations
+[B terrain_160x120_s3100000.png]                    0  block output operations
+[B terrain_160x120_s3100000.png]                    0  messages sent
+[B terrain_160x120_s3100000.png]                    0  messages received
+[B terrain_160x120_s3100000.png]                    0  signals received
+[B terrain_160x120_s3100000.png]                    2  voluntary context switches
+[B terrain_160x120_s3100000.png]                17966  involuntary context switches
+[B terrain_160x120_s3100000.png]         122231382393  instructions retired
+[B terrain_160x120_s3100000.png]          28400186634  cycles elapsed
+[B terrain_160x120_s3100000.png]            100352408  peak memory footprint
+[B terrain_160x120_s3100000.png] size=13236
+[B document_200x280.png]   [mnf8] backend=7 flags=0xe0 literal=234 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B document_200x280.png] encode [mnf8] /tmp/d6_B.mnf: 480 bytes, 200x280 px, 234 tiles, atlas=true, geom=false, 16947 ms
+[B document_200x280.png]        16.95 real        16.30 user         0.32 sys
+[B document_200x280.png]            102039552  maximum resident set size
+[B document_200x280.png]                    0  average shared memory size
+[B document_200x280.png]                    0  average unshared data size
+[B document_200x280.png]                    0  average unshared stack size
+[B document_200x280.png]                23152  page reclaims
+[B document_200x280.png]                    2  page faults
+[B document_200x280.png]                    0  block input operations
+[B document_200x280.png]                    0  block output operations
+[B document_200x280.png]                    0  messages sent
+[B document_200x280.png]                    0  messages received
+[B document_200x280.png]                    0  signals received
+[B document_200x280.png]                    3  voluntary context switches
+[B document_200x280.png]                34232  involuntary context switches
+[B document_200x280.png]         266198466570  instructions retired
+[B document_200x280.png]          54658665368  cycles elapsed
+[B document_200x280.png]            101581232  peak memory footprint
+[B document_200x280.png] size=480
+[B autumn_192x144_s900001.png]   [mnf8] backend=7 flags=0x10 literal=108 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B autumn_192x144_s900001.png] encode [mnf8] /tmp/d6_B.mnf: 18464 bytes, 192x144 px, 108 tiles, atlas=true, geom=false, 12672 ms
+[B autumn_192x144_s900001.png]        12.68 real        12.22 user         0.22 sys
+[B autumn_192x144_s900001.png]            101761024  maximum resident set size
+[B autumn_192x144_s900001.png]                    0  average shared memory size
+[B autumn_192x144_s900001.png]                    0  average unshared data size
+[B autumn_192x144_s900001.png]                    0  average unshared stack size
+[B autumn_192x144_s900001.png]                12623  page reclaims
+[B autumn_192x144_s900001.png]                    2  page faults
+[B autumn_192x144_s900001.png]                    0  block input operations
+[B autumn_192x144_s900001.png]                    0  block output operations
+[B autumn_192x144_s900001.png]                    0  messages sent
+[B autumn_192x144_s900001.png]                    0  messages received
+[B autumn_192x144_s900001.png]                    0  signals received
+[B autumn_192x144_s900001.png]                    2  voluntary context switches
+[B autumn_192x144_s900001.png]                22761  involuntary context switches
+[B autumn_192x144_s900001.png]         175874304447  instructions retired
+[B autumn_192x144_s900001.png]          40913762833  cycles elapsed
+[B autumn_192x144_s900001.png]            100811184  peak memory footprint
+[B autumn_192x144_s900001.png] size=18464
+[B dusk_160x120_s900003.png]   [mnf8] backend=7 flags=0x51 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B dusk_160x120_s900003.png] encode [mnf8] /tmp/d6_B.mnf: 18972 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 9061 ms
+[B dusk_160x120_s900003.png]         9.06 real         8.87 user         0.13 sys
+[B dusk_160x120_s900003.png]            101400576  maximum resident set size
+[B dusk_160x120_s900003.png]                    0  average shared memory size
+[B dusk_160x120_s900003.png]                    0  average unshared data size
+[B dusk_160x120_s900003.png]                    0  average unshared stack size
+[B dusk_160x120_s900003.png]                12405  page reclaims
+[B dusk_160x120_s900003.png]                    2  page faults
+[B dusk_160x120_s900003.png]                    0  block input operations
+[B dusk_160x120_s900003.png]                    0  block output operations
+[B dusk_160x120_s900003.png]                    0  messages sent
+[B dusk_160x120_s900003.png]                    0  messages received
+[B dusk_160x120_s900003.png]                    0  signals received
+[B dusk_160x120_s900003.png]                    4  voluntary context switches
+[B dusk_160x120_s900003.png]                 8042  involuntary context switches
+[B dusk_160x120_s900003.png]         120607788951  instructions retired
+[B dusk_160x120_s900003.png]            100417968  peak memory footprint
+[B dusk_160x120_s900003.png] size=18972
+[B forest_224x160_s900002.png]   [mnf8] backend=7 flags=0x61 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B forest_224x160_s900002.png] encode [mnf8] /tmp/d6_B.mnf: 40692 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 15523 ms
+[B forest_224x160_s900002.png]        15.53 real        15.27 user         0.19 sys
+[B forest_224x160_s900002.png]            102531072  maximum resident set size
+[B forest_224x160_s900002.png]                    0  average shared memory size
+[B forest_224x160_s900002.png]                    0  average unshared data size
+[B forest_224x160_s900002.png]                    0  average unshared stack size
+[B forest_224x160_s900002.png]                 7336  page reclaims
+[B forest_224x160_s900002.png]                    2  page faults
+[B forest_224x160_s900002.png]                    0  block input operations
+[B forest_224x160_s900002.png]                    0  block output operations
+[B forest_224x160_s900002.png]                    0  messages sent
+[B forest_224x160_s900002.png]                    0  messages received
+[B forest_224x160_s900002.png]                    0  signals received
+[B forest_224x160_s900002.png]                    2  voluntary context switches
+[B forest_224x160_s900002.png]                 8158  involuntary context switches
+[B forest_224x160_s900002.png]         222115944156  instructions retired
+[B forest_224x160_s900002.png]          51074080105  cycles elapsed
+[B forest_224x160_s900002.png]            101630384  peak memory footprint
+[B forest_224x160_s900002.png] size=40692
+[B ocean_192x144_s900007.png]   [mnf8] backend=7 flags=0x51 literal=108 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B ocean_192x144_s900007.png] encode [mnf8] /tmp/d6_B.mnf: 30896 bytes, 192x144 px, 108 tiles, atlas=true, geom=false, 12112 ms
+[B ocean_192x144_s900007.png]        12.11 real        11.91 user         0.15 sys
+[B ocean_192x144_s900007.png]            101941248  maximum resident set size
+[B ocean_192x144_s900007.png]                    0  average shared memory size
+[B ocean_192x144_s900007.png]                    0  average unshared data size
+[B ocean_192x144_s900007.png]                    0  average unshared stack size
+[B ocean_192x144_s900007.png]                 7644  page reclaims
+[B ocean_192x144_s900007.png]                    4  page faults
+[B ocean_192x144_s900007.png]                    0  block input operations
+[B ocean_192x144_s900007.png]                    0  block output operations
+[B ocean_192x144_s900007.png]                    0  messages sent
+[B ocean_192x144_s900007.png]                    0  messages received
+[B ocean_192x144_s900007.png]                    0  signals received
+[B ocean_192x144_s900007.png]                    2  voluntary context switches
+[B ocean_192x144_s900007.png]                 6925  involuntary context switches
+[B ocean_192x144_s900007.png]         172375088528  instructions retired
+[B ocean_192x144_s900007.png]          39853057097  cycles elapsed
+[B ocean_192x144_s900007.png]            100647344  peak memory footprint
+[B ocean_192x144_s900007.png] size=30896
+[B sand_160x120_s900000.png]   [mnf8] backend=7 flags=0xe1 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B sand_160x120_s900000.png] encode [mnf8] /tmp/d6_B.mnf: 22520 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 8402 ms
+[B sand_160x120_s900000.png]         8.41 real         8.26 user         0.11 sys
+[B sand_160x120_s900000.png]            102039552  maximum resident set size
+[B sand_160x120_s900000.png]                    0  average shared memory size
+[B sand_160x120_s900000.png]                    0  average unshared data size
+[B sand_160x120_s900000.png]                    0  average unshared stack size
+[B sand_160x120_s900000.png]                11717  page reclaims
+[B sand_160x120_s900000.png]                    2  page faults
+[B sand_160x120_s900000.png]                    0  block input operations
+[B sand_160x120_s900000.png]                    0  block output operations
+[B sand_160x120_s900000.png]                    0  messages sent
+[B sand_160x120_s900000.png]                    0  messages received
+[B sand_160x120_s900000.png]                    0  signals received
+[B sand_160x120_s900000.png]                    2  voluntary context switches
+[B sand_160x120_s900000.png]                 3957  involuntary context switches
+[B sand_160x120_s900000.png]         119964006652  instructions retired
+[B sand_160x120_s900000.png]          27683265890  cycles elapsed
+[B sand_160x120_s900000.png]            100106672  peak memory footprint
+[B sand_160x120_s900000.png] size=22520
+[B slate_192x144_s900004.png]   [mnf8] backend=7 flags=0xd1 literal=108 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B slate_192x144_s900004.png] encode [mnf8] /tmp/d6_B.mnf: 32392 bytes, 192x144 px, 108 tiles, atlas=true, geom=false, 11995 ms
+[B slate_192x144_s900004.png]        12.00 real        11.80 user         0.14 sys
+[B slate_192x144_s900004.png]            101908480  maximum resident set size
+[B slate_192x144_s900004.png]                    0  average shared memory size
+[B slate_192x144_s900004.png]                    0  average unshared data size
+[B slate_192x144_s900004.png]                    0  average unshared stack size
+[B slate_192x144_s900004.png]                 7263  page reclaims
+[B slate_192x144_s900004.png]                    2  page faults
+[B slate_192x144_s900004.png]                    0  block input operations
+[B slate_192x144_s900004.png]                    0  block output operations
+[B slate_192x144_s900004.png]                    0  messages sent
+[B slate_192x144_s900004.png]                    0  messages received
+[B slate_192x144_s900004.png]                    0  signals received
+[B slate_192x144_s900004.png]                    2  voluntary context switches
+[B slate_192x144_s900004.png]                 6240  involuntary context switches
+[B slate_192x144_s900004.png]         171967565040  instructions retired
+[B slate_192x144_s900004.png]            101040560  peak memory footprint
+[B slate_192x144_s900004.png] size=32392
+[B slate_224x160_s900008.png]   [mnf8] backend=7 flags=0x51 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B slate_224x160_s900008.png] encode [mnf8] /tmp/d6_B.mnf: 45212 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 16186 ms
+[B slate_224x160_s900008.png]        16.19 real        15.52 user         0.33 sys
+[B slate_224x160_s900008.png]            102350848  maximum resident set size
+[B slate_224x160_s900008.png]                    0  average shared memory size
+[B slate_224x160_s900008.png]                    0  average unshared data size
+[B slate_224x160_s900008.png]                    0  average unshared stack size
+[B slate_224x160_s900008.png]                27037  page reclaims
+[B slate_224x160_s900008.png]                    2  page faults
+[B slate_224x160_s900008.png]                    0  block input operations
+[B slate_224x160_s900008.png]                    0  block output operations
+[B slate_224x160_s900008.png]                    0  messages sent
+[B slate_224x160_s900008.png]                    0  messages received
+[B slate_224x160_s900008.png]                    0  signals received
+[B slate_224x160_s900008.png]                    2  voluntary context switches
+[B slate_224x160_s900008.png]                30592  involuntary context switches
+[B slate_224x160_s900008.png]         221606978837  instructions retired
+[B slate_224x160_s900008.png]          52033621087  cycles elapsed
+[B slate_224x160_s900008.png]            101335472  peak memory footprint
+[B slate_224x160_s900008.png] size=45212
+[B stone_160x120_s900006.png]   [mnf8] backend=7 flags=0xd1 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B stone_160x120_s900006.png] encode [mnf8] /tmp/d6_B.mnf: 12328 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 8499 ms
+[B stone_160x120_s900006.png]         8.50 real         8.38 user         0.09 sys
+[B stone_160x120_s900006.png]            101629952  maximum resident set size
+[B stone_160x120_s900006.png]                    0  average shared memory size
+[B stone_160x120_s900006.png]                    0  average unshared data size
+[B stone_160x120_s900006.png]                    0  average unshared stack size
+[B stone_160x120_s900006.png]                 6674  page reclaims
+[B stone_160x120_s900006.png]                    4  page faults
+[B stone_160x120_s900006.png]                    0  block input operations
+[B stone_160x120_s900006.png]                    0  block output operations
+[B stone_160x120_s900006.png]                    0  messages sent
+[B stone_160x120_s900006.png]                    0  messages received
+[B stone_160x120_s900006.png]                    0  signals received
+[B stone_160x120_s900006.png]                    3  voluntary context switches
+[B stone_160x120_s900006.png]                 3659  involuntary context switches
+[B stone_160x120_s900006.png]         122365585137  instructions retired
+[B stone_160x120_s900006.png]             99877296  peak memory footprint
+[B stone_160x120_s900006.png] size=12328
+[B terrain_160x120_s900009.png]   [mnf8] backend=7 flags=0x61 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B terrain_160x120_s900009.png] encode [mnf8] /tmp/d6_B.mnf: 21152 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 8454 ms
+[B terrain_160x120_s900009.png]         8.46 real         8.32 user         0.11 sys
+[B terrain_160x120_s900009.png]            101695488  maximum resident set size
+[B terrain_160x120_s900009.png]                    0  average shared memory size
+[B terrain_160x120_s900009.png]                    0  average unshared data size
+[B terrain_160x120_s900009.png]                    0  average unshared stack size
+[B terrain_160x120_s900009.png]                11708  page reclaims
+[B terrain_160x120_s900009.png]                    2  page faults
+[B terrain_160x120_s900009.png]                    0  block input operations
+[B terrain_160x120_s900009.png]                    0  block output operations
+[B terrain_160x120_s900009.png]                    0  messages sent
+[B terrain_160x120_s900009.png]                    0  messages received
+[B terrain_160x120_s900009.png]                    0  signals received
+[B terrain_160x120_s900009.png]                    2  voluntary context switches
+[B terrain_160x120_s900009.png]                 3669  involuntary context switches
+[B terrain_160x120_s900009.png]         120255117042  instructions retired
+[B terrain_160x120_s900009.png]          27843222691  cycles elapsed
+[B terrain_160x120_s900009.png]            100565400  peak memory footprint
+[B terrain_160x120_s900009.png] size=21152
+[B terrain_224x160_s900005.png]   [mnf8] backend=7 flags=0x51 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B terrain_224x160_s900005.png] encode [mnf8] /tmp/d6_B.mnf: 36884 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 16570 ms
+[B terrain_224x160_s900005.png]        16.57 real        15.65 user         0.34 sys
+[B terrain_224x160_s900005.png]            101629952  maximum resident set size
+[B terrain_224x160_s900005.png]                    0  average shared memory size
+[B terrain_224x160_s900005.png]                    0  average unshared data size
+[B terrain_224x160_s900005.png]                    0  average unshared stack size
+[B terrain_224x160_s900005.png]                18507  page reclaims
+[B terrain_224x160_s900005.png]                    2  page faults
+[B terrain_224x160_s900005.png]                    0  block input operations
+[B terrain_224x160_s900005.png]                    0  block output operations
+[B terrain_224x160_s900005.png]                    0  messages sent
+[B terrain_224x160_s900005.png]                    0  messages received
+[B terrain_224x160_s900005.png]                    0  signals received
+[B terrain_224x160_s900005.png]                    2  voluntary context switches
+[B terrain_224x160_s900005.png]                39020  involuntary context switches
+[B terrain_224x160_s900005.png]         223995384505  instructions retired
+[B terrain_224x160_s900005.png]            101761456  peak memory footprint
+[B terrain_224x160_s900005.png] size=36884
+[B screenshot_640x400.png]   [mnf8] backend=7 flags=0xd0 literal=1000 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B screenshot_640x400.png] encode [mnf8] /tmp/d6_B.mnf: 472 bytes, 640x400 px, 1000 tiles, atlas=true, geom=false, 70949 ms
+[B screenshot_640x400.png]        70.96 real        69.36 user         0.70 sys
+[B screenshot_640x400.png]            106905600  maximum resident set size
+[B screenshot_640x400.png]                    0  average shared memory size
+[B screenshot_640x400.png]                    0  average unshared data size
+[B screenshot_640x400.png]                    0  average unshared stack size
+[B screenshot_640x400.png]               143648  page reclaims
+[B screenshot_640x400.png]                    4  page faults
+[B screenshot_640x400.png]                    0  block input operations
+[B screenshot_640x400.png]                    0  block output operations
+[B screenshot_640x400.png]                    0  messages sent
+[B screenshot_640x400.png]                    0  messages received
+[B screenshot_640x400.png]                    0  signals received
+[B screenshot_640x400.png]                    5  voluntary context switches
+[B screenshot_640x400.png]                77751  involuntary context switches
+[B screenshot_640x400.png]        1146989548250  instructions retired
+[B screenshot_640x400.png]         231187790478  cycles elapsed
+[B screenshot_640x400.png]            107512240  peak memory footprint
+[B screenshot_640x400.png] size=472
+[B gradient_320x240.png]   [mnf8] backend=1 flags=0x20 literal=300 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B gradient_320x240.png] encode [mnf8] /tmp/d6_B.mnf: 254 bytes, 320x240 px, 300 tiles, atlas=true, geom=false, 26632 ms
+[B gradient_320x240.png]        26.64 real        25.84 user         0.44 sys
+[B gradient_320x240.png]            102875136  maximum resident set size
+[B gradient_320x240.png]                    0  average shared memory size
+[B gradient_320x240.png]                    0  average unshared data size
+[B gradient_320x240.png]                    0  average unshared stack size
+[B gradient_320x240.png]                27130  page reclaims
+[B gradient_320x240.png]                   18  page faults
+[B gradient_320x240.png]                    0  block input operations
+[B gradient_320x240.png]                    0  block output operations
+[B gradient_320x240.png]                    0  messages sent
+[B gradient_320x240.png]                    0  messages received
+[B gradient_320x240.png]                    0  signals received
+[B gradient_320x240.png]                    3  voluntary context switches
+[B gradient_320x240.png]                29399  involuntary context switches
+[B gradient_320x240.png]         370820101343  instructions retired
+[B gradient_320x240.png]          86726396152  cycles elapsed
+[B gradient_320x240.png]            103170480  peak memory footprint
+[B gradient_320x240.png] size=254
+[B blob_224x160.png]   [mnf8] backend=1 flags=0x21 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B blob_224x160.png] encode [mnf8] /tmp/d6_B.mnf: 5986 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 14270 ms
+[B blob_224x160.png]        14.27 real        13.87 user         0.21 sys
+[B blob_224x160.png]            102662144  maximum resident set size
+[B blob_224x160.png]                    0  average shared memory size
+[B blob_224x160.png]                    0  average unshared data size
+[B blob_224x160.png]                    0  average unshared stack size
+[B blob_224x160.png]                17804  page reclaims
+[B blob_224x160.png]                    4  page faults
+[B blob_224x160.png]                    0  block input operations
+[B blob_224x160.png]                    0  block output operations
+[B blob_224x160.png]                    0  messages sent
+[B blob_224x160.png]                    0  messages received
+[B blob_224x160.png]                    0  signals received
+[B blob_224x160.png]                    2  voluntary context switches
+[B blob_224x160.png]                14562  involuntary context switches
+[B blob_224x160.png]         199271796593  instructions retired
+[B blob_224x160.png]          46487837772  cycles elapsed
+[B blob_224x160.png]            101614000  peak memory footprint
+[B blob_224x160.png] size=5986
+[B blocks_192x128.png]   [mnf8] backend=1 flags=0x0c literal=391 ycocg=0 exact=639 geom=0 color=0 (nontrivial transforms: 0)
+[B blocks_192x128.png] encode [mnf8] /tmp/d6_B.mnf: 1277 bytes, 192x128 px, 96 tiles, atlas=true, geom=false, 8812 ms
+[B blocks_192x128.png]         8.82 real         8.53 user         0.19 sys
+[B blocks_192x128.png]            101138432  maximum resident set size
+[B blocks_192x128.png]                    0  average shared memory size
+[B blocks_192x128.png]                    0  average unshared data size
+[B blocks_192x128.png]                    0  average unshared stack size
+[B blocks_192x128.png]                38237  page reclaims
+[B blocks_192x128.png]                   10  page faults
+[B blocks_192x128.png]                    0  block input operations
+[B blocks_192x128.png]                    0  block output operations
+[B blocks_192x128.png]                    0  messages sent
+[B blocks_192x128.png]                    0  messages received
+[B blocks_192x128.png]                    0  signals received
+[B blocks_192x128.png]                    2  voluntary context switches
+[B blocks_192x128.png]                 7285  involuntary context switches
+[B blocks_192x128.png]         128374341002  instructions retired
+[B blocks_192x128.png]          28792065641  cycles elapsed
+[B blocks_192x128.png]            100041136  peak memory footprint
+[B blocks_192x128.png] size=1277
+[B plaid_192.png]   [mnf8] backend=7 flags=0x11 literal=144 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B plaid_192.png] encode [mnf8] /tmp/d6_B.mnf: 20440 bytes, 192x192 px, 144 tiles, atlas=true, geom=false, 17128 ms
+[B plaid_192.png]        17.13 real        16.44 user         0.29 sys
+[B plaid_192.png]            102137856  maximum resident set size
+[B plaid_192.png]                    0  average shared memory size
+[B plaid_192.png]                    0  average unshared data size
+[B plaid_192.png]                    0  average unshared stack size
+[B plaid_192.png]                 7946  page reclaims
+[B plaid_192.png]                    2  page faults
+[B plaid_192.png]                    0  block input operations
+[B plaid_192.png]                    0  block output operations
+[B plaid_192.png]                    0  messages sent
+[B plaid_192.png]                    0  messages received
+[B plaid_192.png]                    0  signals received
+[B plaid_192.png]                    2  voluntary context switches
+[B plaid_192.png]                29341  involuntary context switches
+[B plaid_192.png]         233067371171  instructions retired
+[B plaid_192.png]            102089136  peak memory footprint
+[B plaid_192.png] size=20440
+[B poster_208x144.png]   [mnf8] backend=1 flags=0x60 literal=117 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B poster_208x144.png] encode [mnf8] /tmp/d6_B.mnf: 1141 bytes, 208x144 px, 117 tiles, atlas=true, geom=false, 10098 ms
+[B poster_208x144.png]        10.10 real         9.98 user         0.08 sys
+[B poster_208x144.png]            101007360  maximum resident set size
+[B poster_208x144.png]                    0  average shared memory size
+[B poster_208x144.png]                    0  average unshared data size
+[B poster_208x144.png]                    0  average unshared stack size
+[B poster_208x144.png]                17513  page reclaims
+[B poster_208x144.png]                    4  page faults
+[B poster_208x144.png]                    0  block input operations
+[B poster_208x144.png]                    0  block output operations
+[B poster_208x144.png]                    0  messages sent
+[B poster_208x144.png]                    0  messages received
+[B poster_208x144.png]                    0  signals received
+[B poster_208x144.png]                    1  voluntary context switches
+[B poster_208x144.png]                 5090  involuntary context switches
+[B poster_208x144.png]         147766098637  instructions retired
+[B poster_208x144.png]             99762608  peak memory footprint
+[B poster_208x144.png] size=1141
+[B noise_256x256.png]   [mnf8] backend=1 flags=0x00 literal=256 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B noise_256x256.png] encode [mnf8] /tmp/d6_B.mnf: 196912 bytes, 256x256 px, 256 tiles, atlas=true, geom=false, 29391 ms
+[B noise_256x256.png]        29.40 real        28.85 user         0.38 sys
+[B noise_256x256.png]            107331584  maximum resident set size
+[B noise_256x256.png]                    0  average shared memory size
+[B noise_256x256.png]                    0  average unshared data size
+[B noise_256x256.png]                    0  average unshared stack size
+[B noise_256x256.png]                20240  page reclaims
+[B noise_256x256.png]                    2  page faults
+[B noise_256x256.png]                    0  block input operations
+[B noise_256x256.png]                    0  block output operations
+[B noise_256x256.png]                    0  messages sent
+[B noise_256x256.png]                    0  messages received
+[B noise_256x256.png]                    0  signals received
+[B noise_256x256.png]                    4  voluntary context switches
+[B noise_256x256.png]                16599  involuntary context switches
+[B noise_256x256.png]         394369285885  instructions retired
+[B noise_256x256.png]          96489613794  cycles elapsed
+[B noise_256x256.png]            112329160  peak memory footprint
+[B noise_256x256.png] size=196912
+[B repeat_256x256.png]   [mnf8] backend=1 flags=0x21 literal=256 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B repeat_256x256.png] encode [mnf8] /tmp/d6_B.mnf: 301 bytes, 256x256 px, 256 tiles, atlas=true, geom=false, 19235 ms
+[B repeat_256x256.png]        19.24 real        18.98 user         0.11 sys
+[B repeat_256x256.png]             93716480  maximum resident set size
+[B repeat_256x256.png]                    0  average shared memory size
+[B repeat_256x256.png]                    0  average unshared data size
+[B repeat_256x256.png]                    0  average unshared stack size
+[B repeat_256x256.png]                 6278  page reclaims
+[B repeat_256x256.png]                    4  page faults
+[B repeat_256x256.png]                    0  block input operations
+[B repeat_256x256.png]                    0  block output operations
+[B repeat_256x256.png]                    0  messages sent
+[B repeat_256x256.png]                    0  messages received
+[B repeat_256x256.png]                    0  signals received
+[B repeat_256x256.png]                    1  voluntary context switches
+[B repeat_256x256.png]                14873  involuntary context switches
+[B repeat_256x256.png]         293278815538  instructions retired
+[B repeat_256x256.png]             92357016  peak memory footprint
+[B repeat_256x256.png] size=301
+[B solid_256x256.png]   [mnf8] backend=1 flags=0x04 literal=256 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B solid_256x256.png]   [mnf9] exact rule discovered: 36 B (mnf8 arm 62 B)
+[B solid_256x256.png] encode [mnf8] /tmp/d6_B.mnf: 36 bytes, 256x256 px, 256 tiles, atlas=true, geom=false, 18262 ms
+[B solid_256x256.png]        18.27 real        18.05 user         0.10 sys
+[B solid_256x256.png]             91832320  maximum resident set size
+[B solid_256x256.png]                    0  average shared memory size
+[B solid_256x256.png]                    0  average unshared data size
+[B solid_256x256.png]                    0  average unshared stack size
+[B solid_256x256.png]                16410  page reclaims
+[B solid_256x256.png]                    4  page faults
+[B solid_256x256.png]                    0  block input operations
+[B solid_256x256.png]                    0  block output operations
+[B solid_256x256.png]                    0  messages sent
+[B solid_256x256.png]                    0  messages received
+[B solid_256x256.png]                    0  signals received
+[B solid_256x256.png]                    1  voluntary context switches
+[B solid_256x256.png]                10439  involuntary context switches
+[B solid_256x256.png]         292914703376  instructions retired
+[B solid_256x256.png]          59934583976  cycles elapsed
+[B solid_256x256.png]             90063256  peak memory footprint
+[B solid_256x256.png] size=36
+[B] CORPUS_TOTAL=768303
+--- hubble B ---
+[B HUBBLE]   [mnf8] backend=7 flags=0x45 literal=653 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[B HUBBLE] encode [mnf8] /tmp/d6_B_hb.mnf: 1438848 bytes, 1000x872 px, 3465 tiles, atlas=true, geom=false, 386365 ms
+[B HUBBLE]       386.38 real       377.79 user         6.27 sys
+[B HUBBLE]            130875392  maximum resident set size
+[B HUBBLE] sha16=b2a8a10915239c99
+=== D6-C arm A ===
+--- build A ---
+    Finished `release` profile [optimized] target(s) in 14.35s
+--- encode corpus A ---
+[A autumn_160x120_s3100006.png]   [mnf8] backend=7 flags=0x51 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A autumn_160x120_s3100006.png] encode [mnf8] /tmp/d6_A.mnf: 20960 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 9679 ms
+[A autumn_160x120_s3100006.png]         9.89 real         9.50 user         0.12 sys
+[A autumn_160x120_s3100006.png]            101482496  maximum resident set size
+[A autumn_160x120_s3100006.png]                    0  average shared memory size
+[A autumn_160x120_s3100006.png]                    0  average unshared data size
+[A autumn_160x120_s3100006.png]                    0  average unshared stack size
+[A autumn_160x120_s3100006.png]                12435  page reclaims
+[A autumn_160x120_s3100006.png]                    3  page faults
+[A autumn_160x120_s3100006.png]                    0  block input operations
+[A autumn_160x120_s3100006.png]                    0  block output operations
+[A autumn_160x120_s3100006.png]                    0  messages sent
+[A autumn_160x120_s3100006.png]                    0  messages received
+[A autumn_160x120_s3100006.png]                    0  signals received
+[A autumn_160x120_s3100006.png]                    2  voluntary context switches
+[A autumn_160x120_s3100006.png]                 6718  involuntary context switches
+[A autumn_160x120_s3100006.png]         136633096040  instructions retired
+[A autumn_160x120_s3100006.png]          31558248295  cycles elapsed
+[A autumn_160x120_s3100006.png]            100434352  peak memory footprint
+[A autumn_160x120_s3100006.png] size=20960
+[A dusk_160x120_s3100003.png]   [mnf8] backend=7 flags=0x10 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A dusk_160x120_s3100003.png] encode [mnf8] /tmp/d6_A.mnf: 13532 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 9541 ms
+[A dusk_160x120_s3100003.png]         9.55 real         9.38 user         0.11 sys
+[A dusk_160x120_s3100003.png]            101777408  maximum resident set size
+[A dusk_160x120_s3100003.png]                    0  average shared memory size
+[A dusk_160x120_s3100003.png]                    0  average unshared data size
+[A dusk_160x120_s3100003.png]                    0  average unshared stack size
+[A dusk_160x120_s3100003.png]                 6523  page reclaims
+[A dusk_160x120_s3100003.png]                    2  page faults
+[A dusk_160x120_s3100003.png]                    0  block input operations
+[A dusk_160x120_s3100003.png]                    0  block output operations
+[A dusk_160x120_s3100003.png]                    0  messages sent
+[A dusk_160x120_s3100003.png]                    0  messages received
+[A dusk_160x120_s3100003.png]                    0  signals received
+[A dusk_160x120_s3100003.png]                    2  voluntary context switches
+[A dusk_160x120_s3100003.png]                 5526  involuntary context switches
+[A dusk_160x120_s3100003.png]         138944716281  instructions retired
+[A dusk_160x120_s3100003.png]            100581808  peak memory footprint
+[A dusk_160x120_s3100003.png] size=13532
+[A dusk_224x160_s3100002.png]   [mnf8] backend=7 flags=0x51 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A dusk_224x160_s3100002.png] encode [mnf8] /tmp/d6_A.mnf: 41836 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 17817 ms
+[A dusk_224x160_s3100002.png]        17.82 real        17.56 user         0.19 sys
+[A dusk_224x160_s3100002.png]            103055360  maximum resident set size
+[A dusk_224x160_s3100002.png]                    0  average shared memory size
+[A dusk_224x160_s3100002.png]                    0  average unshared data size
+[A dusk_224x160_s3100002.png]                    0  average unshared stack size
+[A dusk_224x160_s3100002.png]                 7104  page reclaims
+[A dusk_224x160_s3100002.png]                    2  page faults
+[A dusk_224x160_s3100002.png]                    0  block input operations
+[A dusk_224x160_s3100002.png]                    0  block output operations
+[A dusk_224x160_s3100002.png]                    0  messages sent
+[A dusk_224x160_s3100002.png]                    0  messages received
+[A dusk_224x160_s3100002.png]                    0  signals received
+[A dusk_224x160_s3100002.png]                    2  voluntary context switches
+[A dusk_224x160_s3100002.png]                 8643  involuntary context switches
+[A dusk_224x160_s3100002.png]         254468306838  instructions retired
+[A dusk_224x160_s3100002.png]          58635816184  cycles elapsed
+[A dusk_224x160_s3100002.png]            101941680  peak memory footprint
+[A dusk_224x160_s3100002.png] size=41836
+[A forest_192x144_s3100001.png]   [mnf8] backend=7 flags=0xa1 literal=108 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A forest_192x144_s3100001.png] encode [mnf8] /tmp/d6_A.mnf: 30380 bytes, 192x144 px, 108 tiles, atlas=true, geom=false, 13742 ms
+[A forest_192x144_s3100001.png]        13.75 real        13.54 user         0.14 sys
+[A forest_192x144_s3100001.png]            101711872  maximum resident set size
+[A forest_192x144_s3100001.png]                    0  average shared memory size
+[A forest_192x144_s3100001.png]                    0  average unshared data size
+[A forest_192x144_s3100001.png]                    0  average unshared stack size
+[A forest_192x144_s3100001.png]                 7260  page reclaims
+[A forest_192x144_s3100001.png]                    4  page faults
+[A forest_192x144_s3100001.png]                    0  block input operations
+[A forest_192x144_s3100001.png]                    0  block output operations
+[A forest_192x144_s3100001.png]                    0  messages sent
+[A forest_192x144_s3100001.png]                    0  messages received
+[A forest_192x144_s3100001.png]                    0  signals received
+[A forest_192x144_s3100001.png]                    2  voluntary context switches
+[A forest_192x144_s3100001.png]                 7391  involuntary context switches
+[A forest_192x144_s3100001.png]         197135441339  instructions retired
+[A forest_192x144_s3100001.png]          45265315898  cycles elapsed
+[A forest_192x144_s3100001.png]            100876720  peak memory footprint
+[A forest_192x144_s3100001.png] size=30380
+[A forest_224x160_s3100005.png]   [mnf8] backend=7 flags=0x61 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A forest_224x160_s3100005.png] encode [mnf8] /tmp/d6_A.mnf: 36712 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 18622 ms
+[A forest_224x160_s3100005.png]        18.63 real        18.38 user         0.19 sys
+[A forest_224x160_s3100005.png]            102416384  maximum resident set size
+[A forest_224x160_s3100005.png]                    0  average shared memory size
+[A forest_224x160_s3100005.png]                    0  average unshared data size
+[A forest_224x160_s3100005.png]                    0  average unshared stack size
+[A forest_224x160_s3100005.png]                12528  page reclaims
+[A forest_224x160_s3100005.png]                    2  page faults
+[A forest_224x160_s3100005.png]                    0  block input operations
+[A forest_224x160_s3100005.png]                    0  block output operations
+[A forest_224x160_s3100005.png]                    0  messages sent
+[A forest_224x160_s3100005.png]                    0  messages received
+[A forest_224x160_s3100005.png]                    0  signals received
+[A forest_224x160_s3100005.png]                    3  voluntary context switches
+[A forest_224x160_s3100005.png]                 7620  involuntary context switches
+[A forest_224x160_s3100005.png]         255496169692  instructions retired
+[A forest_224x160_s3100005.png]          61287610757  cycles elapsed
+[A forest_224x160_s3100005.png]            101335472  peak memory footprint
+[A forest_224x160_s3100005.png] size=36712
+[A forest_224x160_s3100008.png]   [mnf8] backend=7 flags=0x10 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A forest_224x160_s3100008.png] encode [mnf8] /tmp/d6_A.mnf: 23300 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 17929 ms
+[A forest_224x160_s3100008.png]        17.93 real        17.68 user         0.20 sys
+[A forest_224x160_s3100008.png]            102940672  maximum resident set size
+[A forest_224x160_s3100008.png]                    0  average shared memory size
+[A forest_224x160_s3100008.png]                    0  average unshared data size
+[A forest_224x160_s3100008.png]                    0  average unshared stack size
+[A forest_224x160_s3100008.png]                22647  page reclaims
+[A forest_224x160_s3100008.png]                    2  page faults
+[A forest_224x160_s3100008.png]                    0  block input operations
+[A forest_224x160_s3100008.png]                    0  block output operations
+[A forest_224x160_s3100008.png]                    0  messages sent
+[A forest_224x160_s3100008.png]                    0  messages received
+[A forest_224x160_s3100008.png]                    0  signals received
+[A forest_224x160_s3100008.png]                    2  voluntary context switches
+[A forest_224x160_s3100008.png]                 7654  involuntary context switches
+[A forest_224x160_s3100008.png]         259679407038  instructions retired
+[A forest_224x160_s3100008.png]            101450160  peak memory footprint
+[A forest_224x160_s3100008.png] size=23300
+[A ocean_192x144_s3100007.png]   [mnf8] backend=7 flags=0x61 literal=108 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A ocean_192x144_s3100007.png] encode [mnf8] /tmp/d6_A.mnf: 29180 bytes, 192x144 px, 108 tiles, atlas=true, geom=false, 13780 ms
+[A ocean_192x144_s3100007.png]        13.78 real        13.52 user         0.16 sys
+[A ocean_192x144_s3100007.png]            102137856  maximum resident set size
+[A ocean_192x144_s3100007.png]                    0  average shared memory size
+[A ocean_192x144_s3100007.png]                    0  average unshared data size
+[A ocean_192x144_s3100007.png]                    0  average unshared stack size
+[A ocean_192x144_s3100007.png]                12435  page reclaims
+[A ocean_192x144_s3100007.png]                    2  page faults
+[A ocean_192x144_s3100007.png]                    0  block input operations
+[A ocean_192x144_s3100007.png]                    0  block output operations
+[A ocean_192x144_s3100007.png]                    0  messages sent
+[A ocean_192x144_s3100007.png]                    0  messages received
+[A ocean_192x144_s3100007.png]                    0  signals received
+[A ocean_192x144_s3100007.png]                    2  voluntary context switches
+[A ocean_192x144_s3100007.png]                 9203  involuntary context switches
+[A ocean_192x144_s3100007.png]         197572349904  instructions retired
+[A ocean_192x144_s3100007.png]            100925872  peak memory footprint
+[A ocean_192x144_s3100007.png] size=29180
+[A sand_192x144_s3100004.png]   [mnf8] backend=7 flags=0x61 literal=108 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A sand_192x144_s3100004.png] encode [mnf8] /tmp/d6_A.mnf: 32408 bytes, 192x144 px, 108 tiles, atlas=true, geom=false, 13699 ms
+[A sand_192x144_s3100004.png]        13.70 real        13.52 user         0.14 sys
+[A sand_192x144_s3100004.png]            102318080  maximum resident set size
+[A sand_192x144_s3100004.png]                    0  average shared memory size
+[A sand_192x144_s3100004.png]                    0  average unshared data size
+[A sand_192x144_s3100004.png]                    0  average unshared stack size
+[A sand_192x144_s3100004.png]                 6558  page reclaims
+[A sand_192x144_s3100004.png]                    2  page faults
+[A sand_192x144_s3100004.png]                    0  block input operations
+[A sand_192x144_s3100004.png]                    0  block output operations
+[A sand_192x144_s3100004.png]                    0  messages sent
+[A sand_192x144_s3100004.png]                    0  messages received
+[A sand_192x144_s3100004.png]                    0  signals received
+[A sand_192x144_s3100004.png]                    2  voluntary context switches
+[A sand_192x144_s3100004.png]                 5661  involuntary context switches
+[A sand_192x144_s3100004.png]         196830104110  instructions retired
+[A sand_192x144_s3100004.png]            101122480  peak memory footprint
+[A sand_192x144_s3100004.png] size=32408
+[A slate_160x120_s3100009.png]   [mnf8] backend=7 flags=0xa1 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A slate_160x120_s3100009.png] encode [mnf8] /tmp/d6_A.mnf: 19948 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 9557 ms
+[A slate_160x120_s3100009.png]         9.56 real         9.40 user         0.10 sys
+[A slate_160x120_s3100009.png]            101793792  maximum resident set size
+[A slate_160x120_s3100009.png]                    0  average shared memory size
+[A slate_160x120_s3100009.png]                    0  average unshared data size
+[A slate_160x120_s3100009.png]                    0  average unshared stack size
+[A slate_160x120_s3100009.png]                 6526  page reclaims
+[A slate_160x120_s3100009.png]                    2  page faults
+[A slate_160x120_s3100009.png]                    0  block input operations
+[A slate_160x120_s3100009.png]                    0  block output operations
+[A slate_160x120_s3100009.png]                    0  messages sent
+[A slate_160x120_s3100009.png]                    0  messages received
+[A slate_160x120_s3100009.png]                    0  signals received
+[A slate_160x120_s3100009.png]                    2  voluntary context switches
+[A slate_160x120_s3100009.png]                 5422  involuntary context switches
+[A slate_160x120_s3100009.png]         137001018626  instructions retired
+[A slate_160x120_s3100009.png]             99664304  peak memory footprint
+[A slate_160x120_s3100009.png] size=19948
+[A terrain_160x120_s3100000.png]   [mnf8] backend=7 flags=0x10 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A terrain_160x120_s3100000.png] encode [mnf8] /tmp/d6_A.mnf: 13236 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 9641 ms
+[A terrain_160x120_s3100000.png]         9.65 real         9.49 user         0.12 sys
+[A terrain_160x120_s3100000.png]            101662720  maximum resident set size
+[A terrain_160x120_s3100000.png]                    0  average shared memory size
+[A terrain_160x120_s3100000.png]                    0  average unshared data size
+[A terrain_160x120_s3100000.png]                    0  average unshared stack size
+[A terrain_160x120_s3100000.png]                17459  page reclaims
+[A terrain_160x120_s3100000.png]                    2  page faults
+[A terrain_160x120_s3100000.png]                    0  block input operations
+[A terrain_160x120_s3100000.png]                    0  block output operations
+[A terrain_160x120_s3100000.png]                    0  messages sent
+[A terrain_160x120_s3100000.png]                    0  messages received
+[A terrain_160x120_s3100000.png]                    0  signals received
+[A terrain_160x120_s3100000.png]                    2  voluntary context switches
+[A terrain_160x120_s3100000.png]                 4723  involuntary context switches
+[A terrain_160x120_s3100000.png]         138916833983  instructions retired
+[A terrain_160x120_s3100000.png]            100172208  peak memory footprint
+[A terrain_160x120_s3100000.png] size=13236
+[A document_200x280.png]   [mnf8] backend=7 flags=0xe0 literal=234 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A document_200x280.png] encode [mnf8] /tmp/d6_A.mnf: 480 bytes, 200x280 px, 234 tiles, atlas=true, geom=false, 18845 ms
+[A document_200x280.png]        18.85 real        18.56 user         0.21 sys
+[A document_200x280.png]            102400000  maximum resident set size
+[A document_200x280.png]                    0  average shared memory size
+[A document_200x280.png]                    0  average unshared data size
+[A document_200x280.png]                    0  average unshared stack size
+[A document_200x280.png]                22634  page reclaims
+[A document_200x280.png]                    2  page faults
+[A document_200x280.png]                    0  block input operations
+[A document_200x280.png]                    0  block output operations
+[A document_200x280.png]                    0  messages sent
+[A document_200x280.png]                    0  messages received
+[A document_200x280.png]                    0  signals received
+[A document_200x280.png]                    3  voluntary context switches
+[A document_200x280.png]                10101  involuntary context switches
+[A document_200x280.png]         303021035501  instructions retired
+[A document_200x280.png]            101466520  peak memory footprint
+[A document_200x280.png] size=480
+[A autumn_192x144_s900001.png]   [mnf8] backend=7 flags=0x10 literal=108 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A autumn_192x144_s900001.png] encode [mnf8] /tmp/d6_A.mnf: 18464 bytes, 192x144 px, 108 tiles, atlas=true, geom=false, 14394 ms
+[A autumn_192x144_s900001.png]        14.40 real        13.81 user         0.29 sys
+[A autumn_192x144_s900001.png]            102187008  maximum resident set size
+[A autumn_192x144_s900001.png]                    0  average shared memory size
+[A autumn_192x144_s900001.png]                    0  average unshared data size
+[A autumn_192x144_s900001.png]                    0  average unshared stack size
+[A autumn_192x144_s900001.png]                12451  page reclaims
+[A autumn_192x144_s900001.png]                    2  page faults
+[A autumn_192x144_s900001.png]                    0  block input operations
+[A autumn_192x144_s900001.png]                    0  block output operations
+[A autumn_192x144_s900001.png]                    0  messages sent
+[A autumn_192x144_s900001.png]                    0  messages received
+[A autumn_192x144_s900001.png]                    0  signals received
+[A autumn_192x144_s900001.png]                    2  voluntary context switches
+[A autumn_192x144_s900001.png]                38343  involuntary context switches
+[A autumn_192x144_s900001.png]         200196616223  instructions retired
+[A autumn_192x144_s900001.png]            100516272  peak memory footprint
+[A autumn_192x144_s900001.png] size=18464
+[A dusk_160x120_s900003.png]   [mnf8] backend=7 flags=0x51 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A dusk_160x120_s900003.png] encode [mnf8] /tmp/d6_A.mnf: 18972 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 9472 ms
+[A dusk_160x120_s900003.png]         9.48 real         9.35 user         0.09 sys
+[A dusk_160x120_s900003.png]            101941248  maximum resident set size
+[A dusk_160x120_s900003.png]                    0  average shared memory size
+[A dusk_160x120_s900003.png]                    0  average unshared data size
+[A dusk_160x120_s900003.png]                    0  average unshared stack size
+[A dusk_160x120_s900003.png]                 6533  page reclaims
+[A dusk_160x120_s900003.png]                    2  page faults
+[A dusk_160x120_s900003.png]                    0  block input operations
+[A dusk_160x120_s900003.png]                    0  block output operations
+[A dusk_160x120_s900003.png]                    0  messages sent
+[A dusk_160x120_s900003.png]                    0  messages received
+[A dusk_160x120_s900003.png]                    0  signals received
+[A dusk_160x120_s900003.png]                    4  voluntary context switches
+[A dusk_160x120_s900003.png]                 3867  involuntary context switches
+[A dusk_160x120_s900003.png]         137870953397  instructions retired
+[A dusk_160x120_s900003.png]            100172208  peak memory footprint
+[A dusk_160x120_s900003.png] size=18972
+[A forest_224x160_s900002.png]   [mnf8] backend=7 flags=0x61 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A forest_224x160_s900002.png] encode [mnf8] /tmp/d6_A.mnf: 40692 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 17805 ms
+[A forest_224x160_s900002.png]        17.81 real        17.56 user         0.18 sys
+[A forest_224x160_s900002.png]            102645760  maximum resident set size
+[A forest_224x160_s900002.png]                    0  average shared memory size
+[A forest_224x160_s900002.png]                    0  average unshared data size
+[A forest_224x160_s900002.png]                    0  average unshared stack size
+[A forest_224x160_s900002.png]                12501  page reclaims
+[A forest_224x160_s900002.png]                    2  page faults
+[A forest_224x160_s900002.png]                    0  block input operations
+[A forest_224x160_s900002.png]                    0  block output operations
+[A forest_224x160_s900002.png]                    0  messages sent
+[A forest_224x160_s900002.png]                    0  messages received
+[A forest_224x160_s900002.png]                    0  signals received
+[A forest_224x160_s900002.png]                    2  voluntary context switches
+[A forest_224x160_s900002.png]                 7869  involuntary context switches
+[A forest_224x160_s900002.png]         254516038620  instructions retired
+[A forest_224x160_s900002.png]          58629747071  cycles elapsed
+[A forest_224x160_s900002.png]            101548464  peak memory footprint
+[A forest_224x160_s900002.png] size=40692
+[A ocean_192x144_s900007.png]   [mnf8] backend=7 flags=0x51 literal=108 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A ocean_192x144_s900007.png] encode [mnf8] /tmp/d6_A.mnf: 30896 bytes, 192x144 px, 108 tiles, atlas=true, geom=false, 13753 ms
+[A ocean_192x144_s900007.png]        13.76 real        13.52 user         0.16 sys
+[A ocean_192x144_s900007.png]            102137856  maximum resident set size
+[A ocean_192x144_s900007.png]                    0  average shared memory size
+[A ocean_192x144_s900007.png]                    0  average unshared data size
+[A ocean_192x144_s900007.png]                    0  average unshared stack size
+[A ocean_192x144_s900007.png]                17647  page reclaims
+[A ocean_192x144_s900007.png]                    2  page faults
+[A ocean_192x144_s900007.png]                    0  block input operations
+[A ocean_192x144_s900007.png]                    0  block output operations
+[A ocean_192x144_s900007.png]                    0  messages sent
+[A ocean_192x144_s900007.png]                    0  messages received
+[A ocean_192x144_s900007.png]                    0  signals received
+[A ocean_192x144_s900007.png]                    2  voluntary context switches
+[A ocean_192x144_s900007.png]                 7414  involuntary context switches
+[A ocean_192x144_s900007.png]         197190355686  instructions retired
+[A ocean_192x144_s900007.png]          45179148581  cycles elapsed
+[A ocean_192x144_s900007.png]            100843952  peak memory footprint
+[A ocean_192x144_s900007.png] size=30896
+[A sand_160x120_s900000.png]   [mnf8] backend=7 flags=0xe1 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A sand_160x120_s900000.png] encode [mnf8] /tmp/d6_A.mnf: 22520 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 9595 ms
+[A sand_160x120_s900000.png]         9.60 real         9.44 user         0.11 sys
+[A sand_160x120_s900000.png]            101761024  maximum resident set size
+[A sand_160x120_s900000.png]                    0  average shared memory size
+[A sand_160x120_s900000.png]                    0  average unshared data size
+[A sand_160x120_s900000.png]                    0  average unshared stack size
+[A sand_160x120_s900000.png]                11698  page reclaims
+[A sand_160x120_s900000.png]                    2  page faults
+[A sand_160x120_s900000.png]                    0  block input operations
+[A sand_160x120_s900000.png]                    0  block output operations
+[A sand_160x120_s900000.png]                    0  messages sent
+[A sand_160x120_s900000.png]                    0  messages received
+[A sand_160x120_s900000.png]                    0  signals received
+[A sand_160x120_s900000.png]                    2  voluntary context switches
+[A sand_160x120_s900000.png]                 4183  involuntary context switches
+[A sand_160x120_s900000.png]         136805450037  instructions retired
+[A sand_160x120_s900000.png]          31542119888  cycles elapsed
+[A sand_160x120_s900000.png]            100532632  peak memory footprint
+[A sand_160x120_s900000.png] size=22520
+[A slate_192x144_s900004.png]   [mnf8] backend=7 flags=0xd1 literal=108 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A slate_192x144_s900004.png] encode [mnf8] /tmp/d6_A.mnf: 32392 bytes, 192x144 px, 108 tiles, atlas=true, geom=false, 13731 ms
+[A slate_192x144_s900004.png]        13.74 real        13.53 user         0.14 sys
+[A slate_192x144_s900004.png]            102055936  maximum resident set size
+[A slate_192x144_s900004.png]                    0  average shared memory size
+[A slate_192x144_s900004.png]                    0  average unshared data size
+[A slate_192x144_s900004.png]                    0  average unshared stack size
+[A slate_192x144_s900004.png]                 6544  page reclaims
+[A slate_192x144_s900004.png]                    2  page faults
+[A slate_192x144_s900004.png]                    0  block input operations
+[A slate_192x144_s900004.png]                    0  block output operations
+[A slate_192x144_s900004.png]                    0  messages sent
+[A slate_192x144_s900004.png]                    0  messages received
+[A slate_192x144_s900004.png]                    0  signals received
+[A slate_192x144_s900004.png]                    2  voluntary context switches
+[A slate_192x144_s900004.png]                 6752  involuntary context switches
+[A slate_192x144_s900004.png]         196760363817  instructions retired
+[A slate_192x144_s900004.png]          45206658086  cycles elapsed
+[A slate_192x144_s900004.png]            100843928  peak memory footprint
+[A slate_192x144_s900004.png] size=32392
+[A slate_224x160_s900008.png]   [mnf8] backend=7 flags=0x51 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A slate_224x160_s900008.png] encode [mnf8] /tmp/d6_A.mnf: 45212 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 17630 ms
+[A slate_224x160_s900008.png]        17.63 real        17.35 user         0.19 sys
+[A slate_224x160_s900008.png]            102563840  maximum resident set size
+[A slate_224x160_s900008.png]                    0  average shared memory size
+[A slate_224x160_s900008.png]                    0  average unshared data size
+[A slate_224x160_s900008.png]                    0  average unshared stack size
+[A slate_224x160_s900008.png]                 7481  page reclaims
+[A slate_224x160_s900008.png]                    2  page faults
+[A slate_224x160_s900008.png]                    0  block input operations
+[A slate_224x160_s900008.png]                    0  block output operations
+[A slate_224x160_s900008.png]                    0  messages sent
+[A slate_224x160_s900008.png]                    0  messages received
+[A slate_224x160_s900008.png]                    0  signals received
+[A slate_224x160_s900008.png]                    2  voluntary context switches
+[A slate_224x160_s900008.png]                10780  involuntary context switches
+[A slate_224x160_s900008.png]         253891938886  instructions retired
+[A slate_224x160_s900008.png]          57969193892  cycles elapsed
+[A slate_224x160_s900008.png]            101843376  peak memory footprint
+[A slate_224x160_s900008.png] size=45212
+[A stone_160x120_s900006.png]   [mnf8] backend=7 flags=0xd1 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A stone_160x120_s900006.png] encode [mnf8] /tmp/d6_A.mnf: 12328 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 9598 ms
+[A stone_160x120_s900006.png]         9.60 real         9.45 user         0.10 sys
+[A stone_160x120_s900006.png]            101810176  maximum resident set size
+[A stone_160x120_s900006.png]                    0  average shared memory size
+[A stone_160x120_s900006.png]                    0  average unshared data size
+[A stone_160x120_s900006.png]                    0  average unshared stack size
+[A stone_160x120_s900006.png]                 6529  page reclaims
+[A stone_160x120_s900006.png]                    2  page faults
+[A stone_160x120_s900006.png]                    0  block input operations
+[A stone_160x120_s900006.png]                    0  block output operations
+[A stone_160x120_s900006.png]                    0  messages sent
+[A stone_160x120_s900006.png]                    0  messages received
+[A stone_160x120_s900006.png]                    0  signals received
+[A stone_160x120_s900006.png]                    2  voluntary context switches
+[A stone_160x120_s900006.png]                 5254  involuntary context switches
+[A stone_160x120_s900006.png]         139307955106  instructions retired
+[A stone_160x120_s900006.png]          31610037381  cycles elapsed
+[A stone_160x120_s900006.png]            100598168  peak memory footprint
+[A stone_160x120_s900006.png] size=12328
+[A terrain_160x120_s900009.png]   [mnf8] backend=7 flags=0x61 literal=80 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A terrain_160x120_s900009.png] encode [mnf8] /tmp/d6_A.mnf: 21152 bytes, 160x120 px, 80 tiles, atlas=true, geom=false, 9643 ms
+[A terrain_160x120_s900009.png]         9.65 real         9.48 user         0.10 sys
+[A terrain_160x120_s900009.png]            101810176  maximum resident set size
+[A terrain_160x120_s900009.png]                    0  average shared memory size
+[A terrain_160x120_s900009.png]                    0  average unshared data size
+[A terrain_160x120_s900009.png]                    0  average unshared stack size
+[A terrain_160x120_s900009.png]                 6527  page reclaims
+[A terrain_160x120_s900009.png]                    2  page faults
+[A terrain_160x120_s900009.png]                    0  block input operations
+[A terrain_160x120_s900009.png]                    0  block output operations
+[A terrain_160x120_s900009.png]                    0  messages sent
+[A terrain_160x120_s900009.png]                    0  messages received
+[A terrain_160x120_s900009.png]                    0  signals received
+[A terrain_160x120_s900009.png]                    2  voluntary context switches
+[A terrain_160x120_s900009.png]                 4193  involuntary context switches
+[A terrain_160x120_s900009.png]         137438022022  instructions retired
+[A terrain_160x120_s900009.png]            100499888  peak memory footprint
+[A terrain_160x120_s900009.png] size=21152
+[A terrain_224x160_s900005.png]   [mnf8] backend=7 flags=0x51 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A terrain_224x160_s900005.png] encode [mnf8] /tmp/d6_A.mnf: 36884 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 17727 ms
+[A terrain_224x160_s900005.png]        17.73 real        17.46 user         0.20 sys
+[A terrain_224x160_s900005.png]            102498304  maximum resident set size
+[A terrain_224x160_s900005.png]                    0  average shared memory size
+[A terrain_224x160_s900005.png]                    0  average unshared data size
+[A terrain_224x160_s900005.png]                    0  average unshared stack size
+[A terrain_224x160_s900005.png]                12430  page reclaims
+[A terrain_224x160_s900005.png]                    2  page faults
+[A terrain_224x160_s900005.png]                    0  block input operations
+[A terrain_224x160_s900005.png]                    0  block output operations
+[A terrain_224x160_s900005.png]                    0  messages sent
+[A terrain_224x160_s900005.png]                    0  messages received
+[A terrain_224x160_s900005.png]                    0  signals received
+[A terrain_224x160_s900005.png]                    2  voluntary context switches
+[A terrain_224x160_s900005.png]                 9070  involuntary context switches
+[A terrain_224x160_s900005.png]         255299506611  instructions retired
+[A terrain_224x160_s900005.png]          58354659328  cycles elapsed
+[A terrain_224x160_s900005.png]            101106072  peak memory footprint
+[A terrain_224x160_s900005.png] size=36884
+[A screenshot_640x400.png]   [mnf8] backend=7 flags=0xd0 literal=1000 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A screenshot_640x400.png] encode [mnf8] /tmp/d6_A.mnf: 472 bytes, 640x400 px, 1000 tiles, atlas=true, geom=false, 80796 ms
+[A screenshot_640x400.png]        80.80 real        79.79 user         0.54 sys
+[A screenshot_640x400.png]            109363200  maximum resident set size
+[A screenshot_640x400.png]                    0  average shared memory size
+[A screenshot_640x400.png]                    0  average unshared data size
+[A screenshot_640x400.png]                    0  average unshared stack size
+[A screenshot_640x400.png]               129230  page reclaims
+[A screenshot_640x400.png]                    2  page faults
+[A screenshot_640x400.png]                    0  block input operations
+[A screenshot_640x400.png]                    0  block output operations
+[A screenshot_640x400.png]                    0  messages sent
+[A screenshot_640x400.png]                    0  messages received
+[A screenshot_640x400.png]                    0  signals received
+[A screenshot_640x400.png]                    7  voluntary context switches
+[A screenshot_640x400.png]                45661  involuntary context switches
+[A screenshot_640x400.png]        1310304572442  instructions retired
+[A screenshot_640x400.png]         265194705978  cycles elapsed
+[A screenshot_640x400.png]            113181128  peak memory footprint
+[A screenshot_640x400.png] size=472
+[A gradient_320x240.png]   [mnf8] backend=1 flags=0x20 literal=300 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A gradient_320x240.png] encode [mnf8] /tmp/d6_A.mnf: 254 bytes, 320x240 px, 300 tiles, atlas=true, geom=false, 29520 ms
+[A gradient_320x240.png]        29.53 real        28.94 user         0.41 sys
+[A gradient_320x240.png]            104448000  maximum resident set size
+[A gradient_320x240.png]                    0  average shared memory size
+[A gradient_320x240.png]                    0  average unshared data size
+[A gradient_320x240.png]                    0  average unshared stack size
+[A gradient_320x240.png]                64552  page reclaims
+[A gradient_320x240.png]                    4  page faults
+[A gradient_320x240.png]                    0  block input operations
+[A gradient_320x240.png]                    0  block output operations
+[A gradient_320x240.png]                    0  messages sent
+[A gradient_320x240.png]                    0  messages received
+[A gradient_320x240.png]                    0  signals received
+[A gradient_320x240.png]                    3  voluntary context switches
+[A gradient_320x240.png]                14772  involuntary context switches
+[A gradient_320x240.png]         424649687270  instructions retired
+[A gradient_320x240.png]          96980421886  cycles elapsed
+[A gradient_320x240.png]            102924720  peak memory footprint
+[A gradient_320x240.png] size=254
+[A blob_224x160.png]   [mnf8] backend=1 flags=0x21 literal=140 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A blob_224x160.png] encode [mnf8] /tmp/d6_A.mnf: 5986 bytes, 224x160 px, 140 tiles, atlas=true, geom=false, 15813 ms
+[A blob_224x160.png]        15.82 real        15.54 user         0.18 sys
+[A blob_224x160.png]            102760448  maximum resident set size
+[A blob_224x160.png]                    0  average shared memory size
+[A blob_224x160.png]                    0  average unshared data size
+[A blob_224x160.png]                    0  average unshared stack size
+[A blob_224x160.png]                12568  page reclaims
+[A blob_224x160.png]                    2  page faults
+[A blob_224x160.png]                    0  block input operations
+[A blob_224x160.png]                    0  block output operations
+[A blob_224x160.png]                    0  messages sent
+[A blob_224x160.png]                    0  messages received
+[A blob_224x160.png]                    0  signals received
+[A blob_224x160.png]                    2  voluntary context switches
+[A blob_224x160.png]                10500  involuntary context switches
+[A blob_224x160.png]         225169411145  instructions retired
+[A blob_224x160.png]          51915346348  cycles elapsed
+[A blob_224x160.png]            101351856  peak memory footprint
+[A blob_224x160.png] size=5986
+[A blocks_192x128.png]   [mnf8] backend=1 flags=0x0c literal=391 ycocg=0 exact=639 geom=0 color=0 (nontrivial transforms: 0)
+[A blocks_192x128.png] encode [mnf8] /tmp/d6_A.mnf: 1277 bytes, 192x128 px, 96 tiles, atlas=true, geom=false, 9894 ms
+[A blocks_192x128.png]         9.90 real         9.63 user         0.16 sys
+[A blocks_192x128.png]            101187584  maximum resident set size
+[A blocks_192x128.png]                    0  average shared memory size
+[A blocks_192x128.png]                    0  average unshared data size
+[A blocks_192x128.png]                    0  average unshared stack size
+[A blocks_192x128.png]                17571  page reclaims
+[A blocks_192x128.png]                    2  page faults
+[A blocks_192x128.png]                    0  block input operations
+[A blocks_192x128.png]                    0  block output operations
+[A blocks_192x128.png]                    0  messages sent
+[A blocks_192x128.png]                    0  messages received
+[A blocks_192x128.png]                    0  signals received
+[A blocks_192x128.png]                    1  voluntary context switches
+[A blocks_192x128.png]                 9959  involuntary context switches
+[A blocks_192x128.png]         144118645545  instructions retired
+[A blocks_192x128.png]          32346658594  cycles elapsed
+[A blocks_192x128.png]            100237744  peak memory footprint
+[A blocks_192x128.png] size=1277
+[A plaid_192.png]   [mnf8] backend=7 flags=0x11 literal=144 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A plaid_192.png] encode [mnf8] /tmp/d6_A.mnf: 20440 bytes, 192x192 px, 144 tiles, atlas=true, geom=false, 18755 ms
+[A plaid_192.png]        18.76 real        18.49 user         0.19 sys
+[A plaid_192.png]            103071744  maximum resident set size
+[A plaid_192.png]                    0  average shared memory size
+[A plaid_192.png]                    0  average unshared data size
+[A plaid_192.png]                    0  average unshared stack size
+[A plaid_192.png]                 7316  page reclaims
+[A plaid_192.png]                    2  page faults
+[A plaid_192.png]                    0  block input operations
+[A plaid_192.png]                    0  block output operations
+[A plaid_192.png]                    0  messages sent
+[A plaid_192.png]                    0  messages received
+[A plaid_192.png]                    0  signals received
+[A plaid_192.png]                    4  voluntary context switches
+[A plaid_192.png]                 9265  involuntary context switches
+[A plaid_192.png]         265353641457  instructions retired
+[A plaid_192.png]          61750683193  cycles elapsed
+[A plaid_192.png]            101712304  peak memory footprint
+[A plaid_192.png] size=20440
+[A poster_208x144.png]   [mnf8] backend=1 flags=0x60 literal=117 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A poster_208x144.png] encode [mnf8] /tmp/d6_A.mnf: 1141 bytes, 208x144 px, 117 tiles, atlas=true, geom=false, 11588 ms
+[A poster_208x144.png]        11.59 real        11.44 user         0.08 sys
+[A poster_208x144.png]            101400576  maximum resident set size
+[A poster_208x144.png]                    0  average shared memory size
+[A poster_208x144.png]                    0  average unshared data size
+[A poster_208x144.png]                    0  average unshared stack size
+[A poster_208x144.png]                 6662  page reclaims
+[A poster_208x144.png]                    2  page faults
+[A poster_208x144.png]                    0  block input operations
+[A poster_208x144.png]                    0  block output operations
+[A poster_208x144.png]                    0  messages sent
+[A poster_208x144.png]                    0  messages received
+[A poster_208x144.png]                    0  signals received
+[A poster_208x144.png]                    1  voluntary context switches
+[A poster_208x144.png]                 7224  involuntary context switches
+[A poster_208x144.png]         169877387313  instructions retired
+[A poster_208x144.png]          38029342446  cycles elapsed
+[A poster_208x144.png]            100204976  peak memory footprint
+[A poster_208x144.png] size=1141
+[A noise_256x256.png]   [mnf8] backend=1 flags=0x00 literal=256 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A noise_256x256.png] encode [mnf8] /tmp/d6_A.mnf: 196912 bytes, 256x256 px, 256 tiles, atlas=true, geom=false, 33630 ms
+[A noise_256x256.png]        33.63 real        33.10 user         0.39 sys
+[A noise_256x256.png]            112181248  maximum resident set size
+[A noise_256x256.png]                    0  average shared memory size
+[A noise_256x256.png]                    0  average unshared data size
+[A noise_256x256.png]                    0  average unshared stack size
+[A noise_256x256.png]                29066  page reclaims
+[A noise_256x256.png]                    4  page faults
+[A noise_256x256.png]                    0  block input operations
+[A noise_256x256.png]                    0  block output operations
+[A noise_256x256.png]                    0  messages sent
+[A noise_256x256.png]                    0  messages received
+[A noise_256x256.png]                    0  signals received
+[A noise_256x256.png]                    6  voluntary context switches
+[A noise_256x256.png]                18077  involuntary context switches
+[A noise_256x256.png]         457455599953  instructions retired
+[A noise_256x256.png]         110636114386  cycles elapsed
+[A noise_256x256.png]            115032520  peak memory footprint
+[A noise_256x256.png] size=196912
+[A repeat_256x256.png]   [mnf8] backend=1 flags=0x21 literal=256 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A repeat_256x256.png] encode [mnf8] /tmp/d6_A.mnf: 301 bytes, 256x256 px, 256 tiles, atlas=true, geom=false, 21668 ms
+[A repeat_256x256.png]        21.67 real        21.49 user         0.09 sys
+[A repeat_256x256.png]             93962240  maximum resident set size
+[A repeat_256x256.png]                    0  average shared memory size
+[A repeat_256x256.png]                    0  average unshared data size
+[A repeat_256x256.png]                    0  average unshared stack size
+[A repeat_256x256.png]                 6154  page reclaims
+[A repeat_256x256.png]                    2  page faults
+[A repeat_256x256.png]                    0  block input operations
+[A repeat_256x256.png]                    0  block output operations
+[A repeat_256x256.png]                    0  messages sent
+[A repeat_256x256.png]                    0  messages received
+[A repeat_256x256.png]                    0  signals received
+[A repeat_256x256.png]                    3  voluntary context switches
+[A repeat_256x256.png]                11900  involuntary context switches
+[A repeat_256x256.png]         338947785553  instructions retired
+[A repeat_256x256.png]          71301332871  cycles elapsed
+[A repeat_256x256.png]             92291480  peak memory footprint
+[A repeat_256x256.png] size=301
+[A solid_256x256.png]   [mnf8] backend=1 flags=0x04 literal=256 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A solid_256x256.png]   [mnf9] exact rule discovered: 36 B (mnf8 arm 62 B)
+[A solid_256x256.png] encode [mnf8] /tmp/d6_A.mnf: 36 bytes, 256x256 px, 256 tiles, atlas=true, geom=false, 20862 ms
+[A solid_256x256.png]        20.86 real        20.60 user         0.11 sys
+[A solid_256x256.png]             91881472  maximum resident set size
+[A solid_256x256.png]                    0  average shared memory size
+[A solid_256x256.png]                    0  average unshared data size
+[A solid_256x256.png]                    0  average unshared stack size
+[A solid_256x256.png]                11206  page reclaims
+[A solid_256x256.png]                   10  page faults
+[A solid_256x256.png]                    0  block input operations
+[A solid_256x256.png]                    0  block output operations
+[A solid_256x256.png]                    0  messages sent
+[A solid_256x256.png]                    0  messages received
+[A solid_256x256.png]                    0  signals received
+[A solid_256x256.png]                    1  voluntary context switches
+[A solid_256x256.png]                16626  involuntary context switches
+[A solid_256x256.png]         335243010258  instructions retired
+[A solid_256x256.png]          68418066271  cycles elapsed
+[A solid_256x256.png]             90374552  peak memory footprint
+[A solid_256x256.png] size=36
+[A] CORPUS_TOTAL=768303
+--- hubble A ---
+[A HUBBLE]   [mnf8] backend=7 flags=0x45 literal=653 ycocg=0 exact=0 geom=0 color=0 (nontrivial transforms: 0)
+[A HUBBLE] encode [mnf8] /tmp/d6_A_hb.mnf: 1438848 bytes, 1000x872 px, 3465 tiles, atlas=true, geom=false, 444685 ms
+[A HUBBLE]       444.75 real       434.24 user         7.06 sys
+[A HUBBLE]            135921664  maximum resident set size
+[A HUBBLE] sha16=b2a8a10915239c99
+D6-CHAIN-DONE

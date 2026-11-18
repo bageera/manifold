@@ -1,0 +1,83 @@
+=== packaging ===
+error: 18 files in the working directory contain changes that were not yet committed into git:
+
+CHANGELOG.md
+Cargo.lock
+Cargo.toml
+README.md
+docs/benchmarks-v1.17.1/external-verify.json
+docs/benchmarks-v1.17.1/packaging.log
+docs/benchmarks-v1.17.1/parity.log
+docs/benchmarks-v1.17.1/release-gate.log
+docs/mnf17-p1d6-record.md
+docs/v1.17.1-release-prep.md
+research/external-fixtures/v1.17.1/checker_external_101.png
+research/external-fixtures/v1.17.1/document_external_176x220.png
+research/external-fixtures/v1.17.1/flat_external_96.png
+research/external-fixtures/v1.17.1/grad_external_320x201.png
+research/external-fixtures/v1.17.1/noise_external_128.png
+research/external-fixtures/v1.17.1/photo_external_208x181.png
+src/main.rs
+src/mnf8.rs
+
+to proceed despite this and include the uncommitted changes, pass the `--allow-dirty` flag
+PKG-CODEC-EXIT:101
+error: package ID specification `manifold-capi` did not match any packages
+PKG-CAPI-EXIT:101
+shasum: target/package/manifold-codec-1.17.1.crate: No such file or directory
+shasum: target/package/manifold-capi-1.17.1.crate: No such file or directory
+-rw-r--r--@ 1 jonbethea  staff  475493 Nov  4 10:40 target/package/manifold-codec-1.15.0.crate
+-rw-r--r--@ 1 jonbethea  staff  533153 Nov 15 11:28 target/package/manifold-codec-1.16.0.crate
+-rw-r--r--@ 1 jonbethea  staff  567656 Nov 16 19:12 target/package/manifold-codec-1.17.0.crate
+-rw-r--r--@ 1 jonbethea  staff    7904 Nov 15 11:28 target/package/manifold-codec-capi-1.16.0.crate
+-rw-r--r--@ 1 jonbethea  staff    7904 Nov 16 19:14 target/package/manifold-codec-capi-1.17.0.crate
+=== consumer smoke (rust, against packaged + extracted source) ===
+location searched: /tmp/v1171_crate_extracted/manifold-codec-1.17.1
+required by package `v1171-consumer v0.1.0 (/private/tmp/v1171_consumer)`
+RUST-SMOKE-EXIT:0
+=== consumer smoke (c abi) ===
+error: package ID specification `manifold-capi` did not match any packages
+/tmp/v1171_consumer/csmoke.c:15:36: warning: operator '<<' has lower precedence than '+'; '+' will be evaluated first [-Wshift-op-parentheses]
+   15 |     size_t cap = (size_t)w * h * 3 + 1u << 16;
+      |                  ~~~~~~~~~~~~~~~~~~^~~~ ~~
+/tmp/v1171_consumer/csmoke.c:15:36: note: place parentheses around the '+' expression to silence this warning
+   15 |     size_t cap = (size_t)w * h * 3 + 1u << 16;
+      |                                    ^
+      |                  (                     )
+1 warning generated.
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[24](4f97f2375d6aa471-entropy_common.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[25](4f97f2375d6aa471-error_private.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[26](4f97f2375d6aa471-fse_decompress.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[27](4f97f2375d6aa471-pool.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[29](4f97f2375d6aa471-zstd_common.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[30](7c9960efb53c0b35-fse_compress.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[31](7c9960efb53c0b35-hist.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[32](7c9960efb53c0b35-huf_compress.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[33](7c9960efb53c0b35-zstd_compress.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[34](7c9960efb53c0b35-zstd_compress_literals.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[35](7c9960efb53c0b35-zstd_compress_sequences.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[36](7c9960efb53c0b35-zstd_compress_superblock.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[37](7c9960efb53c0b35-zstd_double_fast.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[38](7c9960efb53c0b35-zstd_fast.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[39](7c9960efb53c0b35-zstd_lazy.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[40](7c9960efb53c0b35-zstd_ldm.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[41](7c9960efb53c0b35-zstd_opt.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[42](7c9960efb53c0b35-zstd_preSplit.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[44](865a32d3ef5dbaad-huf_decompress.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[45](865a32d3ef5dbaad-zstd_ddict.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[46](865a32d3ef5dbaad-zstd_decompress.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[47](865a32d3ef5dbaad-zstd_decompress_block.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[48](ebb58710e9060628-cover.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[49](ebb58710e9060628-divsufsort.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[50](ebb58710e9060628-fastcover.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[51](ebb58710e9060628-zdict.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[52](249ab7f209ebe57d-zstd_v01.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[53](249ab7f209ebe57d-zstd_v02.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[54](249ab7f209ebe57d-zstd_v03.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[55](249ab7f209ebe57d-zstd_v04.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[56](249ab7f209ebe57d-zstd_v05.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[57](249ab7f209ebe57d-zstd_v06.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[58](249ab7f209ebe57d-zstd_v07.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
+encode status=-2 len=8938
+C-SMOKE-EXIT:1
+V1171-CHAIN-DONE

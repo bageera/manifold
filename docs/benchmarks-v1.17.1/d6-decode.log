@@ -1,0 +1,19 @@
+[A d6_C_hb.mnf]         2.42 real         2.40 user         0.00 sys
+[A d6_C_hb.mnf]             18284544  maximum resident set size
+[A d6_grad.mnf]         0.00 real         0.00 user         0.00 sys
+[A d6_grad.mnf]              3309568  maximum resident set size
+[A d6_noise.mnf]         0.00 real         0.00 user         0.00 sys
+[A d6_noise.mnf]              3686400  maximum resident set size
+[B d6_C_hb.mnf]         2.08 real         2.06 user         0.00 sys
+[B d6_C_hb.mnf]             18251776  maximum resident set size
+[B d6_grad.mnf]         0.00 real         0.00 user         0.00 sys
+[B d6_grad.mnf]              3325952  maximum resident set size
+[B d6_noise.mnf]         0.00 real         0.00 user         0.00 sys
+[B d6_noise.mnf]              3653632  maximum resident set size
+[C d6_C_hb.mnf]         2.15 real         2.12 user         0.01 sys
+[C d6_C_hb.mnf]             18432000  maximum resident set size
+[C d6_grad.mnf]         0.00 real         0.00 user         0.00 sys
+[C d6_grad.mnf]              3391488  maximum resident set size
+[C d6_noise.mnf]         0.00 real         0.00 user         0.00 sys
+[C d6_noise.mnf]              3686400  maximum resident set size
+DECODE-DONE

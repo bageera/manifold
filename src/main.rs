@@ -66,7 +66,7 @@ fn encode_cmd(
     let t0 = Instant::now();
     let buf = if let Some(profile) = mnf8 {
         let (buf, st, backend) = encode_mnf8(&src.pixels, dims, use_geom, profile);
-        if std::env::var("MNF17_P1D6_STATS").is_ok() {
+        if d6_stats_requested() {
             let d6 = manifold::mnf8::d6_take_stats();
             println!(
                 "  [d6] dominated={} completed={} dom_symbols={} mix_symbols={} dom_streams={}",
@@ -304,7 +304,12 @@ fn benchmark(path: &Path) {
     }
 }
 
-pub fn main() {
+pub fn d6_stats_requested() -> bool {
+    static ONCE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ONCE.get_or_init(|| std::env::var("MNF17_P1D6_STATS").is_ok())
+}
+
+fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() {
         eprintln!("{USAGE}");

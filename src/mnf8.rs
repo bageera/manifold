@@ -528,8 +528,10 @@ pub(crate) fn encode_mnf8_metrics(
                     };
                     // MNF17_P1D6_EXHAUSTIVE=1: instrument — every mix arm
                     // runs to completion (the exhaustive oracle path).
-                    // Byte-neutral: dominated arms can never win.
-                    let inc = if std::env::var("MNF17_P1D6_EXHAUSTIVE").is_ok() {
+                    // Byte-neutral: dominated arms can never win. Read
+                    // once per process (release audit: no per-arm env
+                    // cost, no output effect either way).
+                    let inc = if d6_exhaustive() {
                         None
                     } else {
                         best.as_ref().map(|(s, ..)| *s)
@@ -674,6 +676,11 @@ pub static D6: Mutex<D6Stats> = Mutex::new(D6Stats {
     dominated_streams: 0,
     dominated_position: [0; 4],
 });
+
+fn d6_exhaustive() -> bool {
+    static ONCE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ONCE.get_or_init(|| std::env::var("MNF17_P1D6_EXHAUSTIVE").is_ok())
+}
 
 /// Snapshot and reset the D6 counters.
 pub fn d6_take_stats() -> D6Stats {
@@ -4386,6 +4393,166 @@ mod channel_diff {
             assert_eq!(picked.0, orb.0, "d6 pick parity {name}");
             assert_eq!(picked.2, orb.2, "d6 pick parity backend {name}");
             let _ = d6;
+        }
+    }
+
+    // ==== MNF17-P1-D6 reconciliation instrument: exact phase costs for the
+    // Hubble / corpus mix-rate question - NOT used by production. Env:
+    // MNF17_P1D6_PHASE_OUT (csv, default /tmp/d6_phase.csv),
+    // MNF17_P1D6_PHASE_HUBBLE (png, default /tmp/hf1_hubble_dec.png).
+    #[cfg(test)]
+    mod d6_phase {
+        use super::super::{
+            backend_compress, build_record_stream, Coder, Dims, PredKind, BACKEND_ZLIB,
+            BACKEND_ZSTD19,
+        };
+        use crate::mix_coder::{Geom, MixParams};
+        use crate::mnf6::{MnF6Stats, ProbeCache, PROBE_CACHE_BUDGET_BYTES};
+        use std::time::Instant;
+
+        fn build(
+            pixels: &[u8],
+            dims: Dims,
+            planar: bool,
+            med: bool,
+            kind: &PredKind,
+            coder: &Coder,
+            cache: &ProbeCache,
+        ) -> (Vec<u8>, MnF6Stats) {
+            build_record_stream(pixels, dims, true, false, planar, med, *kind, coder, cache)
+                .expect("encoding an in-memory image cannot fail")
+        }
+
+        #[test]
+        #[ignore]
+        fn d6_phase_probe() {
+            let out_path = std::env::var("MNF17_P1D6_PHASE_OUT")
+                .unwrap_or_else(|_| "/tmp/d6_phase.csv".to_string());
+            let hubble = std::env::var("MNF17_P1D6_PHASE_HUBBLE")
+                .unwrap_or_else(|_| "/tmp/hf1_hubble_dec.png".to_string());
+            let mut rows = String::from("file,phase,ms,symbols\n");
+            for rel in ["testdata/gradient_320x240.png", hubble.as_str()] {
+                let img = image::open(rel).expect("png").to_rgb8();
+                let (w0, h0) = (img.width(), img.height());
+                let pixels = img.into_raw();
+                let dims = Dims {
+                    width: w0,
+                    height: h0,
+                };
+                let kind = PredKind::None;
+                let planar = true;
+                let cache = ProbeCache::new(PROBE_CACHE_BUDGET_BYTES);
+                let med = false;
+
+                let t = Instant::now();
+                let (raw0, st) = build(&pixels, dims, planar, med, &kind, &Coder::Zstd(19), &cache);
+                rows.push_str(&format!(
+                    "{},{},{:.1},{}\n",
+                    rel,
+                    "build_zstd",
+                    t.elapsed().as_secs_f64() * 1e3,
+                    raw0.len()
+                ));
+                let t = Instant::now();
+                let (raw0z, _) = build(&pixels, dims, planar, med, &kind, &Coder::Zlib, &cache);
+                rows.push_str(&format!(
+                    "{},{},{:.1},{}\n",
+                    rel,
+                    "build_zlib",
+                    t.elapsed().as_secs_f64() * 1e3,
+                    raw0z.len()
+                ));
+                let geom7 = Geom {
+                    width: dims.width,
+                    height: dims.height,
+                    tile_count: u32::try_from(st.modes.len()).expect("tile count fits u32"),
+                    planar,
+                };
+
+                let t = Instant::now();
+                let z = backend_compress(BACKEND_ZSTD19, &raw0, Some(geom7))
+                    .expect("encoding an in-memory image cannot fail");
+                let _ = z;
+                rows.push_str(&format!(
+                    "{},{},{:.1},{}\n",
+                    rel,
+                    "zstd19_arm",
+                    t.elapsed().as_secs_f64() * 1e3,
+                    raw0.len()
+                ));
+                let t = Instant::now();
+                let zb = backend_compress(BACKEND_ZLIB, &raw0z, None)
+                    .expect("encoding an in-memory image cannot fail");
+                let _ = zb;
+                rows.push_str(&format!(
+                    "{},{},{:.1},{}\n",
+                    rel,
+                    "zlib_arm",
+                    t.elapsed().as_secs_f64() * 1e3,
+                    raw0z.len()
+                ));
+
+                // budget-form rate vs exhaustive rate (the D6
+                // stride-check loop penalty); 3 reps, min taken
+                let mut ex = vec![0u128; 3];
+                let mut bu = vec![0u128; 3];
+                for i in 0..3 {
+                    let t = Instant::now();
+                    let p = crate::mix_coder::mix_encode_with(&MixParams::BACKEND4, &raw0);
+                    ex[i] = t.elapsed().as_millis();
+                    drop(p);
+                    let t = Instant::now();
+                    let b = crate::mix_coder::mix_encode_with_budget(
+                        &MixParams::BACKEND4,
+                        &raw0,
+                        None,
+                        Some(usize::MAX), // never dominates; the check still runs
+                    );
+                    assert!(matches!(b, crate::mix_coder::MixBudget::Complete(_)));
+                    bu[i] = t.elapsed().as_millis();
+                }
+                let ex_min = ex.iter().min().copied().unwrap_or(0);
+                let bu_min = bu.iter().min().copied().unwrap_or(0);
+                rows.push_str(&format!(
+                    "{},{},{},{}\n",
+                    rel,
+                    "mix4_exhaustive_min_ms",
+                    ex_min,
+                    ex.len()
+                ));
+                rows.push_str(&format!(
+                    "{},{},{},{}\n",
+                    rel,
+                    "mix4_budget_completing_min_ms",
+                    bu_min,
+                    bu.len()
+                ));
+
+                // two full mix arms (plain + lane): the exact production
+                // exhaustion cost, no termination
+                let t = Instant::now();
+                let p = crate::mix_coder::mix_encode_with(&MixParams::BACKEND4, &raw0);
+                rows.push_str(&format!(
+                    "{},{},{:.1},{}\n",
+                    rel,
+                    "mix4_full",
+                    t.elapsed().as_secs_f64() * 1e3,
+                    raw0.len()
+                ));
+                let _ = p;
+                let t = Instant::now();
+                let p7 = crate::mix_coder::mix_encode_with_lane(&MixParams::BACKEND7, &raw0, geom7);
+                rows.push_str(&format!(
+                    "{},{},{:.1},{}\n",
+                    rel,
+                    "mix7_lane_full",
+                    t.elapsed().as_secs_f64() * 1e3,
+                    raw0.len()
+                ));
+                let _ = p7;
+            }
+            std::fs::write(&out_path, rows.clone()).expect("phase csv");
+            println!("d6_phase rows written to {out_path}:\n{rows}");
         }
     }
 

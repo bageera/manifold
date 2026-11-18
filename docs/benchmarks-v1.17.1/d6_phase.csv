@@ -1,0 +1,17 @@
+file,phase,ms,symbols
+testdata/gradient_320x240.png,build_zstd,319.8,231908
+testdata/gradient_320x240.png,build_zlib,787.5,231908
+testdata/gradient_320x240.png,zstd19_arm,24.0,231908
+testdata/gradient_320x240.png,zlib_arm,0.5,231908
+testdata/gradient_320x240.png,mix4_exhaustive_min_ms,196,3
+testdata/gradient_320x240.png,mix4_budget_completing_min_ms,194,3
+testdata/gradient_320x240.png,mix4_full,194.8,231908
+testdata/gradient_320x240.png,mix7_lane_full,198.9,231908
+/tmp/hf1_hubble_dec.png,build_zstd,4042.1,2621402
+/tmp/hf1_hubble_dec.png,build_zlib,9164.3,2624431
+/tmp/hf1_hubble_dec.png,zstd19_arm,435.4,2621402
+/tmp/hf1_hubble_dec.png,zlib_arm,53.5,2624431
+/tmp/hf1_hubble_dec.png,mix4_exhaustive_min_ms,2099,3
+/tmp/hf1_hubble_dec.png,mix4_budget_completing_min_ms,2103,3
+/tmp/hf1_hubble_dec.png,mix4_full,2106.8,2621402
+/tmp/hf1_hubble_dec.png,mix7_lane_full,2108.9,2621402
