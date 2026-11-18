@@ -1,50 +1,27 @@
-=== packaging ===
-error: 18 files in the working directory contain changes that were not yet committed into git:
+   Packaging manifold-codec v1.17.1 (/Users/jonbethea/projects/blacktech/manifold)
+    Updating crates.io index
+    Packaged 252 files, 3.4MiB (930.7KiB compressed)
+   Verifying manifold-codec v1.17.1 (/Users/jonbethea/projects/blacktech/manifold)
+   Compiling manifold-codec v1.17.1 (/Users/jonbethea/projects/blacktech/manifold/target/package/manifold-codec-1.17.1)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.37s
+PKG-CODEC-EXIT:0
+   Packaging manifold-codec-capi v1.17.1 (/Users/jonbethea/projects/blacktech/manifold/crates/manifold-capi)
+    Updating crates.io index
+error: failed to prepare local package for uploading
 
-CHANGELOG.md
-Cargo.lock
-Cargo.toml
-README.md
-docs/benchmarks-v1.17.1/external-verify.json
-docs/benchmarks-v1.17.1/packaging.log
-docs/benchmarks-v1.17.1/parity.log
-docs/benchmarks-v1.17.1/release-gate.log
-docs/mnf17-p1d6-record.md
-docs/v1.17.1-release-prep.md
-research/external-fixtures/v1.17.1/checker_external_101.png
-research/external-fixtures/v1.17.1/document_external_176x220.png
-research/external-fixtures/v1.17.1/flat_external_96.png
-research/external-fixtures/v1.17.1/grad_external_320x201.png
-research/external-fixtures/v1.17.1/noise_external_128.png
-research/external-fixtures/v1.17.1/photo_external_208x181.png
-src/main.rs
-src/mnf8.rs
-
-to proceed despite this and include the uncommitted changes, pass the `--allow-dirty` flag
-PKG-CODEC-EXIT:101
-error: package ID specification `manifold-capi` did not match any packages
-PKG-CAPI-EXIT:101
-shasum: target/package/manifold-codec-1.17.1.crate: No such file or directory
-shasum: target/package/manifold-capi-1.17.1.crate: No such file or directory
--rw-r--r--@ 1 jonbethea  staff  475493 Nov  4 10:40 target/package/manifold-codec-1.15.0.crate
--rw-r--r--@ 1 jonbethea  staff  533153 Nov 15 11:28 target/package/manifold-codec-1.16.0.crate
--rw-r--r--@ 1 jonbethea  staff  567656 Nov 16 19:12 target/package/manifold-codec-1.17.0.crate
--rw-r--r--@ 1 jonbethea  staff    7904 Nov 15 11:28 target/package/manifold-codec-capi-1.16.0.crate
--rw-r--r--@ 1 jonbethea  staff    7904 Nov 16 19:14 target/package/manifold-codec-capi-1.17.0.crate
-=== consumer smoke (rust, against packaged + extracted source) ===
-location searched: /tmp/v1171_crate_extracted/manifold-codec-1.17.1
-required by package `v1171-consumer v0.1.0 (/private/tmp/v1171_consumer)`
+Caused by:
+  failed to select a version for the requirement `manifold-codec = "^1.17.1"`
+  candidate versions found which didn't match: 1.17.0, 1.16.0, 1.15.0, ...
+  location searched: crates.io index
+  required by package `manifold-codec-capi v1.17.1 (/Users/jonbethea/projects/blacktech/manifold/crates/manifold-capi)`
+PKG-CAPI-EXIT(no-verify):101
+CODEC-CRATE-SHA256=e2266bfaead182a8182dbcc0b621437b2cd5be716f3b53c06699dc96c79bdef9
+-rw-r--r--@ 1 jonbethea  staff  953030 Nov 17 19:35 target/package/manifold-codec-1.17.1.crate
+=== consumer smoke (rust, against extracted packaged source) ===
+manifold-codec = { path = "/tmp/v1171_crate_extracted/manifold-codec-1.17.1" }
 RUST-SMOKE-EXIT:0
 === consumer smoke (c abi) ===
-error: package ID specification `manifold-capi` did not match any packages
-/tmp/v1171_consumer/csmoke.c:15:36: warning: operator '<<' has lower precedence than '+'; '+' will be evaluated first [-Wshift-op-parentheses]
-   15 |     size_t cap = (size_t)w * h * 3 + 1u << 16;
-      |                  ~~~~~~~~~~~~~~~~~~^~~~ ~~
-/tmp/v1171_consumer/csmoke.c:15:36: note: place parentheses around the '+' expression to silence this warning
-   15 |     size_t cap = (size_t)w * h * 3 + 1u << 16;
-      |                                    ^
-      |                  (                     )
-1 warning generated.
+    Finished `release` profile [optimized] target(s) in 0.07s
 ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[24](4f97f2375d6aa471-entropy_common.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
 ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[25](4f97f2375d6aa471-error_private.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
 ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[26](4f97f2375d6aa471-fse_decompress.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
@@ -78,6 +55,9 @@ ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/re
 ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[56](249ab7f209ebe57d-zstd_v05.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
 ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[57](249ab7f209ebe57d-zstd_v06.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
 ld: warning: object file (/Users/jonbethea/projects/blacktech/manifold/target/release/libmanifold_capi.a[58](249ab7f209ebe57d-zstd_v07.o)) was built for newer 'macOS' version (27.0) than being linked (26.0)
-encode status=-2 len=8938
-C-SMOKE-EXIT:1
-V1171-CHAIN-DONE
+encode status=0 len=8938
+decode size probe status=-2 need=8883 dims=63x47
+decode status=0 len=8883
+C-SMOKE-OK
+C-SMOKE-EXIT:0
+PACKAGING-DONE
