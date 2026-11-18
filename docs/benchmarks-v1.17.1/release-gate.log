@@ -1,42 +1,42 @@
 cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
     Checking manifold-codec v1.17.1 (/Users/jonbethea/projects/blacktech/manifold)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.57s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.66s
 cargo test --release
    Compiling manifold-codec v1.17.1 (/Users/jonbethea/projects/blacktech/manifold)
-    Finished `release` profile [optimized] target(s) in 6.90s
+    Finished `release` profile [optimized] target(s) in 5.72s
      Running unittests src/lib.rs (target/release/deps/manifold-a35ab6b1b858c1d5)
 
 running 92 tests
-test codec::tests::decoder_rejects_oversized_dims ... ok
-test codec::tests::grid_math ... ok
 test codec::tests::atlas_reference_shape_mismatch_rejected ... ok
-test codec::tests::proxy_cost_monotone ... ok
-test codec::tests::geom_reference_transform4_nonsquare_rejected ... ok
-test codec::tests::encoder_picks_reference_when_residual_compresses ... ok
-test codec::tests::no_atlas_uses_literals ... ok
 test codec::tests::decode_rejects_bad_inputs ... ok
-test error::tests::display_is_stable ... ok
-test codec::tests::roundtrip_solid_16x16_atlas ... ok
-test error::tests::error_is_std_error ... ok
-test laws::tests::const_law_recon_exact ... ok
-test codec::tests::roundtrip_solid_16x16_no_atlas ... ok
-test laws::tests::law_recon_roundtrip_exact ... ok
-test laws::tests::planar_seed_fits_an_actual_plane ... ok
-test laws::tests::wire_roundtrip_bilinear ... ok
+test codec::tests::decoder_rejects_oversized_dims ... ok
+test codec::tests::encoder_picks_reference_when_residual_compresses ... ok
+test codec::tests::geom_reference_transform4_nonsquare_rejected ... ok
+test codec::tests::grid_math ... ok
+test codec::tests::no_atlas_uses_literals ... ok
 test codec::tests::nonsquare_partial_tiles_use_shape_keeping_subset ... ok
+test codec::tests::proxy_cost_monotone ... ok
+test codec::tests::roundtrip_solid_16x16_atlas ... ok
+test error::tests::display_is_stable ... ok
+test error::tests::error_is_std_error ... ok
+test codec::tests::roundtrip_solid_16x16_no_atlas ... ok
+test laws::tests::const_law_recon_exact ... ok
+test laws::tests::planar_seed_fits_an_actual_plane ... ok
+test laws::tests::law_recon_roundtrip_exact ... ok
 test laws::tests::wire_roundtrip_planar ... ok
+test laws::tests::wire_roundtrip_bilinear ... ok
+test codec::tests::encode_mnf5_one_call_roundtrip ... ok
 test mix_coder::p1c4b::p1c4c_constructor_probe ... ignored
 test codec::tests::roundtrip_odd_dims ... ok
-test codec::tests::encode_mnf5_one_call_roundtrip ... ok
 test codec::tests::d8_transforms_roundtrip_lossless ... ok
-test codec::tests::roundtrip_random_pixels ... ok
-test mix_coder::tests::mix_backend4_roundtrip_runs ... ok
 test codec::tests::roundtrip_uniform_atlas_matches_noatlas ... ok
+test codec::tests::roundtrip_random_pixels ... ok
 test mix_coder::tests::backend7_lane_wire_matches_audit ... ok
+test mix_coder::tests::mix_backend4_roundtrip_runs ... ok
 test mix_coder::tests::mix_backend5_rejects_malformed ... ok
-test mix_coder::tests::mix_backends45_byte_frozen ... ok
 test mnf6::tests::bit9_roundtrip ... ok
+test mix_coder::tests::mix_backends45_byte_frozen ... ok
 test mix_coder::tests::mix_backend6_rejects_malformed ... ok
 test mix_coder::tests::mix_backend5_roundtrip_and_distinct ... ok
 test mnf6::tests::mnf6_rejects ... ok
@@ -72,16 +72,16 @@ test mnf8::mnf17_p1a_census::p1b_decomp ... ignored
 test mnf8::mnf17_p1a_census::p1c4a_cohort ... ignored
 test mnf8::mnf17_p1a_census::p1c4bcd_cohort ... ignored
 test mnf8::mnf17_p1a_census::p1c6_cohort ... ignored
-test mnf8::tests::mnf8_balanced_picks_zstd_not_hardcoded ... ok
 test mix_coder::p1d2::d2_differential ... ok
-test mnf8::tests::mnf8_forced_mode4_mode5_records ... ok
-test mnf8::tests::mnf8_balanced_roundtrip_all_classes ... ok
 test mix_coder::oracle::c5_oracle_differential ... ok
-test mnf8::tests::mnf8_med_flag_roundtrip_photo_like ... ok
-test mnf8::tests::mnf8_no_atlas_arm ... ok
+test mnf8::tests::mnf8_balanced_picks_zstd_not_hardcoded ... ok
+test mnf8::tests::mnf8_forced_mode4_mode5_records ... ok
 test mix_coder::d6_budget_differential ... ok
-test mnf8::tests::mnf8_rejects ... ok
+test mnf8::tests::mnf8_balanced_roundtrip_all_classes ... ok
+test mnf8::tests::mnf8_no_atlas_arm ... ok
 test mnf8::tests::mnf8_no_geom_no_flips ... ok
+test mnf8::tests::mnf8_rejects ... ok
+test mnf8::tests::mnf8_med_flag_roundtrip_photo_like ... ok
 test mnf8::tests::mnf8_med_flag_picked_on_photo_like_smoothing ... ok
 test mnf8::tests::mnf8_tokens_decode_rejects_malformed_wire ... ok
 test mnf8::tests::token_wire_unit_roundtrip_and_errors ... ok
@@ -93,15 +93,15 @@ test tokens::near_matches_fire_and_roundtrip_exactly ... ok
 test tokens::near_preferred_on_equal_length ... ok
 test mnf8::tests::mnf8_token_flag_not_picked_on_noise ... ok
 test mnf8::tests::mnf8_token_flag_picked_on_repeating_residual ... ok
-test mnf8::gate30::branch_arms_roundtrip_and_pick_fires ... ok
 test mix_coder::p1c4a::c4a_differential_fixtures ... ok
+test mnf8::gate30::branch_arms_roundtrip_and_pick_fires ... ok
 test mnf8::channel_diff::cd_roundtrip_all_predictor_shapes ... ok
 test mnf8::channel_diff::d6_pick_parity ... ok
 test mix_coder::p1c4b::c4b_ab_differential_fixtures ... ok
 test mnf8::channel_diff::cd_pick_never_worse ... ok
 test mnf8::tests::mnf8_maximum_never_loses_to_mnf7 ... ok
 
-test result: ok. 74 passed; 0 failed; 18 ignored; 0 measured; 0 filtered out; finished in 60.81s
+test result: ok. 74 passed; 0 failed; 18 ignored; 0 measured; 0 filtered out; finished in 56.45s
 
      Running unittests src/main.rs (target/release/deps/manifold-7623595a18c26c63)
 
@@ -126,7 +126,7 @@ test decoders_agree_on_rejections ... ok
 test decoders_agree_on_corpus_across_arms ... ok
 test decoders_agree_on_mnf8_token_arm ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.20s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.73s
 
      Running tests/mnf6_conformance.rs (target/release/deps/mnf6_conformance-308f79ff11aeae97)
 
@@ -137,41 +137,41 @@ test mnf6_golden_vector_exact ... ok
 test mnf6_full_corpus_fits_beats_mnf5_everywhere ... ok
 test mnf6_roundtrip_all_corpus_all_arms ... ok
 
-test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.20s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.05s
 
      Running tests/mnf8_conformance.rs (target/release/deps/mnf8_conformance-37177682cb829ab8)
 
 running 16 tests
-test mnf8_mix5_rejects ... ok
 test mnf8_mix6_rejects ... ok
+test mnf8_mix5_rejects ... ok
 test mnf8_branch_rejections ... ok
 test mnf8_cdiff_rejections ... ok
 test mnf8_golden_vector_exact ... ok
 test mnf8_cdiff_golden_vector_exact ... ok
 test mnf8_branch_golden_vector_exact ... ok
+test mnf8_ref3_golden_vector_exact ... ok
 test mnf8_mix_rejections ... ok
 test mnf8_tokens_golden_vector_exact ... ok
-test mnf8_ref3_golden_vector_exact ... ok
 test mnf8_rejection_vectors_rejected_without_panic ... ok
 test mnf8_ref2_golden_vector_exact ... ok
-test mnf8_mix6_golden_vector_exact ... ok
-test mnf8_mix5_golden_vector_exact ... ok
 test mnf8_mix_golden_vector_exact ... ok
+test mnf8_mix5_golden_vector_exact ... ok
+test mnf8_mix6_golden_vector_exact ... ok
 test mnf8_corpus_roundtrips_both_profiles has been running for over 60 seconds
 test mnf8_corpus_roundtrips_both_profiles ... ok
 
-test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 64.08s
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 69.40s
 
    Doc-tests manifold
 
 running 1 test
 test src/lib.rs - (line 11) - compile ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
 
 cargo doc --no-deps
  Documenting manifold-codec v1.17.1 (/Users/jonbethea/projects/blacktech/manifold)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.66s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.64s
    Generated /Users/jonbethea/projects/blacktech/manifold/target/doc/manifold/index.html
 GATE: OK (fmt, clippy, tests, docs)
 GATE-OK

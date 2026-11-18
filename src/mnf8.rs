@@ -4494,8 +4494,8 @@ mod channel_diff {
 
                 // budget-form rate vs exhaustive rate (the D6
                 // stride-check loop penalty); 3 reps, min taken
-                let mut ex = vec![0u128; 3];
-                let mut bu = vec![0u128; 3];
+                let mut ex = [0u128; 3];
+                let mut bu = [0u128; 3];
                 for i in 0..3 {
                     let t = Instant::now();
                     let p = crate::mix_coder::mix_encode_with(&MixParams::BACKEND4, &raw0);
