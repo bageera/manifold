@@ -1,5 +1,25 @@
 # Changelog
 
+## Research — BZ16-I4B: matched float/fixed comparison, retention confirmed (2026-11-18, not a release)
+
+Under the revised BZ16 methodology (Python = screening environment, Rust =
+confirmation environment; artifact parity optional reference), I4B is
+measured in-repo: the R2H recovered fixed-point pipeline (drift-checked
+against the R2H goldens first — full-stream digests, z tails, window
+vectors, 9/9 byte-identical) against a float twin with identical structure
+(f64 state, the exact exponential in place of the LUT, no drift repair,
+shared Σ 32,768 frequency domain). [docs/bz16-i4b-record.md](docs/bz16-i4b-record.md).
+Verdict: the fixed-point model retains the float engine's compression
+effectiveness — full-stream ideal-cost deltas within ±0.65% on all nine
+(3 fixtures × Q8/Q12/Q16) rigs, max single-position divergence 11.49 bits,
+no systematic sign (fixed is cheaper on 5/9, Q12 at −0.005%…−0.209%). The
+k ≥ 0 clamp is mirrored into the float engine (a slammed-negative state
+would otherwise overflow to inf); the upper LUT saturation floor is
+deliberately left off — its cost shows up in the measured delta
+(brick-Q16 −0.643%). I5 (change-point) and I7 (bounds/streaming) next;
+native replay stays CONDITIONAL against Manifold's production entropy
+models, not the uniform baseline.
+
 ## Research — BZ16-R2H: recovered-semantics reconciliation, R2H-B..D exercised in-repo (2026-11-18, not a release)
 
 The R2H memo authorized the original-reference handoff gate (R2H-A artifact
