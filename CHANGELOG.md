@@ -1,5 +1,22 @@
 # Changelog
 
+## Docs — README results snapshot refreshed at the v1.17.1 vintage (2026-11-18, not a release)
+
+Mechanical refresh: `make corpus` re-run on the current tree (scripts/
+compare_lossless.py, 30 corpus files, RC=0; log
+[research/results/readme-refresh-corpus.log](research/results/readme
+-refresh-corpus.log)) before any table cell changed, then every cell
+lifted from the run's `/tmp/cmp.csv` — the skill-gated "re-verify the
+table cells mechanically before the next docs commit" item. Changes:
+screenshot's pick improved 667 → **472 B** (the v1.17 backend-7
+lane-class model's win); the JXL column regenerated (repeat 9,073,
+screenshot 470, gradient 3,559, blob 5,485, noise 213,411 — the harness's
+current jxl encoders); PNG/WebP/mix-pick cells byte-identical to the
+v1.13.0-vintage table where they appeared; the encoder-arms prose now
+describes the actual measured set (backend 4 through the lane-class
+backend 7 plus the generic zstd/zlib controls) and the library-surface
+table lists backend 4/5/6/7.
+
 ## Research — BZ16 formally CLOSED on the operator's final memo (2026-11-18, not a release)
 
 N3-R accepted; production integration DENIED, N4 and Hubble NOT

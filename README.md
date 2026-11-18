@@ -72,7 +72,7 @@ the in-repo crate and lib name stay `manifold`) and **`manifold-codec-capi`**
 | --- | ------ | ----- |
 | `manifold-codec` / `codec::*` (MNF5 encode/decode, `DecodeLimits`) | stable (v1.x semver) | v1.0 |
 | MNF8 (backend field + FLAG_PRED_MED + FLAG_TOKENS, ADR-002/003) | stable (v1.x semver; TOKENS since v1.6) | v1.2.1 |
-| `mnf8::*` MNF8 encode/decode, profiles, predictor flags; `mix_coder` backend 4/5/6 mix coders (v1.13+), `laws` IF4 tile-law record modes 6/7 (v1.15) | stable | v1.2.0 |
+| `mnf8::*` MNF8 encode/decode, profiles, predictor flags; `mix_coder` backend 4/5/6/7 mix coders (v1.13–v1.17), `laws` IF4 tile-law record modes 6/7 (v1.15) | stable | v1.2.0 |
 | `mnf9::*` MNF9 exact-generative whole-frame encode/decode (ADR-007) | stable | v1.10.0 |
 | `error::Error` / `error::Result` (matchable categories) | stable | v1.2.1 |
 | `refdecode::ref_decode` (independent MNF5 decoder) | stable | v1.2.1 |
@@ -100,11 +100,13 @@ candidates from the last-128-window atlas by structural signature
 cost. MNF6/MNF7 encoders are rate-aware: they build the full tile stream
 under every flag variant and emit the smallest file. MNF8 additionally
 measures FLAG_PRED_MED (image-wide JPEG-LS MED pre-predictor in front of
-literal bodies, causal inversion in the decoder) and the v1.13 backend-4
-dual-timescale mix coder — both picked per file at complete-file cost;
+literal bodies, causal inversion in the decoder), the adaptive mix
+coder family (the v1.13 backend-4 dual-timescale coder through the
+v1.16 warm/R9 composition and the v1.17 lane-class backend 7) plus the
+generic zstd/zlib controls — all picked per file at complete-file cost;
 the shipped pick is never worse than the prior arms by construction.
 
-## Results snapshot (v1.13.0 pick, fair corpus comparison)
+## Results snapshot (v1.17.1 pick, fair corpus comparison)
 
 Complete serialized bytes from one `make corpus` run (scripts/
 compare_lossless.py: identical decoded RGB8, pixel-exact checks, current
@@ -113,11 +115,11 @@ corpus files, webp/jxl if installed); honest losses included.
 | Image | pick (mnf8-max) | PNG | WebP | JXL |
 |---|---|---|---|---|
 | solid 256² | **36** | 761 | 44 | 49 |
-| repeat-pattern 256² | **301** | 2,799 | 358 | 7,261 |
-| screenshot 640×400 | **667** | 2,118 | 320 | 498 |
-| gradient 320×240 | **254** | 2,902 | 148 | 1,603 |
-| blob (held-out) | **5,986** | 9,778 | 7,792 | 7,786 |
-| noise 256² | 196,912 | 197,106 | **196,688** | 216,172 |
+| repeat-pattern 256² | **301** | 2,799 | 358 | 9,073 |
+| screenshot 640×400 | **472** | 2,118 | 320 | 470 |
+| gradient 320×240 | **254** | 2,902 | 148 | 3,559 |
+| blob (held-out) | **5,986** | 9,778 | 7,792 | 5,485 |
+| noise 256² | 196,912 | 197,106 | **196,688** | 213,411 |
 
 WebP's palette mode keeps the flat-color classes; the pick's MNF9/record
 arms keep the synthetic corpus; photographic files still lose to WebP/JXL
