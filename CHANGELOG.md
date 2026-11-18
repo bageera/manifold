@@ -1,5 +1,27 @@
 # Changelog
 
+## Research — BZ16-R2H: recovered-semantics reconciliation, R2H-B..D exercised in-repo (2026-11-18, not a release)
+
+The R2H memo authorized the original-reference handoff gate (R2H-A artifact
+verification, R2H-B semantic reconciliation, R2H-C 36 golden vectors, R2H-D
+nine full-stream probability-trace SHA-256 digests) and delivered the
+recovered model semantics as a reconciliation table in the memo body. The
+transfer package is not on this box, so R2H-B..D run in-repo per the
+twin-prototype convention: scalar Python reference
+(`crates/mnf-mans/scripts/bz16_r2h_reference.py`) plus an independent Rust
+twin (`crates/mnf-mans/examples/bz16_r2h_parity.rs`), each recovered row
+overriding the corresponding R2 pin ([docs/bz16-r2h-record.md](docs/bz16-r2h-record.md)
+carries the full provenance split and result tables). All nine
+(fixture × precision) rigs pass: 512-window parity per position (energies,
+k indices, post-update carries, counter digest, full f/F vectors), the
+36-golden structure, byte-equal incremental trace digests (BE-u16
+pre-observation frequencies, no retained histories), post-run z carries, and
+the CACM87 decode instrument — with the memo §5 Q16 bounds widened and
+asserted (energy 3,221,225,472 → i64; gradient ×16 < 2^62). R2H-A stays
+PENDING the delivered package; the in-repo pair's digests are twin-internal,
+never "the accepted reference's". No production-surface edits; I4B
+CONDITIONAL, I5/I7/native replay/production HOLD per memo.
+
 ## Research — BZ16-R2: in-repo numerical parity prototype, R2-A..G exercised (2026-11-18, not a release)
 
 The R2 gate (exact Python–Rust integer parity) is executed in-repo: a scalar
