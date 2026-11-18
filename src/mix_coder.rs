@@ -3267,3 +3267,693 @@ pub(crate) mod p1d2 {
 
     pub(crate) const HEADER8_SIZE: usize = 32;
 }
+
+// ==== MNF17-N2/N3: native probability replay + cost harness ============
+// (research instrument; production behavior untouched — env-gated #[ignore]
+// test. The BZ16 engine mirrors crates/mnf-mans/examples/bz16_r2h_parity.rs
+// verbatim (frozen LUT fnv asserted); the six authorized arms replay on the
+// MNF17-N1 acquisition binaries; N3 = in-loop component timers + incremental
+// 18-bit CACM87 serialization per arm. Production-conditioned arms use the
+// backend-7 lane-class model (the production entropy-model family) uniformly;
+// A0 = each stream's actual production payload from the N1 ledger.)
+#[cfg(test)]
+mod mnf17_n2_replay {
+    use super::{build_parent_tree, mix_ctx_key, share_step, Geom, LaneWalk, MixCtx, MixParams};
+
+    // --- recovered engine pins (bz16_r2h_parity.rs verbatim) ---
+    const BZ_K_MAX: i64 = 4096;
+    const BZ_N_ENTRIES: usize = 4097;
+    const BZ_SCALE: f64 = (1u32 << 24) as f64;
+    const BZ_PROB_TOTAL: i64 = 32768;
+    const BZ_W_SUM: i64 = 65536;
+    const BZ_W_INIT: i64 = BZ_W_SUM / 4;
+    const BZ_FS_NUM: i64 = 999;
+    const BZ_FS_ADD: i64 = 16384;
+    const BZ_FS_DEN: i64 = 1000;
+    const BZ_GRAD_DEN: i64 = 32768;
+    const BZ_FREQ_SUM: i64 = BZ_PROB_TOTAL;
+    const BZ_R_TOP: i64 = 0x3_FFFF;
+    const BZ_R_HALF: i64 = 0x2_0000;
+    const BZ_R_QUARTER: i64 = 0x1_0000;
+    const BZ_R_3QUARTER: i64 = 0x3_0000;
+    const BZ_X_SHIFT: u32 = 9;
+    const BZ_LUT_FNV: u64 = 0x50abef206188b374;
+
+    const OUT_DEFAULT: &str = "research/results/mnf17-n2-summary.csv";
+    const DIR_DEFAULT: &str = "research/results/mnf17-n1";
+
+    /// The seven-screening-cohort container geometries (static testdata;
+    /// tile_count = div_ceil(TILE_SIZE) grid; planar comes from the ledger).
+    const GEOMS: [(&str, u32, u32); 7] = [
+        ("solid_256x256", 256, 256),
+        ("gradient_320x240", 320, 240),
+        ("repeat_256x256", 256, 256),
+        ("screenshot_640x400", 640, 400),
+        ("noise_256x256", 256, 256),
+        ("forest_224x160_s900002", 224, 160),
+        ("terrain_160x120_s3100000", 160, 120),
+    ];
+
+    fn round_half_even(x: f64) -> f64 {
+        let fl = x.floor();
+        let frac = x - fl;
+        let up = frac > 0.5 || (frac == 0.5 && (fl as i64) % 2 != 0);
+        if up {
+            fl + 1.0
+        } else {
+            fl
+        }
+    }
+
+    fn build_lut() -> Vec<i64> {
+        (0..BZ_N_ENTRIES)
+            .map(|k| {
+                let r = round_half_even(BZ_SCALE * (0.0 - k as f64 / 256.0).exp());
+                r.clamp(1.0, u32::MAX as f64) as i64
+            })
+            .collect()
+    }
+
+    fn fnv1a_le(values: &[i64]) -> u64 {
+        let mut h: u64 = 0xcbf29ce484222325;
+        for &v in values {
+            for shift in [0u32, 8, 16, 24] {
+                h ^= ((v >> shift) & 0xFF) as u64;
+                h = h.wrapping_mul(0x100000001b3);
+            }
+        }
+        h
+    }
+
+    fn cdist(a: i64, b: i64) -> i64 {
+        let d = (a - b).abs();
+        if d <= 128 {
+            d
+        } else {
+            256 - d
+        }
+    }
+
+    fn clamp_k(e: i64, shift: u32) -> i64 {
+        (e >> shift).clamp(0, BZ_K_MAX)
+    }
+
+    fn round_half_away(n: i64, d: i64) -> i64 {
+        if n >= 0 {
+            (2 * n + d) / (2 * d)
+        } else {
+            -((-2 * n + d) / (2 * d))
+        }
+    }
+
+    /// Same recovered rule (grant +1 to the first max of the original
+    /// input order, granted slots sort behind every tie; zero repair pulls
+    /// from the current first max), exercised with heaps so the grant and
+    /// repair loops are O(log n) instead of O(n) per grant.
+    fn largest_remainder(num: &[i64], total: i64, sum_to: i64) -> (Vec<i64>, usize) {
+        assert!(total > 0, "LR total");
+        let mut fs: Vec<i64> = num.iter().map(|&n| n * sum_to / total).collect();
+        let mut heap = std::collections::BinaryHeap::with_capacity(fs.len());
+        for (i, (&n, &f)) in num.iter().zip(fs.iter()).enumerate() {
+            heap.push((n * sum_to - f * total, std::cmp::Reverse(i)));
+        }
+        let mut remaining = sum_to - fs.iter().sum::<i64>();
+        while remaining > 0 {
+            if let Some((r, std::cmp::Reverse(m))) = heap.pop() {
+                fs[m] += 1;
+                remaining -= 1;
+                heap.push((r - total, std::cmp::Reverse(m)));
+            }
+        }
+        let mut repairs = 0usize;
+        let mut fheap: std::collections::BinaryHeap<(i64, std::cmp::Reverse<usize>)> = fs
+            .iter()
+            .enumerate()
+            .map(|(i, &f)| (f, std::cmp::Reverse(i)))
+            .collect();
+        for s in 0..fs.len() {
+            if fs[s] == 0 {
+                repairs += 1;
+                let (fm, std::cmp::Reverse(m)) = fheap.pop().expect("non-empty");
+                fs[m] -= 1;
+                fs[s] += 1;
+                fheap.push((fm - 1, std::cmp::Reverse(m)));
+            }
+        }
+        assert_eq!(fs.iter().sum::<i64>(), sum_to, "remainder invariant");
+        assert!(*fs.iter().min().unwrap() >= 1, "remainder floor");
+        (fs, repairs)
+    }
+
+    struct BzState {
+        c_hi: [i64; 3],
+        c_lo: [i64; 3],
+        w: [i64; 4],
+        counters: Vec<i64>,
+    }
+
+    impl BzState {
+        fn new() -> Self {
+            BzState {
+                c_hi: [0; 3],
+                c_lo: [0; 3],
+                w: [BZ_W_INIT; 4],
+                counters: vec![1; 256],
+            }
+        }
+    }
+
+    struct BzModel<'a> {
+        lut: &'a [i64],
+        shift: u32,
+        s_lim: i64,
+    }
+
+    impl<'a> BzModel<'a> {
+        fn new(lut: &'a [i64], n_q: u32) -> Self {
+            BzModel {
+                lut,
+                shift: n_q - 4,
+                s_lim: 1i64 << n_q,
+            }
+        }
+
+        /// Recovered mixture: features cdist(v,{0,up,left})<<5; counter
+        /// unigram via largest remainder; mixture (weights Q16, probs 2^15).
+        fn mixture(
+            &self,
+            s: &BzState,
+            up: i64,
+            left: i64,
+            p_hi: &mut [i64; 256],
+            p_lo: &mut [i64; 256],
+            p_hi24: &mut [i64; 256],
+        ) -> (Vec<i64>, Vec<i64>, i64) {
+            let x_unif = 128i64;
+            for v in 0..=255i64 {
+                let d0 = cdist(v, 0) << 5;
+                let d1 = cdist(v, up) << 5;
+                let d2 = cdist(v, left) << 5;
+                let e_hi = s.c_hi[0] * d0 + s.c_hi[1] * d1 + s.c_hi[2] * d2;
+                let e_lo = s.c_lo[0] * d0 + s.c_lo[1] * d1 + s.c_lo[2] * d2;
+                // asymmetric domain (R2H-E): S = 2^Q = c_lim/4
+                assert!(
+                    e_hi >= -self.s_lim * 12288
+                        && e_hi <= 4 * self.s_lim * 12288
+                        && 2 * e_lo >= -2 * self.s_lim * 12288
+                        && 2 * e_lo <= 8 * self.s_lim * 12288,
+                    "energy domain"
+                );
+                let k_hi = clamp_k(e_hi, self.shift);
+                let k_lo = clamp_k(2 * e_lo, self.shift);
+                p_hi[v as usize] = self.lut[k_hi as usize] >> BZ_X_SHIFT;
+                p_lo[v as usize] = self.lut[k_lo as usize] >> BZ_X_SHIFT;
+                // Q24 LUT row (the unwindowed exp; LUT floors at 1, so the
+                // standalone/tilted arms never go all-zero in Q15)
+                p_hi24[v as usize] = self.lut[k_hi as usize];
+            }
+            let cnt_sum = s.counters.iter().sum::<i64>();
+            let (cnt_fs, _) = largest_remainder(&s.counters, cnt_sum, BZ_FREQ_SUM);
+            let m: Vec<i64> = (0..256)
+                .map(|v| {
+                    (s.w[0] * p_hi[v] + s.w[1] * p_lo[v] + s.w[2] * cnt_fs[v] + s.w[3] * x_unif)
+                        >> 16
+                })
+                .collect();
+            (m, cnt_fs, x_unif)
+        }
+    }
+
+    /// Recovered adaptation (gradient + fixed-share); `symmetric` = the
+    /// labeled ±c_lim ablation instead of the recovered [−S, 4S].
+    fn bz_adapt(
+        state: &mut BzState,
+        o: usize,
+        ds: [i64; 3],
+        p_hi: &[i64; 256],
+        p_lo: &[i64; 256],
+        cnt_fs: &[i64],
+        x_unif: i64,
+        f: &[i64],
+        n_q: u32,
+        symmetric: bool,
+    ) {
+        let c_lim = 4i64 << n_q;
+        for (cs, xs) in [(&mut state.c_hi, p_hi), (&mut state.c_lo, p_lo)] {
+            let err = f[o] - xs[o];
+            assert!(
+                -BZ_FREQ_SUM < err && err <= BZ_FREQ_SUM,
+                "gradient err bound"
+            );
+            for (i, &di) in ds.iter().enumerate() {
+                let num = err * di;
+                assert!(num.abs() <= BZ_FREQ_SUM * 4096, "gradient num bound");
+                let new = cs[i] - round_half_away(num, BZ_GRAD_DEN);
+                cs[i] = if symmetric {
+                    new.clamp(-c_lim, c_lim)
+                } else {
+                    // recovered asymmetric clamp (R2H-E): -S <= b <= 4S
+                    new.clamp(-(c_lim / 4), c_lim)
+                };
+            }
+        }
+        let posts = [
+            state.w[0] * p_hi[o],
+            state.w[1] * p_lo[o],
+            state.w[2] * cnt_fs[o],
+            state.w[3] * x_unif,
+        ];
+        let (post, _) = largest_remainder(&posts, posts.iter().sum(), BZ_W_SUM);
+        for (w_slot, &pv) in state.w.iter_mut().zip(post.iter()) {
+            *w_slot = round_half_away(BZ_FS_NUM * pv + BZ_FS_ADD, BZ_FS_DEN);
+        }
+        let drift = BZ_W_SUM - state.w.iter().sum::<i64>();
+        if drift != 0 {
+            let mut m = 0usize;
+            for i in 1..4 {
+                if state.w[i] > state.w[m] {
+                    m = i;
+                }
+            }
+            assert!(state.w[m] + drift >= 0, "drift preserves non-negativity");
+            state.w[m] += drift;
+        }
+        assert_eq!(state.w.iter().sum::<i64>(), BZ_W_SUM, "weights invariant");
+    }
+
+    /// 18-bit CACM87 symbol coder (R2H pins); external freq tables.
+    struct AcCoder {
+        low: i64,
+        high: i64,
+        pending: i64,
+        bits: Vec<u8>,
+    }
+
+    impl AcCoder {
+        fn new() -> Self {
+            AcCoder {
+                low: 0,
+                high: BZ_R_TOP,
+                pending: 0,
+                bits: Vec::new(),
+            }
+        }
+
+        fn encode(&mut self, o: usize, f: &[i64]) {
+            let mut cums = [0i64; 257];
+            let mut acc = 0i64;
+            for (s, &fv) in f.iter().enumerate() {
+                cums[s] = acc;
+                acc += fv;
+            }
+            cums[256] = acc;
+            assert!(1 <= f[o] && f[o] <= BZ_FREQ_SUM, "coder-fit frequency");
+            let rng = self.high - self.low + 1;
+            self.high = self.low + (rng * cums[o + 1]) / BZ_FREQ_SUM - 1;
+            self.low += (rng * cums[o]) / BZ_FREQ_SUM;
+            assert!(self.low <= self.high, "inverted interval");
+            let mut it = 0usize;
+            loop {
+                it += 1;
+                assert!(it <= 256, "renorm loop");
+                if self.high < BZ_R_HALF {
+                    self.emit(0);
+                } else if self.low >= BZ_R_HALF {
+                    self.emit(1);
+                    self.low -= BZ_R_HALF;
+                    self.high -= BZ_R_HALF;
+                } else if self.low >= BZ_R_QUARTER && self.high < BZ_R_3QUARTER {
+                    self.pending += 1;
+                    self.low -= BZ_R_QUARTER;
+                    self.high -= BZ_R_QUARTER;
+                } else {
+                    break;
+                }
+                self.low <<= 1;
+                self.high = (self.high << 1) | 1;
+            }
+        }
+
+        fn emit(&mut self, bit: u8) {
+            self.bits.push(bit);
+            while self.pending > 0 {
+                self.bits.push(1 - bit);
+                self.pending -= 1;
+            }
+        }
+
+        fn seal(mut self) -> Vec<u8> {
+            self.pending += 1;
+            let fin: u8 = if self.low < BZ_R_QUARTER { 0 } else { 1 };
+            self.emit(fin);
+            self.bits
+        }
+    }
+
+    struct Rec {
+        b: u8,
+        cls: u8,
+        left: u8,
+        upper: u8,
+    }
+
+    struct ArmOut {
+        a1_bits: f64,
+        b0_bits: f64,
+        b1_bits: f64,
+        c0_bits: f64,
+        c1_bits: f64,
+        b0_wire_b: usize,
+        b1_wire_b: usize,
+        c0_wire_b: usize,
+        c1_wire_b: usize,
+        mix_ns_pos: u128,
+        eng_ns_pos: u128,
+    }
+
+    /// The fused six-arm replay over one fully-eligible stream.
+    fn replay(recs: &[Rec], geom: super::Geom, n_q: u32, symmetric: bool) -> ArmOut {
+        static LUT: std::sync::OnceLock<Vec<i64>> = std::sync::OnceLock::new();
+        let lut = LUT.get_or_init(|| {
+            let l = build_lut();
+            assert_eq!(fnv1a_le(&l), BZ_LUT_FNV, "frozen exp LUT");
+            l
+        });
+        let params = MixParams::BACKEND7;
+        let mut ctxs: Vec<MixCtx> = (0..params.nctx)
+            .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+            .collect();
+        build_parent_tree(&mut ctxs, &params);
+        let mut walk = LaneWalk::new(geom.width, geom.height, geom.tile_count, geom.planar)
+            .expect("lane walk");
+        let model = BzModel::new(lut, n_q);
+        let mut state = BzState::new();
+        let mut p_hi = [0i64; 256];
+        let mut p_lo = [0i64; 256];
+        let mut p_hi24 = [0i64; 256];
+        let mut prev = 0u8;
+        let mut prev2 = 0u8;
+        let mut prev3 = 0u8;
+        let mut a1_bits = 0f64;
+        let mut b0_bits = 0f64;
+        let mut b1_bits = 0f64;
+        let mut c0_bits = 0f64;
+        let mut c1_bits = 0f64;
+        let mut ac_b0 = AcCoder::new();
+        let mut ac_b1 = AcCoder::new();
+        let mut ac_c0 = AcCoder::new();
+        let mut ac_c1 = AcCoder::new();
+        let mut mix_ns = 0u128;
+        let mut eng_ns = 0u128;
+        // C1's two-expert fixed-share state (production + hi expert):
+        // the recovered constants on two slots.
+        let mut w2 = [BZ_W_SUM / 2, BZ_W_SUM / 2];
+        for r in recs {
+            let o = usize::from(r.b);
+            // --- production mix step (mix_encode_with_lane verbatim) ---
+            let t0 = std::time::Instant::now();
+            let cls = walk.peek_class().expect("byte beyond the record grammar");
+            let class_ok = walk.consume(r.b);
+            assert!(class_ok.is_some(), "well-formed record stream");
+            assert_eq!(cls, r.cls, "N1 walk parity");
+            let base = mix_ctx_key(&params, prev, prev2, prev3);
+            let c = if params.lane_child && cls == 1 {
+                base + 20
+            } else {
+                base
+            };
+            let pm: Vec<i64> = ctxs[c]
+                .probs_with(&ctxs, &params) // 2^24 scale, Σ=2^24
+                .iter()
+                .map(|&x| x as i64)
+                .collect();
+            ctxs[c].step(r.b);
+            share_step(&mut ctxs, &params, c, r.b);
+            prev3 = prev2;
+            prev2 = prev;
+            prev = r.b;
+            mix_ns += t0.elapsed().as_nanos();
+            // production model bits (2^24 fixed point)
+            a1_bits += -((pm[o] as f64).log2() - 24.0);
+            // production vector at Q15 for the conditioned arms
+            let (pm15, _) = largest_remainder(&pm, 1i64 << 24, BZ_FREQ_SUM);
+            // --- recovered engine step (N1 acquisition geometry) ---
+            let t1 = std::time::Instant::now();
+            let (m, cnt_fs, x_unif) = model.mixture(
+                &state,
+                i64::from(r.upper),
+                i64::from(r.left),
+                &mut p_hi,
+                &mut p_lo,
+                &mut p_hi24,
+            );
+            // the recovered coder's zero-mixture fallback (weights can all
+            // dilute to the +16384 fixed-share floor; Σm = 0 → uniform)
+            let m_sum = m.iter().sum::<i64>();
+            let (f0, _) = if m_sum > 0 {
+                largest_remainder(&m, m_sum, BZ_FREQ_SUM)
+            } else {
+                (vec![BZ_FREQ_SUM / 256; 256], 0)
+            };
+            // B1: standalone Boltzmann = the hi expert normalized from its
+            // native Q24 LUT row (LR floor ≥ 1: never all-zero at any β)
+            let p_hi24_sum = p_hi24.iter().sum::<i64>();
+            let (f1, _) = largest_remainder(&p_hi24.to_vec(), p_hi24_sum, BZ_FREQ_SUM);
+            // C0: production prior × Boltzmann tilt (the hi expert; β baked
+            // into the engine's LUT/coefficients), per-position renormalized.
+            // (2^16 domains both sides: pm16 = LR(pm → 2^16; products ≤ 2^32)
+            let (pm16, _) = largest_remainder(&pm, 1i64 << 24, 1i64 << 16);
+            let (hi16, _) = largest_remainder(&p_hi24.to_vec(), p_hi24_sum, 1i64 << 16);
+            let q0: Vec<i64> = (0..256).map(|v| pm16[v] * hi16[v]).collect();
+            let (fc0, _) = largest_remainder(&q0, q0.iter().sum(), BZ_FREQ_SUM);
+            // C1: adaptive two-expert mixture (prod + hi), recovered
+            // fixed-share on two slots.
+            let m1: Vec<i64> = (0..256)
+                .map(|v| (w2[0] * pm15[v] + w2[1] * hi16[v]) >> 16)
+                .collect();
+            let (fc1, _) = largest_remainder(&m1, m1.iter().sum(), BZ_FREQ_SUM);
+            // costs + serialization (all incremental, same symbols)
+            b0_bits += -((f0[o] as f64).log2() - 15.0);
+            b1_bits += -((f1[o] as f64).log2() - 16.0);
+            c0_bits += -((fc0[o] as f64).log2() - 15.0);
+            c1_bits += -((fc1[o] as f64).log2() - 15.0);
+            ac_b0.encode(o, &f0);
+            ac_b1.encode(o, &f1);
+            ac_c0.encode(o, &fc0);
+            ac_c1.encode(o, &fc1);
+            // engine adaptation (B0's own evolution; shared causal state)
+            bz_adapt(
+                &mut state,
+                o,
+                [
+                    cdist(i64::from(r.b), 0) << 5,
+                    cdist(i64::from(r.b), i64::from(r.upper)) << 5,
+                    cdist(i64::from(r.b), i64::from(r.left)) << 5,
+                ],
+                &p_hi,
+                &p_lo,
+                &cnt_fs,
+                x_unif,
+                &f0,
+                n_q,
+                symmetric,
+            );
+            state.counters[o] += 1;
+            // C1 weight update (fixed-share on 2 slots, recovered formulas)
+            let post2 = [w2[0] * pm15[o], w2[1] * hi16[o]];
+            let total2 = post2.iter().sum::<i64>();
+            if total2 > 0 {
+                let (p2, _) = largest_remainder(&post2, total2, BZ_W_SUM);
+                for (ws, &pv) in w2.iter_mut().zip(p2.iter()) {
+                    *ws = round_half_away(BZ_FS_NUM * pv + BZ_FS_ADD, BZ_FS_DEN);
+                }
+                let drift = BZ_W_SUM - w2.iter().sum::<i64>();
+                if drift != 0 {
+                    let mslot = if w2[1] > w2[0] { 1 } else { 0 };
+                    w2[mslot] += drift;
+                }
+            }
+            eng_ns += t1.elapsed().as_nanos();
+        }
+        let n = recs.len() as u128;
+        ArmOut {
+            a1_bits,
+            b0_bits,
+            b1_bits,
+            c0_bits,
+            c1_bits,
+            b0_wire_b: ac_b0.seal().len(),
+            b1_wire_b: ac_b1.seal().len(),
+            c0_wire_b: ac_c0.seal().len(),
+            c1_wire_b: ac_c1.seal().len(),
+            mix_ns_pos: mix_ns / n,
+            eng_ns_pos: eng_ns / n,
+        }
+    }
+
+    /// Self-check: the heap LR reproduces the twin's scan LR exactly on
+    /// tie/repair-heavy vectors (one runnable check for the selection rule).
+    #[test]
+    fn n2_lr_selfcheck() {
+        let cases: Vec<(Vec<i64>, i64, i64)> = vec![
+            (vec![1; 256], 256, BZ_FREQ_SUM),
+            (vec![0, 5, 5, 5, 0], 15, 100),
+            (vec![1_000_000, 1, 1, 1], 1_000_003, 1000),
+            (vec![7, 7, 7, 7, 7], 35, 37),
+            (vec![1, 2, 3, 4, 5, 6, 7, 8], 36, 35),
+        ];
+        for (num, total, sum_to) in cases {
+            let (heap, hrep) = largest_remainder(&num, total, sum_to);
+            assert_eq!(heap.iter().sum::<i64>(), sum_to);
+            assert!(*heap.iter().min().unwrap() >= 1);
+            // scan reference (the twin's rule, inline)
+            let mut fs: Vec<i64> = num.iter().map(|&n| n * sum_to / total).collect();
+            let mut rems: Vec<i64> = num
+                .iter()
+                .zip(fs.iter())
+                .map(|(&n, &f)| n * sum_to - f * total)
+                .collect();
+            let mut remaining = sum_to - fs.iter().sum::<i64>();
+            let mut rep = 0usize;
+            while remaining > 0 {
+                let mut m = 0usize;
+                for i in 1..fs.len() {
+                    if rems[i] > rems[m] {
+                        m = i;
+                    }
+                }
+                fs[m] += 1;
+                rems[m] -= total;
+                remaining -= 1;
+            }
+            for s in 0..fs.len() {
+                if fs[s] == 0 {
+                    rep += 1;
+                    let mut m = 0usize;
+                    for i in 1..fs.len() {
+                        if fs[i] > fs[m] {
+                            m = i;
+                        }
+                    }
+                    fs[m] -= 1;
+                    fs[s] += 1;
+                }
+            }
+            assert_eq!(heap, fs, "LR heap == scan on {num:?}");
+            assert_eq!(hrep, rep, "LR repairs on {num:?}");
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn n2_replay() {
+        let out = std::env::var("MNF17_N2_OUT").unwrap_or_else(|_| OUT_DEFAULT.to_string());
+        let dir = std::env::var("MNF17_N2_DIR").unwrap_or_else(|_| DIR_DEFAULT.to_string());
+        let ledger =
+            std::fs::read_to_string("research/results/mnf17-n1-summary.csv").expect("n1 ledger");
+        let mut rows = String::from(
+            "file,n_q,sym,n,a0_native_b,a0_mix7_b,a1_bits,b0_bits,b1_bits,c0_bits,c1_bits,\
+             b0_wire_b,b1_wire_b,c0_wire_b,c1_wire_b,mix_ns_pos,eng_ns_pos\n",
+        );
+        let mut lines = ledger.lines();
+        let header: Vec<String> = lines
+            .next()
+            .expect("header")
+            .split(',')
+            .map(|s| s.to_string())
+            .collect();
+        // payload columns are positional in candidate order
+        // [MIX7, MIX6, MIX5, MIX4, ZSTD19, ZLIB] (the emit pushed payloads[bidx]).
+        const PAY_MIX7: usize = 12;
+        const PAY_ZSTD: usize = 16;
+        for line in lines {
+            let f: Vec<&str> = line.split(',').collect();
+            assert_eq!(f.len(), header.len(), "ledger row shape");
+            if f[9] != "winner" {
+                continue;
+            }
+            let kind = f[2];
+            let coder = f[4];
+            let planar = f[3] == "true";
+            let reference = f[5];
+            let sel_backend: u32 = f[8].parse().expect("selected backend id");
+            let a0_native: usize = match sel_backend {
+                crate::mnf8::BACKEND_MIX7 => f[PAY_MIX7].parse().expect("mix7 payload"),
+                crate::mnf8::BACKEND_ZSTD19 => f[PAY_ZSTD].parse().expect("zstd payload"),
+                other => panic!("unexpected winner backend {other}"),
+            };
+            let a0_mix7: usize = f[PAY_MIX7].parse().expect("mix7 payload");
+            let raw_len: usize = f[7].parse().expect("raw_len");
+            let path = f[0].split('/').last().unwrap().trim_end_matches(".png");
+            let bin = format!(
+                "{dir}/n1-{path}-{kind}-{coder}-planar{}-ref{reference}.bin",
+                planar as u8
+            );
+            let bytes = std::fs::read(&bin).unwrap_or_else(|e| panic!("n1 bin {bin}: {e:?}"));
+            // parse N1G2: one 9-byte record per eligible byte; the
+            // trailing u32 = the eligible RECORD COUNT (== raw positions
+            // acquired; the remaining tail, if any, is 4-byte N1IN groups).
+            let nrec = u32::from_le_bytes(bytes[bytes.len() - 4..].try_into().unwrap()) as usize;
+            assert_eq!(
+                bytes.len() - 4 - nrec * 9,
+                (raw_len - nrec) * 4,
+                "N1IN tail groups match the ineligible tail"
+            );
+            let mut recs = Vec::with_capacity(nrec);
+            for chunk in bytes[..nrec * 9].as_chunks::<9>().0 {
+                recs.push(Rec {
+                    b: chunk[0],
+                    cls: chunk[1],
+                    left: chunk[3],
+                    upper: chunk[4],
+                });
+            }
+            assert_eq!(recs.len(), raw_len, "fully eligible winner stream");
+            let mut geom_wh: Option<(u32, u32)> = None;
+            for (stem, gw, gh) in GEOMS {
+                if stem == path {
+                    geom_wh = Some((gw, gh));
+                }
+            }
+            let (w, h) = geom_wh.unwrap_or_else(|| panic!("geometry for {path}"));
+            let geom = super::Geom {
+                width: w,
+                height: h,
+                tile_count: w.div_ceil(crate::codec::TILE_SIZE)
+                    * h.div_ceil(crate::codec::TILE_SIZE),
+                planar,
+            };
+            println!(
+                "n2 {path}: n={} a0_native={a0_native} a0_mix7={a0_mix7} kind={kind} planar={planar}",
+                recs.len()
+            );
+            for (n_q, sym) in [(8u32, false), (12u32, false), (16u32, false), (12u32, true)] {
+                let o = replay(&recs, geom, n_q, sym);
+                rows.push_str(&format!(
+                    "{path},{n_q},{},{},{a0_native},{a0_mix7},{:.2},{:.2},{:.2},{:.2},{:.2},{},{},{},{},{},{}\n",
+                    sym,
+                    recs.len(),
+                    o.a1_bits,
+                    o.b0_bits,
+                    o.b1_bits,
+                    o.c0_bits,
+                    o.c1_bits,
+                    o.b0_wire_b,
+                    o.b1_wire_b,
+                    o.c0_wire_b,
+                    o.c1_wire_b,
+                    o.mix_ns_pos,
+                    o.eng_ns_pos,
+                ));
+                println!(
+                    "n2 {path} q{n_q} sym={sym}: A1={:.0} B0={:.0} B1={:.0} C0={:.0} C1={:.0} bits | wires {}/{}/{}/{} | ns/pos mix {} eng {}",
+                    o.a1_bits, o.b0_bits, o.b1_bits, o.c0_bits, o.c1_bits,
+                    o.b0_wire_b, o.b1_wire_b, o.c0_wire_b, o.c1_wire_b,
+                    o.mix_ns_pos, o.eng_ns_pos,
+                );
+            }
+        }
+        std::fs::write(&out, &rows).expect("n2 csv");
+        println!("n2 summary -> {out}");
+    }
+}

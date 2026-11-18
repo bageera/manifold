@@ -1,5 +1,26 @@
 # Changelog
 
+## Research — MNF17-N2/N3: native probability replay + cost harness, six-arm ΔL complete (2026-11-18, not a release)
+
+The six authorized arms (A0/A1/B0/B1/C0/C1) replayed on the seven
+acquired winner streams, Q12 primary with Q8/Q16 controls and the Q12
+symmetric-clamp ablation ([docs/mnf17-n2-record.md](docs/mnf17-n2-record.md)):
+ΔL_energy (B1−B0) is positive on all seven (+61k…+898k bits — within the
+BZ16 family, the adaptive mixture machinery is necessary); ΔL_correction
+(C0−A1) is positive on 6/7 (the Boltzmann tilt is harmful against the
+production prior; only `repeat` gains −1,988 bits); ΔL_mixture (C1−C0)
+is negative on 3/7 natural streams (adaptive prod+Boltzmann mixing beats
+the fixed product by up to −259,690 bits). Complete serialized costs
+(18-bit CACM87 wires + production payloads) resolve the central
+question NEGATIVELY: no BZ16 arm approaches A0 on any stream (best wires
+2,286 vs 30 B / 71,331 vs 222 B / 124,974 vs 13,204 B), and the per
+-component compute harness shows the BZ16 model layer at ~50–100× the
+production mix step per position. Production integration stays HOLD;
+the ΔL structure is recorded as the decision evidence. Instrument:
+`src/mix_coder.rs::mnf17_n2_replay` (env-gated, research-side; LR
+grant/repair exercised with heaps — self-checked equal to the recovered
+scan rule).
+
 ## Research — MNF17-N1: native entropy-stream acquisition complete (2026-11-18, not a release)
 
 The seven-file screening cohort's production entropy streams are acquired
