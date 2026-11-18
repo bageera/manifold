@@ -1,5 +1,28 @@
 # Changelog
 
+## Research — MNF17-N3-R: serialization accounting reconciled; BZ16 program CLOSED (2026-11-18, not a release)
+
+Operator-authorized audit executed
+([docs/mnf17-n2-record.md](docs/mnf17-n2-record.md), §N3-R): the first
+report's "wire" columns were BIT counts mislabeled as bytes — the CSV
+now carries both byte lengths (ceil) and raw bit counts, with the
+audit's confirmations: worst finalized-coder overhead +141 bits (well
+inside the 16-bit-per-symbol invariant), framing shared with A0 on both
+sides, **independent 18-bit decode round-trips bit-exact for B0 and C1
+across all seven streams** (shared single-source table paths so the
+encode/decode semantics cannot drift), per-stream quantities only.
+Arm semantics labeled per the memo: B0 = the frozen four-expert
+recovered engine, C1 = the two-expert production-conditioned mixture,
+A1 = the mix7-family replay (native-selected on MIX7 winners,
+family-replay on ZSTD19 winners), no Bx/Cx variants beyond the six
+authorized arms. The **corrected complete-wire table confirms the
+negative verdict**: no portfolio wins — noise B0 lands an exact tie
+with the ZSTD19 production pick (196,880 B) but ties do not advance a
+pick; the closest losses are forest C1 (+0.9%) and terrain C1 (+18.3%).
+Per the ledger: BZ16 production integration DENIED, N4 and Hubble NOT
+AUTHORIZED, slot-incremental redesign DEFERRED — the program is CLOSED
+with the lessons retained.
+
 ## Research — MNF17-N2/N3: native probability replay + cost harness, six-arm ΔL complete (2026-11-18, not a release)
 
 The six authorized arms (A0/A1/B0/B1/C0/C1) replayed on the seven

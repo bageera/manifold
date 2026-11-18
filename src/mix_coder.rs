@@ -3617,6 +3617,250 @@ mod mnf17_n2_replay {
         upper: u8,
     }
 
+    /// B0 table path: the recovered four-expert mixture + LR to 2^15,
+    /// with the recovered zero-mixture fallback. Shared by the encoder
+    /// and the independent decode pass (single source of truth).
+    #[allow(clippy::too_many_arguments)]
+    fn b0_tables(
+        model: &BzModel<'_>,
+        state: &BzState,
+        up: i64,
+        left: i64,
+        p_hi: &mut [i64; 256],
+        p_lo: &mut [i64; 256],
+        p_hi24: &mut [i64; 256],
+    ) -> (Vec<i64>, Vec<i64>, i64) {
+        let (m, cnt_fs, x_unif) = model.mixture(state, up, left, p_hi, p_lo, p_hi24);
+        let m_sum = m.iter().sum::<i64>();
+        let (f0, _) = if m_sum > 0 {
+            largest_remainder(&m, m_sum, BZ_FREQ_SUM)
+        } else {
+            (vec![BZ_FREQ_SUM / 256; 256], 0)
+        };
+        (f0, cnt_fs, x_unif)
+    }
+
+    /// C1 table path: the two-expert fixed-share mixture (production + hi
+    /// expert) — posterior on the observed symbol, recovered constants,
+    /// same first-max/behind-tie LR. Shared by encoder and decode pass.
+    fn c1_tables_and_step(w2: &mut [i64; 2], pm15: &[i64], hi16: &[i64], o: usize) -> Vec<i64> {
+        let m1: Vec<i64> = (0..256)
+            .map(|v| (w2[0] * pm15[v] + w2[1] * hi16[v]) >> 16)
+            .collect();
+        let (fc1, _) = largest_remainder(&m1, m1.iter().sum(), BZ_FREQ_SUM);
+        let post2 = [w2[0] * pm15[o], w2[1] * hi16[o]];
+        let total2 = post2.iter().sum::<i64>();
+        if total2 > 0 {
+            let (p2, _) = largest_remainder(&post2, total2, BZ_W_SUM);
+            for (ws, &pv) in w2.iter_mut().zip(p2.iter()) {
+                *ws = round_half_away(BZ_FS_NUM * pv + BZ_FS_ADD, BZ_FS_DEN);
+            }
+            let drift = BZ_W_SUM - w2.iter().sum::<i64>();
+            if drift != 0 {
+                let mslot = if w2[1] > w2[0] { 1 } else { 0 };
+                w2[mslot] += drift;
+            }
+        }
+        fc1
+    }
+
+    /// 18-bit CACM87 decode (the R2H decoder mirrors ac_decode in the
+    /// parity twin), tables supplied externally per position.
+    struct AcDecoder<'a> {
+        low: i64,
+        high: i64,
+        code: i64,
+        pos: usize,
+        bits: &'a [u8],
+    }
+
+    impl<'a> AcDecoder<'a> {
+        fn new(bits: &'a [u8]) -> Self {
+            let mut d = AcDecoder { low: 0, high: BZ_R_TOP, code: 0, pos: 0, bits };
+            for _ in 0..18 {
+                d.code = (d.code << 1) | d.get_bit();
+            }
+            d
+        }
+
+        fn get_bit(&mut self) -> i64 {
+            let b = if self.pos < self.bits.len() {
+                i64::from(self.bits[self.pos])
+            } else {
+                0
+            };
+            self.pos += 1;
+            b
+        }
+
+        fn decode(&mut self, f: &[i64]) -> usize {
+            let o_dec = f.len();
+            let _ = o_dec;
+            let mut cums = [0i64; 257];
+            let mut acc = 0i64;
+            for (s, &fv) in f.iter().enumerate() {
+                cums[s] = acc;
+                acc += fv;
+            }
+            cums[256] = acc;
+            let rng = self.high - self.low + 1;
+            let value = ((self.code - self.low + 1) * BZ_FREQ_SUM - 1) / rng;
+            let mut sym = 0usize;
+            while sym < 255 && cums[sym + 1] <= value {
+                sym += 1;
+            }
+            assert!(1 <= f[sym] && f[sym] <= BZ_FREQ_SUM, "decode symbol range");
+            self.high = self.low + (rng * cums[sym + 1]) / BZ_FREQ_SUM - 1;
+            self.low += (rng * cums[sym]) / BZ_FREQ_SUM;
+            assert!(self.low <= self.high, "inverted interval (decoder)");
+            let mut it = 0usize;
+            loop {
+                it += 1;
+                assert!(it <= 256, "renorm loop (decoder)");
+                if self.high < BZ_R_HALF {
+                    // E0
+                } else if self.low >= BZ_R_HALF {
+                    self.code -= BZ_R_HALF;
+                    self.low -= BZ_R_HALF;
+                    self.high -= BZ_R_HALF;
+                } else if self.low >= BZ_R_QUARTER && self.high < BZ_R_3QUARTER {
+                    self.code -= BZ_R_QUARTER;
+                    self.low -= BZ_R_QUARTER;
+                    self.high -= BZ_R_QUARTER;
+                } else {
+                    break;
+                }
+                let b = self.get_bit();
+                self.code = (self.code << 1) | b;
+                self.low <<= 1;
+                self.high = (self.high << 1) | 1;
+            }
+            sym
+        }
+    }
+
+    /// Independent decode verification over the serialized bitstreams:
+    /// the B0 and C1 arms (the two adaptive-state paths) re-derive every
+    /// table from the DECODED prefix + the acquisition's side geometry
+    /// metadata, then assert the round-trip symbol-for-symbol.
+    fn decode_check(
+        recs: &[Rec],
+        geom: super::Geom,
+        lut: &[i64],
+        n_q: u32,
+        symmetric: bool,
+        bits_b0: &[u8],
+        bits_c1: &[u8],
+    ) {
+        let model = BzModel::new(lut, n_q);
+        // --- B0: engine state evolves purely from the decoded prefix ---
+        let mut state = BzState::new();
+        let mut p_hi = [0i64; 256];
+        let mut p_lo = [0i64; 256];
+        let mut p_hi24 = [0i64; 256];
+        let mut dec = AcDecoder::new(bits_b0);
+        for r in recs {
+            let (f0, cnt_fs, x_unif) = b0_tables(
+                &model,
+                &state,
+                i64::from(r.upper),
+                i64::from(r.left),
+                &mut p_hi,
+                &mut p_lo,
+                &mut p_hi24,
+            );
+            let sym = dec.decode(&f0);
+            assert_eq!(sym, usize::from(r.b), "B0 decode round-trip");
+            bz_adapt(
+                &mut state,
+                sym,
+                [
+                    cdist(sym as i64, 0) << 5,
+                    cdist(sym as i64, i64::from(r.upper)) << 5,
+                    cdist(sym as i64, i64::from(r.left)) << 5,
+                ],
+                &p_hi,
+                &p_lo,
+                &cnt_fs,
+                x_unif,
+                &f0,
+                n_q,
+                symmetric,
+            );
+            state.counters[sym] += 1;
+        }
+        // --- C1: mix state re-derived from decoded bytes; engine state
+        // (the hi expert) evolves on the decoded stream as in encode ---
+        let params = MixParams::BACKEND7;
+        let mut ctxs: Vec<MixCtx> = (0..params.nctx)
+            .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+            .collect();
+        build_parent_tree(&mut ctxs, &params);
+        let mut walk = LaneWalk::new(geom.width, geom.height, geom.tile_count, geom.planar)
+            .expect("lane walk");
+        let mut prev = 0u8;
+        let mut prev2 = 0u8;
+        let mut prev3 = 0u8;
+        let mut w2 = [BZ_W_SUM / 2, BZ_W_SUM / 2];
+        let mut state = BzState::new(); // FRESH engine state for the C1 pass
+        let mut p_e = [0i64; 256];
+        let mut p_e2 = [0i64; 256];
+        let mut p_e24 = [0i64; 256];
+        let mut dec = AcDecoder::new(bits_c1);
+        for r in recs {
+            let cls = walk.peek_class().expect("grammar");
+            walk.consume(r.b).expect("well-formed");
+            let base = mix_ctx_key(&params, prev, prev2, prev3);
+            let c = if params.lane_child && cls == 1 {
+                base + 20
+            } else {
+                base
+            };
+            let pm: Vec<i64> = ctxs[c]
+                .probs_with(&ctxs, &params)
+                .iter()
+                .map(|&x| x as i64)
+                .collect();
+            ctxs[c].step(r.b);
+            share_step(&mut ctxs, &params, c, r.b);
+            prev3 = prev2;
+            prev2 = prev;
+            prev = r.b;
+            let (pm15, _) = largest_remainder(&pm, 1i64 << 24, BZ_FREQ_SUM);
+            let (f0_t, cnt_t, x_t) = b0_tables(
+                &model,
+                &state,
+                i64::from(r.upper),
+                i64::from(r.left),
+                &mut p_e,
+                &mut p_e2,
+                &mut p_e24,
+            );
+            let hi24_sum = p_e24.iter().sum::<i64>();
+            let (hi16, _) = largest_remainder(&p_e24, hi24_sum, 1i64 << 16);
+            let fc1 = c1_tables_and_step(&mut w2, &pm15, &hi16, usize::from(r.b));
+            let sym = dec.decode(&fc1);
+            assert_eq!(sym, usize::from(r.b), "C1 decode round-trip");
+            bz_adapt(
+                &mut state,
+                sym,
+                [
+                    cdist(sym as i64, 0) << 5,
+                    cdist(sym as i64, i64::from(r.upper)) << 5,
+                    cdist(sym as i64, i64::from(r.left)) << 5,
+                ],
+                &p_e,
+                &p_e2,
+                &cnt_t,
+                x_t,
+                &f0_t,
+                n_q,
+                symmetric,
+            );
+            state.counters[sym] += 1;
+        }
+    }
+
     struct ArmOut {
         a1_bits: f64,
         b0_bits: f64,
@@ -3627,6 +3871,10 @@ mod mnf17_n2_replay {
         b1_wire_b: usize,
         c0_wire_b: usize,
         c1_wire_b: usize,
+        b0_wire_bits: usize,
+        b1_wire_bits: usize,
+        c0_wire_bits: usize,
+        c1_wire_bits: usize,
         mix_ns_pos: u128,
         eng_ns_pos: u128,
     }
@@ -3718,20 +3966,17 @@ mod mnf17_n2_replay {
             // B1: standalone Boltzmann = the hi expert normalized from its
             // native Q24 LUT row (LR floor ≥ 1: never all-zero at any β)
             let p_hi24_sum = p_hi24.iter().sum::<i64>();
-            let (f1, _) = largest_remainder(&p_hi24.to_vec(), p_hi24_sum, BZ_FREQ_SUM);
+            let (f1, _) = largest_remainder(&p_hi24, p_hi24_sum, BZ_FREQ_SUM);
             // C0: production prior × Boltzmann tilt (the hi expert; β baked
             // into the engine's LUT/coefficients), per-position renormalized.
             // (2^16 domains both sides: pm16 = LR(pm → 2^16; products ≤ 2^32)
             let (pm16, _) = largest_remainder(&pm, 1i64 << 24, 1i64 << 16);
-            let (hi16, _) = largest_remainder(&p_hi24.to_vec(), p_hi24_sum, 1i64 << 16);
+            let (hi16, _) = largest_remainder(&p_hi24, p_hi24_sum, 1i64 << 16);
             let q0: Vec<i64> = (0..256).map(|v| pm16[v] * hi16[v]).collect();
             let (fc0, _) = largest_remainder(&q0, q0.iter().sum(), BZ_FREQ_SUM);
             // C1: adaptive two-expert mixture (prod + hi), recovered
-            // fixed-share on two slots.
-            let m1: Vec<i64> = (0..256)
-                .map(|v| (w2[0] * pm15[v] + w2[1] * hi16[v]) >> 16)
-                .collect();
-            let (fc1, _) = largest_remainder(&m1, m1.iter().sum(), BZ_FREQ_SUM);
+            // fixed-share on two slots (shared path with the decode pass).
+            let fc1 = c1_tables_and_step(&mut w2, &pm15, &hi16, o);
             // costs + serialization (all incremental, same symbols)
             b0_bits += -((f0[o] as f64).log2() - 15.0);
             b1_bits += -((f1[o] as f64).log2() - 16.0);
@@ -3759,33 +4004,34 @@ mod mnf17_n2_replay {
                 symmetric,
             );
             state.counters[o] += 1;
-            // C1 weight update (fixed-share on 2 slots, recovered formulas)
-            let post2 = [w2[0] * pm15[o], w2[1] * hi16[o]];
-            let total2 = post2.iter().sum::<i64>();
-            if total2 > 0 {
-                let (p2, _) = largest_remainder(&post2, total2, BZ_W_SUM);
-                for (ws, &pv) in w2.iter_mut().zip(p2.iter()) {
-                    *ws = round_half_away(BZ_FS_NUM * pv + BZ_FS_ADD, BZ_FS_DEN);
-                }
-                let drift = BZ_W_SUM - w2.iter().sum::<i64>();
-                if drift != 0 {
-                    let mslot = if w2[1] > w2[0] { 1 } else { 0 };
-                    w2[mslot] += drift;
-                }
-            }
             eng_ns += t1.elapsed().as_nanos();
         }
         let n = recs.len() as u128;
+        let bits_b0 = ac_b0.seal();
+        let bits_b1 = ac_b1.seal();
+        let bits_c0 = ac_c0.seal();
+        let bits_c1 = ac_c1.seal();
+        // N3-R: serialized size = the actual bitstream's byte length
+        // (ceil); bit counts stay beside them for the entropy audit.
+        let bytes = |v: &[u8]| v.len().div_ceil(8);
+        // Q12 (primary): independent decode verification, B0 + C1
+        if n_q == 12 {
+            decode_check(recs, geom, lut, n_q, symmetric, &bits_b0, &bits_c1);
+        }
         ArmOut {
             a1_bits,
             b0_bits,
             b1_bits,
             c0_bits,
             c1_bits,
-            b0_wire_b: ac_b0.seal().len(),
-            b1_wire_b: ac_b1.seal().len(),
-            c0_wire_b: ac_c0.seal().len(),
-            c1_wire_b: ac_c1.seal().len(),
+            b0_wire_b: bytes(&bits_b0),
+            b1_wire_b: bytes(&bits_b1),
+            c0_wire_b: bytes(&bits_c0),
+            c1_wire_b: bytes(&bits_c1),
+            b0_wire_bits: bits_b0.len(),
+            b1_wire_bits: bits_b1.len(),
+            c0_wire_bits: bits_c0.len(),
+            c1_wire_bits: bits_c1.len(),
             mix_ns_pos: mix_ns / n,
             eng_ns_pos: eng_ns / n,
         }
@@ -3853,7 +4099,8 @@ mod mnf17_n2_replay {
             std::fs::read_to_string("research/results/mnf17-n1-summary.csv").expect("n1 ledger");
         let mut rows = String::from(
             "file,n_q,sym,n,a0_native_b,a0_mix7_b,a1_bits,b0_bits,b1_bits,c0_bits,c1_bits,\
-             b0_wire_b,b1_wire_b,c0_wire_b,c1_wire_b,mix_ns_pos,eng_ns_pos\n",
+             b0_wire_b,b1_wire_b,c0_wire_b,c1_wire_b,b0_wire_bits,b1_wire_bits,c0_wire_bits,\
+             c1_wire_bits,mix_ns_pos,eng_ns_pos\n",
         );
         let mut lines = ledger.lines();
         let header: Vec<String> = lines
@@ -3930,7 +4177,7 @@ mod mnf17_n2_replay {
             for (n_q, sym) in [(8u32, false), (12u32, false), (16u32, false), (12u32, true)] {
                 let o = replay(&recs, geom, n_q, sym);
                 rows.push_str(&format!(
-                    "{path},{n_q},{},{},{a0_native},{a0_mix7},{:.2},{:.2},{:.2},{:.2},{:.2},{},{},{},{},{},{}\n",
+                    "{path},{n_q},{},{},{a0_native},{a0_mix7},{:.2},{:.2},{:.2},{:.2},{:.2},{},{},{},{},{},{},{},{},{},{}\n",
                     sym,
                     recs.len(),
                     o.a1_bits,
@@ -3942,13 +4189,18 @@ mod mnf17_n2_replay {
                     o.b1_wire_b,
                     o.c0_wire_b,
                     o.c1_wire_b,
+                    o.b0_wire_bits,
+                    o.b1_wire_bits,
+                    o.c0_wire_bits,
+                    o.c1_wire_bits,
                     o.mix_ns_pos,
                     o.eng_ns_pos,
                 ));
                 println!(
-                    "n2 {path} q{n_q} sym={sym}: A1={:.0} B0={:.0} B1={:.0} C0={:.0} C1={:.0} bits | wires {}/{}/{}/{} | ns/pos mix {} eng {}",
+                    "n2 {path} q{n_q} sym={sym}: A1={:.0} B0={:.0} B1={:.0} C0={:.0} C1={:.0} bits | wires {}/{}/{}/{} B (bits {}/{}/{}/{}) | ns/pos mix {} eng {}",
                     o.a1_bits, o.b0_bits, o.b1_bits, o.c0_bits, o.c1_bits,
                     o.b0_wire_b, o.b1_wire_b, o.c0_wire_b, o.c1_wire_b,
+                    o.b0_wire_bits, o.b1_wire_bits, o.c0_wire_bits, o.c1_wire_bits,
                     o.mix_ns_pos, o.eng_ns_pos,
                 );
             }

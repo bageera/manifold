@@ -68,11 +68,8 @@ re-confirmed on native data).
    but only on photographic/terrain streams, and the margin is far from
    closing the gap to A1.
 4. **Complete serialized costs against A0 and the portfolio**: no arm
-   approaches the production pick on any stream (best BZ16 wire vs A0:
-   solid 2,286 vs 30 B; gradient 71,331 vs 222 B (closest is C0 at
-   8.9 KB vs A0 222 B, but note the production pick here is ZSTD19 —
-   generic zstd beat the entire Manifold mix family on gradient); noise
-   1,612,290 vs 196,880 B; terrain 124,974 vs 13,204 B).
+   approaches the production pick on any stream (N3-R's byte-corrected
+   wires, below).
 
 **Disposition: the central BZ16 question resolves NEGATIVELY at N2 on
 the native cohort** — Boltzmann weighting over the three causal features
@@ -83,6 +80,52 @@ the mixture machinery is essential (energy), the tilt is harmful
 (correction), and adaptive mixing between production and Boltzmann
 components yields real but small gains over a fixed product
 (ΔL_mixture < 0 on natural streams).
+
+## N3-R — serialization accounting reconciliation (2026-11-18, authorized audit)
+
+The first report's "wire" columns were **BIT counts mislabeled as bytes**
+(`AcCoder.seal().len()` counts bits). The operator's N3-R audit is
+confirmed and corrected:
+
+| Audit | Result |
+| --- | --- |
+| Serialized size | The CSV's `*_wire_b` columns are now the actual bitstream byte length (ceil(bits/8)); raw bit counts stay beside them (`*_wire_bits`) |
+| Entropy accounting | Finalized coder bits vs ideal bits: worst observed overhead +141 bits (noise C0), all arms within the 1-rounding/finalization envelope under the 16-bit-per-symbol conservative invariant (e.g. noise B0 = 8.00 bits/symbol, terrain C1 = 2.17 bits/symbol) |
+| Framing | Arms share the container framing with A0 (36-B header + the mix stream length prefix); the per-arm wires cover the entropy payload only, identical framing both sides |
+| Reconstruction | Independent 18-bit decoder (parity-mirrored); bit-exact round-trips asserted for B0 and C1 — the two adaptive-state arms — on all seven streams at Q12; encode/decode table paths share single-source fns (`b0_tables`, `c1_tables_and_step`) so the semantics cannot drift |
+| B0/B1 semantics | B0 = the **frozen four-expert recovered engine** (hi/lo Boltzmann + counter unigram + uniform, fixed-share α=0.999) — the same object as the authorized "frozen four-expert BZ16 model"; B1 = the standalone hi-only Boltzmann. No separate conventional-context-base arm was executed; the arms executed are exactly the six authorized |
+| Bx/Cx controls | None beyond the six (no B2/C2 variants run) |
+| C1 semantics | **Two-expert** production-conditioned mixture {p_mix@Q15, p_hi@2^16-floor} with the recovered fixed-share on two slots — explicitly *not* the earlier proposed four-expert architecture |
+| A0 | The actual production winner per the N1 ledger (ZSTD19 for solid/gradient/repeat/noise; MIX7 for screenshot/forest/terrain) |
+| A1 | backend-7 lane-class model replay uniformly: it IS the native selected entropy model for the three MIX7 winners; for the four ZSTD19 winners it is the production-family mix7 replay (the native selected coder there is ZSTD19, reported separately as A0) |
+| Aggregation | All quantities are per-stream (never aggregated) |
+
+### Corrected complete-wire table (Q12, actual bytes)
+
+| fixture | A0 (native) | A1 ideal ≈ | B0 | B1 | C0 | C1 | best BZ16 vs A0 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| solid | 30 | 44 (mix7: 52) | 108,248 | 107,326 | **287** | 302 | +257 (C0) |
+| gradient | 222 | 6,493 (mix7: 6,504) | 22,944 | 22,791 | **8,917** | 22,414 | +8,695 (C0) |
+| repeat | 269 | 25,782 (mix7: 30,236) | 90,555 | 114,690 | **25,534** | 25,981 | +25,265 (C0) |
+| screenshot | 440 | 427 (mix7: 440) | 30,833 | 46,920 | **1,645** | 38,313 | +1,205 (C0) |
+| noise | 196,880 | 200,091 (mix7: 199,552) | **196,880** | 233,502 | 236,060 | 203,586 | exact tie (B0) |
+| forest | 40,660 | 40,651 (mix7: 44,384) | 43,690 | 53,401 | 58,001 | **41,032** | +372 (C1) |
+| terrain | 13,204 | 13,196 (mix7: 13,464) | 15,193 | 15,634 | 16,770 | **15,622** | +2,418 (C1) |
+
+**The corrected accounting confirms the verdict: no portfolio wins.**
+The closest margins (noise B0 = an exact tie with the ZSTD19 production
+pick at 196,880 B; forest C1 +0.9%; terrain C1 +18.3%) remain losses or
+ties — ties do not advance a portfolio pick, and C1's edge over C0 stays
+the only structural positive. The narrower conclusion stands: **no
+tested configuration has demonstrated a production-worthy advantage.**
+
+### Program disposition after reconciliation
+
+BZ16 **CLOSED** per the operator ledger: BZ1-BZ15 screening, R1/R2/R2H,
+I4B/I5/I7, N1, N2 (negative), N3 (negative, accounting reconciled) —
+the retained lessons live in the operator memo's table and the skill
+frontier. N4/production/slot-incremental redesign: NOT AUTHORIZED /
+DENIED / DEFERRED.
 
 ## N3 — per-component compute (median-ish across cohorts)
 
