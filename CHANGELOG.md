@@ -1,5 +1,36 @@
 # Changelog
 
+## Research — BZ16-I7: bounded arithmetic + streaming measured (2026-11-18, not a release)
+
+Third gate under the revised methodology
+([docs/bz16-i7-record.md](docs/bz16-i7-record.md)): the bounds table
+(normalization products per branch: counter ≤ 2^31, mixture ≤ 2^38,
+weight ≤ 2^49, coder ≤ 2^33 — all live-asserted < 2^62; energy/gradient
+per the memo §5 table) plus the minimal streaming policy: counters halved
+(round half up, floor 1) whenever Σ exceeds 2^16. On extended
+65,536-position streams the policy fires on all nine (3 fixtures ×
+Q8/Q12/Q16) rigs and costs ≤ 15 bits over ≥ 325 k-bit streams (≤ 0.003%,
+either direction — brick-Q12 is 14.7 bits cheaper under it). Working memory
+is O(256) counters + the constant LUT; the probability trace is consumed
+incrementally; stream length is unbounded under the policy. With R2H
+(determinism), I4B (retention within ±0.65%) and I5 (recovery in 64–164
+positions) the BZ16 confirmation chain is complete; native Manifold replay
+(ΔL vs the production entropy models under full wire accounting) is the
+next CONDITIONAL gate before any production decision.
+
+## Research — BZ16-I5: change-point recovery measured (2026-11-18, not a release)
+
+Second gate under the revised methodology
+([docs/bz16-i5-record.md](docs/bz16-i5-record.md)): the recovered fixed-share
+engine absorbs hard mid-stream distribution changes (camera↔brick joints at
+t* = 8192, Q12 primary + Q8/Q16 controls) within 64–164 positions, with a
+worst-case adaptive-state excess of ≈106 bits vs a fresh restart over the
+measured window and the transient capped by the coder-fit floor (f ≥ 1 ⇒
+15 b/sym maximum anywhere). The fixed-share α ablation (0.999/0.99/0.9,
+float domain) confirms the recovered 0.999 regime — faster tracking worsens
+both the transient and the steady state (α = 0.9 settles 1.4 b/sym higher).
+Native replay stays the production-decision gate.
+
 ## Research — BZ16-I4B: matched float/fixed comparison, retention confirmed (2026-11-18, not a release)
 
 Under the revised BZ16 methodology (Python = screening environment, Rust =
