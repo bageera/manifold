@@ -22,6 +22,21 @@ PENDING the delivered package; the in-repo pair's digests are twin-internal,
 never "the accepted reference's". No production-surface edits; I4B
 CONDITIONAL, I5/I7/native replay/production HOLD per memo.
 
+Follow-up (same day, accepted-memo rung): the CACM87 correction was accepted
+and hardened — both mirrors now carry bounded-instrument guards (inverted
+interval + renorm-loop cap, failing in O(1) instead of the 16-bit instrument's
+memory blow-up), and the memo §5 energy-difference bound landed as asserted
+identities (memo [−S, 4S] values 15,728,640/251,658,240/4,026,531,840) plus a
+live-verified structural ceiling under the twin's symmetric clamp
+(2·e_lim) — with the nine-rig spread census showing every Q8 rig EXCEEDS the
+memo's [−S, 4S] value (max 24,717,184 vs 15,728,640), recorded in §4a as an
+open clamp-polarity question for the external package. The memo's nine
+archived stream digests (`expected_stream_sha256.json`) were delivered in-memo
+and recorded verbatim as the R2H-D comparison contract; on package arrival
+they become the pass/fail column over the archived crops. R2H-A's remaining
+artifact list: scalar/NumPy engine sources, 36 vectors, LUT binary, three
+crops, SHA-256 manifest.
+
 ## Research — BZ16-R2: in-repo numerical parity prototype, R2-A..G exercised (2026-11-18, not a release)
 
 The R2 gate (exact Python–Rust integer parity) is executed in-repo: a scalar

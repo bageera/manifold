@@ -105,6 +105,15 @@ single frequency unit or digest byte aborts the run.
   i64 twin wrapped and spun). The 18-bit window's exit floor is 2^16 + 1 =
   65,537 ≥ 2·F, making every `f ≥ 1` sub-interval non-empty. R2's 16-bit
   pin stays valid for R2's own `F = 4096` (4× margin there).
+- Per the acceptance follow-up memo (internal parity accepted; CACM87
+  correction accepted): the instruments now carry **bounded failure
+  assertions** — an inverted interval (`low ≤ high` after every symbol
+  update) and a renorm-loop iteration cap (256) in both mirrors, so a
+  future window/total mismatch fails in O(1) instead of consuming memory.
+  The nine streams double as the standing regression fixtures (f = 1
+  symbols, cumulative boundaries, minimum-width intervals and repeated
+  renormalization all occur in them); the fuller dedicated fixture set
+  stays an I7 item (HOLD per memo).
 
 ## 3. The nine incremental probability-trace digests (twin-internal)
 
@@ -115,9 +124,21 @@ single frequency unit or digest byte aborts the run.
 | noise | `7d15f8469c9a6470…` | `8140643a4d8d9496…` | `eae77a934e52cd46…` |
 
 These are the **in-repo pair's** digests (Python export = Rust computation,
-byte-equal). The memo's nine *archived* targets
-(`expected_stream_sha256.json`) remain PENDING with the transfer package —
-they encode the archived fixture crops and are not reproducible without them.
+byte-equal). The memo's nine **archived** targets
+(`expected_stream_sha256.json`) were subsequently delivered in-memo — they
+encode the archived fixture crops and are not reproducible without them
+(the synthetic streams above are different inputs by design). Recorded as
+the pending comparison contract, per the memo's delivery:
+
+| Fixture | Q8 | Q12 | Q16 |
+| --- | --- | --- | --- |
+| camera | `6feafd85c7b3f778…` | `c3c3208d226de906…` | `3ce4ce9a36668697…` |
+| brick | `a1e55a0b4931d54a…` | `d399842abfaf7ed1…` | `75ed7f07a3926140…` |
+| noise | `9b51eaab32051428…` | `47bfddc35c68a8fe…` | `1a664eaeabbc5333…` |
+
+On package arrival (R2H-A), the twin consumes the archived crops and these
+nine become the pass/fail column; the twin-internal digests above stay the
+determinism evidence.
 
 ## 4. Q16 bounds extension (memo §5) — asserted as identities on the typed path
 
@@ -127,12 +148,48 @@ they encode the archived fixture crops and are not reproducible without them.
 | Energy accumulator Q12 | 201,326,592 | i32 | PASS |
 | Energy accumulator Q16 | 3,221,225,472 | i64 (> `i32::MAX`) | PASS |
 | Gradient numerator ×16 | 26,388,279,066,624 | i64 | PASS (< 2^62) |
+| Energy difference, memo [−S, 4S] reading | Q8 15,728,640 / Q12 251,658,240 / Q16 4,026,531,840 | i64 | asserted identities |
+| Energy difference, symmetric-clamp structural | Q8 25,165,824 / Q12 402,653,184 / Q16 6,442,450,944 | i64 | asserted + LIVE-asserted |
 
 Widened arithmetic is used consistently (i64 state, u64-scale products);
 debug-mode overflow panics stay live on the typed path for every streamed
 position. Every per-precision shift is boundary-tested (`k` table incl.
 negative clamp and the 4096 cap). I7 (normalization products, accumulator,
 counters, stream-length bounds) remains the memo's next bounds rung — HOLD.
+
+### 4a. Energy-difference follow-up (memo §5, R2H-A/B re-point question)
+
+The memo's difference bound (5·e_lim/4) is derived for a coefficient
+interval **[−S, 4S]** (S = c_lim/4); the R2H-B reconciliation table is silent
+on clamp polarity, and the twin carries the R2 pin **symmetric
+[−c_lim, +c_lim]**, whose structural ceiling is 2·e_lim. The live census
+settles why this matters — every Q8 rig crosses the memo's [−S, 4S] bound
+(the first position's f-vs-p mismatch slams Q8's narrow c_lim = 1024, and
+the β=2 expert doubles the spread that feeds `clamp(2·e_lo >> shift)`):
+
+| Rig | Observed max E-spread | Twin bound (2·e_lim) | Memo bound (5·e_lim/4) |
+| --- | --- | --- | --- |
+| camera-Q8 | 24,621,312 | 25,165,824 | 15,728,640 (**exceeded**) |
+| brick-Q8 | 24,552,000 | 25,165,824 | 15,728,640 (**exceeded**) |
+| noise-Q8 | 24,717,184 | 25,165,824 | 15,728,640 (**exceeded**) |
+| camera-Q12 | 74,022,816 | 402,653,184 | 251,658,240 |
+| brick-Q12 | 32,509,888 | 402,653,184 | 251,658,240 |
+| noise-Q12 | 74,011,776 | 402,653,184 | 251,658,240 |
+| camera-Q16 | 24,760,352 | 6,442,450,944 | 4,026,531,840 |
+| brick-Q16 | 116,639,264 | 6,442,450,944 | 4,026,531,840 |
+| noise-Q16 | 27,920,896 | 6,442,450,944 | 4,026,531,840 |
+(the twin bound is live-asserted at every position of all nine streams;
+spreads are cross-language equal — e.g. noise-Q16 27,920,896 Py = Rs.)
+
+OPEN QUESTION for the external package: does the recovered engine clamp
+coefficients symmetrically (±c_lim, the R2 pin) or asymmetrically
+([−S, 4S], the §5 derivation's premise)? The R2H-B table does not say; the
+Q8 rigs demonstrate the choice is observable (the memo bound is exceeded
+under the symmetric pin). The external MODEL_DIFF (R2H-A's
+`MODEL_SPEC.md`/scalar engine) decides it; the memo's values stay asserted
+as pinned identities and the discrepancy is disclosed rather than silently
+re-pointed. "Do not preserve a pinned assumption if it conflicts" — the
+conflict itself is evidence the external spec must answer first.
 
 ## 5. Saturation census and economy note (honest, synthetic-only)
 
@@ -183,11 +240,12 @@ superseded in-repo by the recovered rows.
 
 | Gate | Disposition |
 | --- | --- |
-| R2H-A original artifact verification | PENDING (transfer package; artifact list = §intro, contract format pinned) |
-| R2H-B recovered-semantics reconciliation | PASS (in-repo twin, provenance split recorded) |
+| R2H-A original artifact verification | PENDING (transfer package; remaining = engine sources, 36 vectors, LUT binary, fixture crops, manifest — the nine digest TARGETS are now delivered in-memo) |
+| R2H-B recovered-semantics reconciliation | PASS (in-repo twin, provenance split recorded; clamp polarity question → §4a) |
 | R2H-C 36 golden vectors | PASS (in-repo twin; archived vectors re-point PENDING) |
-| R2H-D nine trace digests | PASS (in-repo twin; archived targets re-point PENDING) |
+| R2H-D nine trace digests | PASS (in-repo twin; archived targets delivered in-memo, comparison PENDING crops) |
 | Q16 bounds widening (memo §5) | PASS (asserted identities) |
+| CACM87 correction + bounded guards | ACCEPTED per memo (18-bit window; inverted-interval + renorm-cap asserts) |
 | I4B matched float/fixed comparison | CONDITIONAL per memo |
 | I5 change-point evaluation | HOLD per memo |
 | I7 exhaustive bounds + streaming | HOLD per memo |

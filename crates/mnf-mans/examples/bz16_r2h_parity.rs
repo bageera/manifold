@@ -186,11 +186,11 @@ impl<'a> Model<'a> {
         left: i64,
         p_hi: &mut [i64; 256],
         p_lo: &mut [i64; 256],
-    ) -> (Vec<i64>, Vec<i64>, i64, usize, usize, usize) {
+    ) -> (Vec<i64>, Vec<i64>, i64, usize, i64, usize) {
         let x_unif = 128i64;
-        let mut hi_neg = 0usize;
-        let mut lo_neg = 0usize;
         let mut clamp_hits = 0usize;
+        let mut e_min = 1i64 << 62;
+        let mut e_max = -(1i64 << 62);
         for v in 0..=255i64 {
             let d0 = cdist(v, 0) << 5;
             let d1 = cdist(v, up) << 5;
@@ -202,9 +202,9 @@ impl<'a> Model<'a> {
             let k_lo = clamp_k(2 * e_lo, self.shift);
             p_hi[v as usize] = self.lut[k_hi as usize] >> X_SHIFT;
             p_lo[v as usize] = self.lut[k_lo as usize] >> X_SHIFT;
-            hi_neg += usize::from(e_hi < 0);
-            lo_neg += usize::from(2 * e_lo < 0);
             clamp_hits += usize::from(k_hi == K_MAX) + usize::from(k_lo == K_MAX);
+            e_min = e_min.min(e_hi).min(2 * e_lo);
+            e_max = e_max.max(e_hi).max(2 * e_lo);
         }
         let cnt_sum = s.counters.iter().sum::<i64>();
         let (cnt_fs, r0) = largest_remainder(&s.counters, cnt_sum, FREQ_SUM);
@@ -213,7 +213,7 @@ impl<'a> Model<'a> {
                 (s.w[0] * p_hi[v] + s.w[1] * p_lo[v] + s.w[2] * cnt_fs[v] + s.w[3] * x_unif) >> 16
             })
             .collect();
-        (m, cnt_fs, x_unif, r0, hi_neg + lo_neg, clamp_hits)
+        (m, cnt_fs, x_unif, r0, e_max - e_min, clamp_hits)
     }
 }
 
@@ -473,7 +473,11 @@ fn ac_decode(bits: &[u8], n: usize, lut: &[i64], n_q: u32) -> Vec<i64> {
         assert!(f[sym] >= 1 && sym <= 255, "decode symbol range");
         high = low + (rng * cums[sym + 1]) / FREQ_SUM - 1;
         low += (rng * cums[sym]) / FREQ_SUM;
+        assert!(low <= high, "inverted interval (decoder t={t})");
+        let mut it = 0usize;
         loop {
+            it += 1;
+            assert!(it <= 256, "renorm loop (decoder t={t})");
             if high < R_HALF {
                 // E0
             } else if low >= R_HALF {
@@ -677,8 +681,28 @@ fn main() {
     let grad_x16: i64 = 16 * 32768 * 4096 * 4096 * 3;
     assert_eq!(grad_x16, 26_388_279_066_624);
     assert!(grad_x16 < 1i64 << 62, "gradient x16 comfortably within i64");
+    // R2H follow-up memo §5: energy-difference bounds. The memo's values
+    // (5·e_lim/4, the [−S, 4S] coefficient-interval reading) asserted as
+    // pinned identities; the twin's symmetric clamp ([−c_lim, +c_lim], the
+    // R2 pin — the R2H-B table is silent on clamp polarity) has the
+    // structural ceiling 2·e_lim, which is the LIVE-asserted bound. The
+    // interval discrepancy is flagged in the record for the external
+    // package (R2H-A/B re-point).
+    let q8_d: i64 = 5 * (3 * (4 << 8) * 4096) / 4;
+    let q12_d: i64 = 5 * (3 * (4 << 12) * 4096) / 4;
+    let q16_d: i64 = 5 * (3 * (4 << 16) * 4096) / 4;
+    assert_eq!(q8_d, 15_728_640);
+    assert_eq!(q12_d, 251_658_240);
+    assert_eq!(q16_d, 4_026_531_840);
+    assert_eq!(2 * E_MAX_Q8, 25_165_824);
+    assert_eq!(2 * E_MAX_Q12, 402_653_184);
+    assert_eq!(2 * E_MAX_Q16, 6_442_450_944);
+    assert!(
+        2 * q16 < 1i64 << 62,
+        "Q16 difference comfortably within i64"
+    );
     println!(
-        "R2H bounds PASS: Q8 {q8} (i32), Q12 {q12} (i32), Q16 {q16} (> i32::MAX -> i64); gradient x16 {grad_x16} < i64"
+        "R2H bounds PASS: Q8 {q8} (i32), Q12 {q12} (i32), Q16 {q16} (> i32::MAX -> i64); gradient x16 {grad_x16} < i64; E-diff memo {q8_d}/{q12_d}/{q16_d}, symmetric-clamp live 25165824/402653184/6442450944"
     );
 
     let golden_dir = std::env::args()
@@ -706,6 +730,7 @@ fn main() {
             let mut trace = Sha256::new();
             let mut failures = Vec::new();
             let mut repairs_total = 0usize;
+            let mut spread_max = 0i64;
 
             for (t, &o) in stream.iter().enumerate() {
                 let ti = t as i64;
@@ -719,9 +744,17 @@ fn main() {
                 } else {
                     0
                 };
-                let (m, cnt_fs, x_unif, cnt_repairs, _, _) =
+                let (m, cnt_fs, x_unif, cnt_repairs, spread, _) =
                     model.mixture(&state, up, left, &mut p_hi, &mut p_lo);
                 repairs_total += cnt_repairs;
+                assert!(
+                    spread <= 2 * model.e_lim,
+                    "energy-difference bound (q{}-{} t{})",
+                    n_q,
+                    name,
+                    t
+                );
+                spread_max = spread_max.max(spread);
                 let total = m.iter().sum::<i64>();
                 let (f, repairs) = if total > 0 {
                     largest_remainder(&m, total, FREQ_SUM)
@@ -836,8 +869,10 @@ fn main() {
             println!(
                 "{tag}: parity {WINDOW}/{WINDOW} PASS, 36-golden subset PASS, \
                  trace-digest MATCH, z PASS, decode PASS ({} window bits), \
-                 repairs={repairs_total}",
-                wbits_bits
+                 repairs={repairs_total}, max_energy_spread={spread_max} (bound {}, memo {})",
+                wbits_bits,
+                2 * model.e_lim,
+                5 * model.e_lim / 4
             );
         }
     }
@@ -891,7 +926,11 @@ fn ac_encode_window(stream: &[i64], lut: &[i64], n_q: u32) -> Vec<u8> {
         let rng = high - low + 1;
         high = low + (rng * cums[o as usize + 1]) / FREQ_SUM - 1;
         low += (rng * cums[o as usize]) / FREQ_SUM;
+        assert!(low <= high, "inverted interval (encoder t={t})");
+        let mut it = 0usize;
         loop {
+            it += 1;
+            assert!(it <= 256, "renorm loop (encoder t={t})");
             if high < R_HALF {
                 emit_bit(&mut bits, &mut pending, 0);
             } else if low >= R_HALF {

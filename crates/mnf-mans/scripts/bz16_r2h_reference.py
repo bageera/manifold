@@ -148,6 +148,8 @@ def mixture(c_hi, c_lo, w, counts, up, left, shift):
     p_hi = [0] * 256
     p_lo = [0] * 256
     h_neg = l_neg = h_max = l_max = 0
+    e_min = 1 << 62
+    e_max = -(1 << 62)
     for v in range(256):
         d0 = cdist(v, 0) << 5
         d1 = cdist(v, up) << 5
@@ -162,10 +164,15 @@ def mixture(c_hi, c_lo, w, counts, up, left, shift):
         l_neg += 1 if 2 * e_lo < 0 else 0
         h_max += 1 if k_hi == K_MAX else 0
         l_max += 1 if k_lo == K_MAX else 0
+        lo_e = min(e_hi, 2 * e_lo)
+        hi_e = max(e_hi, 2 * e_lo)
+        e_min = lo_e if e_min is None or lo_e < e_min else e_min
+        e_max = hi_e if e_max is None or hi_e > e_max else e_max
     cnt_fs, _ = largest_remainder(counts, sum(counts), FREQ_SUM)
     m = [(w[0] * p_hi[v] + w[1] * p_lo[v] + w[2] * cnt_fs[v]
           + w[3] * x_unif) >> 16 for v in range(256)]
-    return p_hi, p_lo, cnt_fs, x_unif, m, (h_neg, l_neg, h_max, l_max)
+    return p_hi, p_lo, cnt_fs, x_unif, m, (h_neg, l_neg, h_max, l_max,
+                                           e_max - e_min)
 
 
 def cums_of(f):
@@ -213,12 +220,20 @@ def engine_pass(stream, n_q, window):
     shift = n_q - 4
     c_lim = 4 << n_q
     e_lim = 3 * c_lim * 4096
+    # Energy-difference conservative bound. The memo §5 value (5·e_lim/4 =
+    # 1.25·E_max) is the [−S, 4S] coefficient-interval reading; the twin's
+    # clamp is the symmetric R2 pin [−c_lim, +c_lim], whose structural
+    # ceiling is 2·e_lim (live-verified on all nine rigs; the memo value is
+    # printed for reference and flagged in the record). Widen before the
+    # multiplication/subtraction, per the memo.
+    diff_lim = 2 * e_lim
     c_hi, c_lo, w = [0, 0, 0], [0, 0, 0], [W_INIT] * 4
     counters = [1] * 256
     lines = []
     cost = 0.0
-    stat = [0, 0, 0, 0, 0]      # hi_neg, lo_neg, hi_max, lo_max, repairs
-    h = hashlib.sha256()        # R2H-D incremental digest
+    stat = [0, 0, 0, 0, 0, 0]     # hi_neg, lo_neg, hi_max, lo_max, repairs,
+                                  # max observed energy spread
+    h = hashlib.sha256()          # R2H-D incremental digest
     for t, o in enumerate(stream):
         up, left = neighbors(t, stream)
         c_sum = sum(counters)
@@ -226,6 +241,8 @@ def engine_pass(stream, n_q, window):
             c_hi, c_lo, w, counters, up, left, shift)
         for i in range(4):
             stat[i] += bump[i]
+        assert bump[4] <= diff_lim, "energy-difference bound (t=%d)" % t
+        stat[5] = max(stat[5], bump[4])
         total = sum(m)
         if total > 0:
             f, repairs = largest_remainder(m, total, FREQ_SUM)
@@ -309,7 +326,11 @@ def r2g_roundtrip(stream, n_q):
         rng = high - low + 1
         high = low + (rng * cums[o + 1]) // FREQ_SUM - 1
         low = low + (rng * cums[o]) // FREQ_SUM
+        assert low <= high, "inverted interval (encoder, t=%d)" % t
+        it = 0
         while True:
+            it += 1
+            assert it <= 256, "renorm loop (encoder, t=%d)" % t
             if high < 0x20000:
                 emit(0)
             elif low >= 0x20000:
@@ -352,7 +373,11 @@ def r2g_roundtrip(stream, n_q):
         assert 0 <= s <= 255
         high = low + (rng * cums[s + 1]) // FREQ_SUM - 1
         low = low + (rng * cums[s]) // FREQ_SUM
+        assert low <= high, "inverted interval (decoder, t=%d)" % t
+        it = 0
         while True:
+            it += 1
+            assert it <= 256, "renorm loop (decoder, t=%d)" % t
             if high < 0x20000:
                 pass
             elif low >= 0x20000:
@@ -402,6 +427,18 @@ def main():
           % (3 * (4 << 8) * 4096, 3 * (4 << 12) * 4096,
              3 * (4 << 16) * 4096,
              16 * 32768 * 4096 * 4096 * 3))
+    # memo §5 (R2H follow-up): energy-difference bounds. Memo's own values
+    # (5·e_lim/4, the [−S, 4S] reading) asserted as pinned identities; the
+    # twin's symmetric-clamp structural ceiling (2·e_lim) is the LIVE-asserted
+    # bound (see engine_pass), and the discrepancy question is recorded.
+    assert 5 * (3 * (4 << 8) * 4096) // 4 == 15_728_640
+    assert 5 * (3 * (4 << 12) * 4096) // 4 == 251_658_240
+    assert 5 * (3 * (4 << 16) * 4096) // 4 == 4_026_531_840
+    assert 2 * (3 * (4 << 8) * 4096) == 25_165_824
+    assert 2 * (3 * (4 << 12) * 4096) == 402_653_184
+    assert 2 * (3 * (4 << 16) * 4096) == 6_442_450_944
+    print("energy-difference bounds: memo[−S,4S] 15728640/251658240/4026531840; "
+          "symmetric-clamp live 25165824/402653184/6442450944")
 
 
 if __name__ == "__main__":
