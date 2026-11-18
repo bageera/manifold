@@ -1,5 +1,25 @@
 # Changelog
 
+## Research — BZ16 formally CLOSED on the operator's final memo (2026-11-18, not a release)
+
+N3-R accepted; production integration DENIED, N4 and Hubble NOT
+AUTHORIZED, slot-incremental redesign DEFERRED, production wire format
+UNCHANGED. The final ledger with per-fixture best-BZ16 ratios
+(corrected bytes, min of the arms at Q12): solid 9.567x, gradient
+40.167x, repeat 94.922x, screenshot 3.739x, noise exact tie, forest
+1.009x, terrain 1.151x (the operator's record correction adopted:
+terrain's best BZ16 arm is B0 at 15,193 B = +15.06%, not C1 at
+15,622 B). Wire wins 0/7, ties 1/7, losses 6/7. Permanent
+qualifications recorded (Repeat's narrow positive against A1; the
+unexecuted Bx/Cx isolation limit; B0 = frozen four-expert vs C1 =
+two-expert; decode demonstrated for B0/C1 only; shared framing an
+accounting assumption). Retained assets: the fixed-point exponential
+modeling stack, the adaptive-recovery evidence, the hardened coder
+instruments and the N1 native-stream acquisition infrastructure.
+Forward direction per the operator: conditional information discovery
+before new probability models
+([docs/mnf17-n2-record.md](docs/mnf17-n2-record.md), §Closure).
+
 ## Research — MNF17-N3-R: serialization accounting reconciled; BZ16 program CLOSED (2026-11-18, not a release)
 
 Operator-authorized audit executed

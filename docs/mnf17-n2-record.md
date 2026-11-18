@@ -110,13 +110,15 @@ confirmed and corrected:
 | screenshot | 440 | 427 (mix7: 440) | 30,833 | 46,920 | **1,645** | 38,313 | +1,205 (C0) |
 | noise | 196,880 | 200,091 (mix7: 199,552) | **196,880** | 233,502 | 236,060 | 203,586 | exact tie (B0) |
 | forest | 40,660 | 40,651 (mix7: 44,384) | 43,690 | 53,401 | 58,001 | **41,032** | +372 (C1) |
-| terrain | 13,204 | 13,196 (mix7: 13,464) | 15,193 | 15,634 | 16,770 | **15,622** | +2,418 (C1) |
+| terrain | 13,204 | 13,196 (mix7: 13,464) | **15,193** | 15,634 | 16,770 | 15,622 | +1,989 (B0, +15.06%) |
 
 **The corrected accounting confirms the verdict: no portfolio wins.**
 The closest margins (noise B0 = an exact tie with the ZSTD19 production
-pick at 196,880 B; forest C1 +0.9%; terrain C1 +18.3%) remain losses or
-ties — ties do not advance a portfolio pick, and C1's edge over C0 stays
-the only structural positive. The narrower conclusion stands: **no
+pick at 196,880 B; forest C1 +0.9%, +372 B; terrain B0 +15.06%) remain
+losses or ties — ties do not advance a portfolio pick, and C1's edge
+over C0 stays the only structural positive. Forest is the most
+interesting near-miss; with the measured ~50-100x model-layer overhead
+it does not justify further optimization either. The narrower conclusion stands: **no
 tested configuration has demonstrated a production-worthy advantage.**
 
 ### Program disposition after reconciliation
@@ -156,3 +158,41 @@ CSV: `research/results/mnf17-n2-summary.csv` (28 rows × 17 cols);
 run log `research/results/mnf17-n2.log` (N2_RC=0). Hubble remains gated
 behind the initial screening cohort and awaits its acquisition run;
 production integration stays HOLD.
+
+## Closure — BZ16 program formally closed (operator memo, 2026-11-18)
+
+**N3-R accepted; the BZ16 research program is CLOSED. Production
+integration denied; no further Boltzmann optimization authorized.** The
+operator's final ledger: BZ1-BZ15 CLOSED, R1/R2/R2H + R2H-E + I4B/I5/I7
+PASS, N1 PASS, N2 NEGATIVE, N3 NEGATIVE, N3-R PASS; N4 and Hubble NOT
+AUTHORIZED, slot-incremental redesign DEFERRED, production wire format
+UNCHANGED. Per-fixture best-BZ16-vs-production ratios at Q12 (corrected
+bytes): solid 9.567x, gradient 40.167x, repeat 94.922x, screenshot
+3.739x, noise exact tie, forest 1.009x, terrain 1.151x (B0 at
+15,193 B — the operator's record correction adopted above). Wire wins
+0/7, ties 1/7, losses 6/7.
+
+Permanent qualifications to preserve:
+- Repeat's -1,988-bit result remains a narrow local positive against A1.
+- The unexecuted Bx/Cx controls prevent definitive isolation of the
+  energy function's contribution.
+- B0 = the frozen four-expert Boltzmann model; C1 = the two-expert
+  variant.
+- Independent serialized decoding was demonstrated for B0 and C1 across
+  all seven Q12 streams, not every experimental arm.
+- Shared framing is an experimental accounting assumption; any
+  additional model-identification overhead would further disadvantage
+  the candidate.
+
+Retained assets: the deterministic fixed-point exponential modeling
+(4,097-entry LUT, precision ablations, signed-gradient arithmetic),
+the adaptive change-point recovery evidence (64-164 symbols,
+fixed-share), **the N1 native entropy-stream acquisition instrument**
+(likely the program's most valuable reusable engineering
+contribution), the hardened arithmetic-coder instruments and the
+Python-screens / Rust-confirms methodology.
+
+Next-direction guidance from the operator: exact probability
+arithmetic, structural discovery, and — prioritized — conditional
+information discovery (measure what the current production models fail
+to explain BEFORE constructing another probability model).
