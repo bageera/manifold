@@ -1,5 +1,24 @@
 # Changelog
 
+## Research — BZ16-R1: Boltzmann frozen LUT + preliminary Q12 bounds confirmed in Rust (2026-11-18, not a release)
+
+The BZ16 Python research (long-stream precision, independent probability
+verification, Q12 as leading migration reference) is confirmed on the Rust
+side from its frozen specification:
+[`bz16_lut_confirm`](crates/mnf-mans/examples/bz16_lut_confirm.rs) regenerates
+the frozen exponential LUT (`L_k = max(1, round(2^24·e^{−k/256}))`) with
+Python-round parity and asserts every documented property (4097 entries,
+16388 B u32, max 16,777,216, min 2); both preliminary Q12 overflow bounds
+(energy 201,326,592 < i32::MAX; gradient numerator 1,649,267,441,664 < i64)
+are re-derived in exact integer arithmetic, and the proposed type mapping
+(i32/u16/i64/u32) is representability-checked
+([docs/bz16-r1-record.md](docs/bz16-r1-record.md), FNV-1a table digest
+`50abef206188b374` for R2 diffing). Golden-vector parity
+(`F_Rust,i(s) = F_Python,i(s)`) is BLOCKED pending the Python artifacts
+(vectors, nine stream digests, scalar-engine source) — the BZ16 Python
+environment is not on this machine. BZ17 (Rust production migration) stays
+HOLD as memoed.
+
 ## Research — MNF15-P1-A: per-file encoder search-cost attribution (2026-11-14, not a release)
 
 The P1 work order ("exact portfolio search optimization": same pick, same
