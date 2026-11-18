@@ -174,7 +174,7 @@ impl<'a> Model<'a> {
             lut,
             shift: n_q - 4,
             e_lim: 3 * (4 << n_q) * 4096,
-            s_lim: 3i64 << n_q,
+            s_lim: 1i64 << n_q,
         }
     }
 
@@ -245,8 +245,8 @@ fn adapt(state: &mut State, o: i64, ds: [i64; 3], probs: Probs<'_>, f: &[i64], n
             let num = err * di;
             assert!(num.abs() <= FREQ_SUM * 4096, "gradient num bound");
             let new = cs[i] - round_half_away(num, GRAD_DEN);
-            // recovered clamp polarity: -S <= b <= 4S with S = 3<<n_q
-            cs[i] = new.clamp(-(3 * c_lim / 4), 3 * c_lim);
+            // recovered clamp polarity: -S <= b <= 4S, S = 2^Q = c_lim/4
+            cs[i] = new.clamp(-(c_lim / 4), c_lim);
         }
     }
     let posts = [
@@ -700,12 +700,18 @@ fn main() {
     assert_eq!(q8_d, 15_728_640);
     assert_eq!(q12_d, 251_658_240);
     assert_eq!(q16_d, 4_026_531_840);
-    let c8: i64 = 9 * (3 << 8) * 12288;
-    let c12: i64 = 9 * (3 << 12) * 12288;
-    let c16: i64 = 9 * (3 << 16) * 12288;
-    assert_eq!(c8, 84_934_656);
-    assert_eq!(c12, 1_358_954_496);
-    assert_eq!(c16, 21_743_271_936);
+    let c8: i64 = 9 * (1 << 8) * 12288;
+    let c12: i64 = 9 * (1 << 12) * 12288;
+    let c16: i64 = 9 * (1 << 16) * 12288;
+    assert_eq!(c8, 28_311_552);
+    assert_eq!(c12, 452_984_832);
+    assert_eq!(c16, 7_247_757_312);
+    let w8: i64 = 5 * (1 << 8) * 12288;
+    let w12: i64 = 5 * (1 << 12) * 12288;
+    let w16: i64 = 5 * (1 << 16) * 12288;
+    assert_eq!(w8, 15_728_640);
+    assert_eq!(w12, 251_658_240);
+    assert_eq!(w16, 4_026_531_840);
     assert!(
         2 * q16 < 1i64 << 62,
         "Q16 difference comfortably within i64"

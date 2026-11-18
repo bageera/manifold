@@ -77,28 +77,31 @@ delta is length-independent by construction.
 
 ---
 
-## Addendum — R2H-E asymmetric clamp (2026-11-18)
+## Addendum — R2H-E asymmetric clamp, corrected scale (2026-11-18)
 
-Re-measured under the recovered asymmetric clamp ([−S, 4S], S = 3<<n_q).
-The bounds table updates: |E| ≤ 8·S·12288 (75,497,472 / 1,207,959,552 /
-19,327,352,832 — i32, i32, i64) and the cross-expert spread ceiling
-9·S·12288 (84,934,656 / 1,358,954,496 / 21,743,271,936), replacing the
-pre-addendum |E| table (which assumed symmetric ±: 3·c_lim·4096). The
-gradient, LR, weight and coder product identities are unchanged.
+Re-measured under the recovered asymmetric clamp (`S = 2^Q = c_lim/4`).
+The bounds table updates: |E| ≤ 8·S·12288 (25,165,824 / 402,653,184 /
+6,442,450,944 — i32, i32, i64) and the cross-expert spread ceiling
+9·S·12288 (28,311,552 / 452,984,832 / 7,247,757,312); the memo §5 values
+are the within-expert range 5·S·12288 (15,728,640 / 251,658,240 /
+4,026,531,840), asserted as pinned identities. The pre-addendum |E| table
+(symmetric 3·c_lim·4096) and the gradient/LR/weight/coder product
+identities are unchanged.
 
 Extended 65,536-position bounded-counter rerun (policy fires on all nine
-rigs; deltas ≤ 15 bits / ≤ 0.003% — brick-Q12 −14.66 bits is the largest):
+rigs; deltas ≤ 14.7 bits / ≤ 0.003% — brick-Q12 −14.66 bits is the
+largest):
 
 | rig | Q | pos | cost_unbounded | cost_bounded | delta | rel |
 | --- | --- | --- | --- | --- | --- | --- |
 | camera | 12 | 65536 | 527,288.84 | 527,291.96 | +3.12 | +0.001% |
-| camera | 8 | 65536 | 522,647.59 | 522,647.74 | +0.15 | +0.000% |
+| camera | 8 | 65536 | 522,588.07 | 522,588.52 | +0.44 | +0.000% |
 | camera | 16 | 65536 | 533,312.49 | 533,312.77 | +0.28 | +0.000% |
 | brick | 12 | 65536 | 451,089.71 | 451,075.05 | −14.66 | −0.003% |
-| brick | 8 | 65536 | 520,706.78 | 520,707.15 | +0.36 | +0.000% |
+| brick | 8 | 65536 | 521,934.81 | 521,935.17 | +0.36 | +0.000% |
 | brick | 16 | 65536 | 325,233.43 | 325,233.43 | +0.00 | +0.000% |
 | noise | 12 | 65536 | 523,952.52 | 523,952.54 | +0.02 | +0.000% |
-| noise | 8 | 65536 | 523,949.20 | 523,949.22 | +0.03 | +0.000% |
+| noise | 8 | 65536 | 523,949.42 | 523,949.38 | −0.04 | −0.000% |
 | noise | 16 | 65536 | 525,760.84 | 525,760.89 | +0.05 | +0.000% |
 
 Streaming qualifications stand (O(256)-counter working memory, constant

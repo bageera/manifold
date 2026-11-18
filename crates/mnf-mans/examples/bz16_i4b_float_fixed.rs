@@ -231,8 +231,8 @@ fn adapt(
             let num = err * di;
             assert!(num.abs() <= FREQ_SUM * 4096, "gradient num bound");
             let new = cs[i] - round_half_away(num, GRAD_DEN);
-            // recovered asymmetric clamp: -S <= b <= 4S, S = 3<<n_q
-            cs[i] = new.clamp(-(3 * c_lim / 4), 3 * c_lim);
+            // recovered asymmetric clamp: -S <= b <= 4S, S = 2^Q = c_lim/4
+            cs[i] = new.clamp(-(c_lim / 4), c_lim);
         }
     }
     let posts = [
@@ -299,7 +299,7 @@ impl FloatModel {
         FloatModel {
             b_hi: (2.0f64).powi(-(n_q as i32 + 4)),
             b_lo: 2.0 * (2.0f64).powi(-(n_q as i32 + 4)),
-            s_lim: (3i64 << n_q) as f64,
+            s_lim: (1i64 << n_q) as f64,
         }
     }
 

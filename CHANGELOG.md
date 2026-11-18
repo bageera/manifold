@@ -1,21 +1,25 @@
 # Changelog
 
-## Research — BZ16-R2H-E: clamp-polarity reconciled to the recovered asymmetric clamp (2026-11-18, not a release)
+## Research — BZ16-R2H-E: clamp-polarity reconciled to the recovered asymmetric clamp, S = 2^Q (2026-11-18, not a release)
 
-Operator-memo directive ([docs/bz16-r2h-record-e.md](docs/bz16-r2h-record-e.md)):
-the recovered reference implements `b[j][k] = min(4·scale, max(−scale, b+step))`
-explicitly — asymmetric `b ∈ [−S, 4S]`, `S = 3<<n_q` — and the twin's
-symmetric `±c_lim` pin was the deviation. All five mirrors (Python reference
-+ four Rust instruments) now clamp asymmetrically; the engine's exact
-energy-difference ceiling is 9·S·12288 (84,934,656 / 1,358,954,496 /
-21,743,271,936 — the memo §5 value 5·e_lim/4 models a single feature
-magnitude and stays asserted as a pinned identity). R2H twin parity,
+Operator-memo directive
+([docs/bz16-r2h-record-e.md](docs/bz16-r2h-record-e.md)): the recovered
+reference implements `b[j][k] = min(4·scale, max(−scale, b+step))`
+explicitly — asymmetric `b ∈ [−S, 4S]` with the scale **`S = 2^Q` per
+precision** (`c_lim/4`; the operator's clarification resolved the first-read
+`S = 3·2^Q` as a mis-parameterization) — and the twin's symmetric ±c_lim
+pin was the deviation. All five mirrors (Python reference + four Rust
+instruments) clamp asymmetrically; the exact engine ceilings are |E| ≤
+8·S·12288 (25,165,824 / 402,653,184 / 6,442,450,944 — i32/i32/i64) and
+spread ≤ 9·S·12288 (28,311,552 / 452,984,832 / 7,247,757,312), with the §5
+within-expert identities 5·S·12288 (15,728,640 / 251,658,240 / 4,026,531,840)
+asserted as pinned values. The corrected reading reproduces the operator's
+observed noise-Q8 spread maximum (24,717,184) exactly. R2H twin parity,
 36 goldens and the 512-window f-vectors re-verified byte-equal across
-languages; the I4B/I5/I7 gates re-measured (retention ≤ ±1.5% with
-brick-Q8 +1.50% the largest deviation; recovery still 64–164 positions;
-bounded-counter cost still ≤ 0.003%). Q8 trace digests change; Q12/Q16 are
-byte-identical (the clamp never binds there). Production integration
-remains untouched research-side.
+languages; the I4B/I5/I7 gates re-measured (retention ≤ ±0.65%; recovery
+still 64–164 positions, α = 0.999; bounded-counter cost still ≤ 0.003%).
+Q8 trace digests change; Q12/Q16 are byte-identical (the clamp never binds
+there). Production integration remains untouched research-side.
 
 ## Research — BZ16-I7: bounded arithmetic + streaming measured (2026-11-18, not a release)
 

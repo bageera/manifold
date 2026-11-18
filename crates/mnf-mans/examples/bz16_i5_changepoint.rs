@@ -226,8 +226,8 @@ fn run_engine(stream: &[i64], n_q: u32, lut: &[i64]) -> Vec<f64> {
                 .enumerate()
             {
                 let new = cs[i] - round_half_away(err * dv, GRAD_DEN);
-                // recovered asymmetric clamp: -S <= b <= 4S, S = 3<<n_q
-                cs[i] = new.clamp(-(3 * c_lim / 4), 3 * c_lim);
+                // recovered asymmetric clamp: -S <= b <= 4S, S = 2^Q = c_lim/4
+                cs[i] = new.clamp(-(c_lim / 4), c_lim);
             }
         }
         let posts = [
@@ -312,7 +312,7 @@ fn run_engine_float(stream: &[i64], n_q: u32, alpha: f64) -> Vec<f64> {
             for (i, &dv) in ds[row].iter().enumerate() {
                 let new = cs[i] - err * dv / GRAD_DEN as f64;
                 // recovered asymmetric clamp: -S <= b <= 4S
-                cs[i] = new.clamp(-0.75 * c_lim, 3.0 * c_lim);
+                cs[i] = new.clamp(-0.25 * c_lim, c_lim);
             }
         }
         let post = [

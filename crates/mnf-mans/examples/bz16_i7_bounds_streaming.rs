@@ -141,7 +141,7 @@ impl Engine {
         Engine {
             shift: n_q - 4,
             c_lim: 4i64 << n_q,
-            s_lim: 3i64 << n_q,
+            s_lim: 1i64 << n_q,
             bounded,
             rescales: 0,
             max_cnt_sum: 0,
@@ -219,8 +219,8 @@ impl Engine {
                     let num = err * dv;
                     assert!(num.abs() <= FREQ_SUM * 4096, "gradient num bound");
                     let new = cs[i] - round_half_away(num, GRAD_DEN);
-                    // recovered asymmetric clamp: -S <= b <= 4S, S = 3<<n_q
-                    cs[i] = new.clamp(-3 * self.c_lim / 4, 3 * self.c_lim);
+                    // recovered asymmetric clamp: -S <= b <= 4S, S = c_lim/4
+                    cs[i] = new.clamp(-self.c_lim / 4, self.c_lim);
                 }
             }
             let posts = [
@@ -317,14 +317,14 @@ fn main() {
     // doubled, so |E| <= 8·S·12288 and the cross-expert spread
     // ceiling is 9·S·12288. i32/i64 classification: Q8/Q12 live in i32,
     // Q16 requires i64.
-    let q8: i64 = 8 * (3 << 8) * 12288;
-    let q12: i64 = 8 * (3 << 12) * 12288;
-    let q16: i64 = 8 * (3 << 16) * 12288;
-    assert_eq!((q8, q12, q16), (75_497_472, 1_207_959_552, 19_327_352_832));
-    let s8: i64 = 9 * (3 << 8) * 12288;
-    let s12: i64 = 9 * (3 << 12) * 12288;
-    let s16: i64 = 9 * (3 << 16) * 12288;
-    assert_eq!((s8, s12, s16), (84_934_656, 1_358_954_496, 21_743_271_936));
+    let q8: i64 = 8 * (1 << 8) * 12288;
+    let q12: i64 = 8 * (1 << 12) * 12288;
+    let q16: i64 = 8 * (1 << 16) * 12288;
+    assert_eq!((q8, q12, q16), (25_165_824, 402_653_184, 6_442_450_944));
+    let s8: i64 = 9 * (1 << 8) * 12288;
+    let s12: i64 = 9 * (1 << 12) * 12288;
+    let s16: i64 = 9 * (1 << 16) * 12288;
+    assert_eq!((s8, s12, s16), (28_311_552, 452_984_832, 7_247_757_312));
     let grad_x16 = 16i64 * 32768 * 4096 * 4096 * 3;
     assert_eq!(grad_x16, 26_388_279_066_624);
     // normalization products (post-policy): counters ≤ COUNTER_CAP ⇒

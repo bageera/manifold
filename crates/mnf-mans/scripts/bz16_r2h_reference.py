@@ -192,7 +192,7 @@ def adapt(c_hi, c_lo, w, counters, o, ds, p_hi, p_lo, cnt_fs, x_unif, f,
     again). Counters are updated by the caller (+1 per observation). ds =
     the three feature distances at o, pre-scaled (<<5)."""
     c_lim = 4 << n_q
-    s_lim = 3 << n_q   # recovered asymmetric clamp scale S
+    s_lim = 1 << n_q   # recovered asymmetric clamp scale S = 2^Q
     for cs, xs in ((c_hi, p_hi), (c_lo, p_lo)):
         err = f[o] - xs[o]
         assert -FREQ_SUM < err <= FREQ_SUM, "gradient err bound"
@@ -221,15 +221,15 @@ def engine_pass(stream, n_q, window):
     """Single pass: model, adapt, and emit everything (goldens + digest)."""
     shift = n_q - 4
     c_lim = 4 << n_q
-    s_lim = 3 << n_q                      # recovered asymmetric scale S
+    s_lim = 1 << n_q                      # recovered asymmetric scale S = 2^Q
     e_lim = 3 * c_lim * 4096
     # Energy-difference live ceiling at the recovered asymmetric clamp
-    # [−S, 4S] (S = 3<<n_q). E = Σ3 c_k·d_k, d_k <= 4096, so Σd <= 12288:
-    # the lo expert's energy enters doubled, max 2·4S·12288, the hi
-    # expert's floor is −S·12288, and the cross-expert spread ceiling is
-    # (8S + S)·12288 = 9·S·12288. The memo §5 value 5·e_lim/4 assumes a
-    # single feature magnitude; the three-feature engine needs the wider
-    # exact ceiling. Widened at the multiplication, per the memo.
+    # [−S, 4S], S = 2^Q (= c_lim/4). E = Σ3 c_k·d_k, d_k <= 4096, so
+    # Σd <= 12288; the lo expert's energy enters doubled, max 2·4S·12288,
+    # and the hi expert's floor is −S·12288, so the cross-expert spread
+    # ceiling is (8S + S)·12288 = 9·S·12288. The memo §5 value 5·e_lim/4
+    # is the within-expert E range 5S·12288 — asserted separately. Widened
+    # at the multiplication, per the memo.
     diff_lim = 9 * s_lim * 12288
     c_hi, c_lo, w = [0, 0, 0], [0, 0, 0], [W_INIT] * 4
     counters = [1] * 256
@@ -438,16 +438,16 @@ def main():
     # identity 5·e_lim/4 assumes a single feature magnitude; the
     # three-feature engine's exact live ceiling is 9·S·12288 (hi floor
     # −S·12288 vs the lo expert's doubled max 8S·12288), asserted here.
-    assert 5 * (3 * (4 << 8) * 4096) // 4 == 15_728_640
-    assert 5 * (3 * (4 << 12) * 4096) // 4 == 251_658_240
-    assert 5 * (3 * (4 << 16) * 4096) // 4 == 4_026_531_840
-    assert 9 * (3 << 8) * 12288 == 84_934_656
-    assert 9 * (3 << 12) * 12288 == 1_358_954_496
-    assert 9 * (3 << 16) * 12288 == 21_743_271_936
-    print("energy-difference live ceiling (asymmetric [−S,4S]): "
-          "9·S·12288 = %d/%d/%d; memo §5 single-feature 5·e_lim/4 = "
+    assert 5 * (1 << 8) * 12288 == 15_728_640
+    assert 5 * (1 << 12) * 12288 == 251_658_240
+    assert 5 * (1 << 16) * 12288 == 4_026_531_840
+    assert 9 * (1 << 8) * 12288 == 28_311_552
+    assert 9 * (1 << 12) * 12288 == 452_984_832
+    assert 9 * (1 << 16) * 12288 == 7_247_757_312
+    print("energy-difference live ceiling (asymmetric [−S,4S], S=2^Q): "
+          "9·S·12288 = %d/%d/%d; memo §5 within-expert 5·S·12288 = "
           "15728640/251658240/4026531840"
-          % (84_934_656, 1_358_954_496, 21_743_271_936))
+          % (28_311_552, 452_984_832, 7_247_757_312))
 
 
 if __name__ == "__main__":

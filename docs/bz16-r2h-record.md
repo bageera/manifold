@@ -194,12 +194,15 @@ conflict itself is evidence the external spec must answer first.
 **CLOSED 2026-11-18 (R2H-E, operator memo):** the recovered reference's own
 source implements the **asymmetric clamp** explicitly (`self.b[j][k] =
 min(4*self.scale, max(-self.scale, self.b[j][k] + step))`); the twin's
-symmetric pin was the deviation, not the recovered engine. All four mirrors
-now implement `[−S, 4S]`, `S = 3<<n_q`; the engine's exact difference
-ceiling is 9·S·12288 (the §5 identity 5·e_lim/4 accounts a single feature
-magnitude), and only the Q8 trace digests change — Q12/Q16 states are
-byte-identical because the clamp never binds at those precisions. Full
-detail and the new digest set:
+symmetric pin was the deviation, not the recovered engine. All mirrors now
+implement `[−S, 4S]` with the scale `S = 2^Q` per precision (`c_lim/4`);
+the engine's exact difference ceiling is 9·S·12288 (28,311,552 /
+452,984,832 / 7,247,757,312) with the §5 within-expert identities
+5·S·12288 (15,728,640 / 251,658,240 / 4,026,531,840) asserted as pins —
+and the corrected reading reproduces the §4a table's observed noise-Q8
+maximum (24,717,184) exactly. Only the Q8 trace digests change — Q12/Q16
+states are byte-identical because the clamp never binds at those
+precisions. Full detail and the new digest set:
 [docs/bz16-r2h-record-e.md](bz16-r2h-record-e.md). The symmetric-pole
 measurements in §4a's table above stand as the **labeled symmetric-clamp
 ablation**.

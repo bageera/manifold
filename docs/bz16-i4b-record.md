@@ -100,26 +100,26 @@ serialization accounting — CONDITIONAL, not yet measured.
 
 ---
 
-## Addendum — R2H-E asymmetric clamp (2026-11-18)
+## Addendum — R2H-E asymmetric clamp, corrected scale (2026-11-18)
 
-Re-measured under the recovered asymmetric clamp (`[−S, 4S]`, S = 3<<n_q;
-see [bz16-r2h-record-e.md](bz2-r2h-record-e.md) — the symmetric numbers in
+Re-measured under the recovered asymmetric clamp (`b ∈ [−S, 4S]`,
+`S = 2^Q = c_lim/4` — the operator's scale clarification; the numbers in
 the table above are retained as the labeled symmetric-clamp ablation):
 
 | rig | cost_fixed | cost_float | delta_bits | rel |
 | --- | --- | --- | --- | --- |
-| camera-Q8 | 130,672.81 | 130,670.95 | +1.86 | +0.001% |
+| camera-Q8 | 130,658.25 | 130,657.09 | +1.16 | +0.001% |
 | camera-Q12 | 131,616.49 | 131,808.36 | −191.87 | −0.146% |
 | camera-Q16 | 132,875.66 | 132,959.50 | −83.84 | −0.063% |
-| brick-Q8 | 129,746.57 | 127,797.12 | +1,949.46 | +1.503% |
+| brick-Q8 | 129,909.94 | 129,741.81 | +168.13 | +0.129% |
 | brick-Q12 | 112,714.49 | 112,950.61 | −236.12 | −0.209% |
 | brick-Q16 | 79,711.35 | 80,223.54 | −512.19 | −0.643% |
-| noise-Q8 | 131,079.01 | 131,078.32 | +0.69 | +0.001% |
+| noise-Q8 | 131,078.39 | 131,076.63 | +1.76 | +0.001% |
 | noise-Q12 | 131,077.17 | 131,083.88 | −6.71 | −0.005% |
 | noise-Q16 | 131,533.50 | 131,538.05 | −4.55 | −0.003% |
 
 Retention verdict unchanged in kind: fixed≈float, no systematic sign
-(fixed cheaper 4/9 vs 5/9 before; the largest deviation is brick-Q8
-+1.50%, the −S floor changing the Q8 trajectory where brick's dense
-distance structure pressed coefficients downward). Drift-check: the fixed
-engine is byte-identical to the R2H-E goldens (digest + z + window f).
+(fixed cheaper 4/9), worst deviation ±0.65% (brick-Q8 tightened from the
+3S misparameterization's +1.50% to +0.13% under the corrected scale; the
+overall worst is brick-Q16 −0.643%). Drift-check: the fixed engine is
+byte-identical to the R2H-E goldens (digest + z + window f).

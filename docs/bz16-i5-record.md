@@ -81,21 +81,22 @@ native replay gate (CONDITIONAL) remains the ΔL vs production decision.
 
 ---
 
-## Addendum — R2H-E asymmetric clamp (2026-11-18)
+## Addendum — R2H-E asymmetric clamp, corrected scale (2026-11-18)
 
-Re-measured under the recovered asymmetric clamp ([−S, 4S]; the numbers
+Re-measured under the recovered asymmetric clamp (`S = 2^Q`; the numbers
 above are the labeled symmetric-clamp ablation):
 
 | rig | Q | before | after | join_max | recover | adapt_x | restart |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | camera→brick | 12 | 7.999 | 8.086 | 8.034 | 64 | 576.0 | −12.2 |
-| camera→brick | 8 | 7.996 | 8.002 | 8.034 | 64 | 576.0 | −8.9 |
+| camera→brick | 8 | 7.997 | 8.002 | 8.034 | 64 | 576.0 | −9.1 |
 | camera→brick | 16 | 8.132 | 8.114 | 8.678 | 64 | 576.0 | +5.1 |
 | brick→camera | 12 | 6.604 | 7.881 | 8.371 | 64 | 576.0 | +106.1 |
-| brick→camera | 8 | 7.903 | 7.932 | 8.313 | 64 | 576.0 | +95.5 |
+| brick→camera | 8 | 7.902 | 7.930 | 8.313 | 64 | 576.0 | +95.5 |
 | brick→camera | 16 | 3.889 | 5.691 | 15.000 | 164 | 676.0 | −733.7 |
 
 Recovery verdict unchanged: 64 positions typical, 164 at the
-brick→camera Q16 joint; the recovered α = 0.999 remains optimal (float
-α-sensitivity: 0.999 → join 8.300, 0.99 → 8.286, 0.9 → 8.791 for the
-brick→camera Q12 rig).
+brick→camera Q16 joint. Fixed-share α = 0.999 remains the selected regime
+(float α-sensitivity on the brick→camera Q12 rig: 0.999 → join 8.771,
+0.99 → 9.445, 0.9 → 15.000 b/sym — the corrected-scale sensitivity is
+monotone in α).
