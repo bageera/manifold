@@ -78,3 +78,24 @@ native replay gate (CONDITIONAL) remains the ΔL vs production decision.
 | I7 bounds + streaming | next (AUTHORIZED) |
 | Native replay / portfolio evaluation | CONDITIONAL |
 | Production integration | HOLD |
+
+---
+
+## Addendum — R2H-E asymmetric clamp (2026-11-18)
+
+Re-measured under the recovered asymmetric clamp ([−S, 4S]; the numbers
+above are the labeled symmetric-clamp ablation):
+
+| rig | Q | before | after | join_max | recover | adapt_x | restart |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| camera→brick | 12 | 7.999 | 8.086 | 8.034 | 64 | 576.0 | −12.2 |
+| camera→brick | 8 | 7.996 | 8.002 | 8.034 | 64 | 576.0 | −8.9 |
+| camera→brick | 16 | 8.132 | 8.114 | 8.678 | 64 | 576.0 | +5.1 |
+| brick→camera | 12 | 6.604 | 7.881 | 8.371 | 64 | 576.0 | +106.1 |
+| brick→camera | 8 | 7.903 | 7.932 | 8.313 | 64 | 576.0 | +95.5 |
+| brick→camera | 16 | 3.889 | 5.691 | 15.000 | 164 | 676.0 | −733.7 |
+
+Recovery verdict unchanged: 64 positions typical, 164 at the
+brick→camera Q16 joint; the recovered α = 0.999 remains optimal (float
+α-sensitivity: 0.999 → join 8.300, 0.99 → 8.286, 0.9 → 8.791 for the
+brick→camera Q12 rig).

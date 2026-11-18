@@ -4,8 +4,8 @@
 //!
 //! Gates:
 //!   I7-A  bounds table asserted as identities/live on the typed path:
-//!         energy magnitudes (Q8/Q12/Q16 per memo §5), energy difference
-//!         (structural 2·e_lim, live per R2H §4a), gradient numerator,
+//!         energy magnitudes (asymmetric clamp domain per precision),
+//!         energy difference (9·S·12288 live ceiling), gradient numerator,
 //!         normalization products (largest-remainder intermediates),
 //!         weight-domain products, coder-domain products (18-bit window),
 //!         counter domain under the bounded policy.
@@ -128,7 +128,7 @@ fn largest_remainder(num: &[i64], total: i64, sum_to: i64) -> (Vec<i64>, usize) 
 struct Engine {
     shift: u32,
     c_lim: i64,
-    e_lim: i64,
+    s_lim: i64,
     bounded: bool,
     rescales: usize,
     max_cnt_sum: i64,
@@ -141,7 +141,7 @@ impl Engine {
         Engine {
             shift: n_q - 4,
             c_lim: 4i64 << n_q,
-            e_lim: 3 * (4 << n_q) * 4096,
+            s_lim: 3i64 << n_q,
             bounded,
             rescales: 0,
             max_cnt_sum: 0,
@@ -169,7 +169,13 @@ impl Engine {
                 let d2 = cdist(v, left) << 5;
                 let e_hi = state.c_hi[0] * d0 + state.c_hi[1] * d1 + state.c_hi[2] * d2;
                 let e_lo = state.c_lo[0] * d0 + state.c_lo[1] * d1 + state.c_lo[2] * d2;
-                assert!(e_hi.abs() <= self.e_lim && e_lo.abs() <= self.e_lim);
+                // asymmetric domain: hi in [-S, 4S]·Σd, lo doubled
+                assert!(
+                    e_hi >= -self.s_lim * 12288
+                        && e_hi <= 4 * self.s_lim * 12288
+                        && 2 * e_lo >= -2 * self.s_lim * 12288
+                        && 2 * e_lo <= 8 * self.s_lim * 12288
+                );
                 let k_hi = clamp_k(e_hi, self.shift);
                 let k_lo = clamp_k(2 * e_lo, self.shift);
                 p_hi[v as usize] = lut[k_hi as usize] >> X_SHIFT;
@@ -213,7 +219,8 @@ impl Engine {
                     let num = err * dv;
                     assert!(num.abs() <= FREQ_SUM * 4096, "gradient num bound");
                     let new = cs[i] - round_half_away(num, GRAD_DEN);
-                    cs[i] = new.clamp(-self.c_lim, self.c_lim);
+                    // recovered asymmetric clamp: -S <= b <= 4S, S = 3<<n_q
+                    cs[i] = new.clamp(-3 * self.c_lim / 4, 3 * self.c_lim);
                 }
             }
             let posts = [
@@ -305,11 +312,19 @@ fn fixture_noise() -> Vec<i64> {
 fn main() {
     let lut = build_lut();
 
-    // ---- I7-A bounds identities ----
-    let q8: i64 = 3 * (4 << 8) * 4096;
-    let q12: i64 = 3 * (4 << 12) * 4096;
-    let q16: i64 = 3 * (4 << 16) * 4096;
-    assert_eq!((q8, q12, q16), (12_582_912, 201_326_592, 3_221_225_472));
+    // ---- I7-A bounds identities (asymmetric clamp [−S, 4S], S = 3<<n_q)
+    // E = Σ3 c·d, d <= 4096 → Σd <= 12288; the lo expert's energy is
+    // doubled, so |E| <= 8·S·12288 and the cross-expert spread
+    // ceiling is 9·S·12288. i32/i64 classification: Q8/Q12 live in i32,
+    // Q16 requires i64.
+    let q8: i64 = 8 * (3 << 8) * 12288;
+    let q12: i64 = 8 * (3 << 12) * 12288;
+    let q16: i64 = 8 * (3 << 16) * 12288;
+    assert_eq!((q8, q12, q16), (75_497_472, 1_207_959_552, 19_327_352_832));
+    let s8: i64 = 9 * (3 << 8) * 12288;
+    let s12: i64 = 9 * (3 << 12) * 12288;
+    let s16: i64 = 9 * (3 << 16) * 12288;
+    assert_eq!((s8, s12, s16), (84_934_656, 1_358_954_496, 21_743_271_936));
     let grad_x16 = 16i64 * 32768 * 4096 * 4096 * 3;
     assert_eq!(grad_x16, 26_388_279_066_624);
     // normalization products (post-policy): counters ≤ COUNTER_CAP ⇒
@@ -327,10 +342,10 @@ fn main() {
     // coder products (18-bit window): rng·FREQ_SUM ≤ 2^18·2^15 = 2^33−2^15
     assert_eq!(0x3_FFFF * FREQ_SUM, (1i64 << 33) - (1i64 << 15));
     println!(
-        "I7-A bounds PASS: energy {}/{}/{} (i32/i32/i64), E-diff ≤ 2·e_lim (live), \
+        "I7-A bounds PASS: energy {}/{}/{} ≤ 8S·12288 (asymmetric identities), E-diff ≤ 9·S·12288 (live {}/{}/{}), \
          gradient x16 {grad_x16} < 2^62, LR products ≤ 2^38, weight products = 2^31, \
          coder products < 2^33 (18-bit window), counters capped at {COUNTER_CAP}",
-        q8, q12, q16,
+        q8, q12, q16, s8, s12, s16,
     );
 
     // ---- I7-B/C extended-stream policy measurement ----

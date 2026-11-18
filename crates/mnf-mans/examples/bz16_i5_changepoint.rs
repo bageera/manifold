@@ -170,7 +170,6 @@ fn fixture_noise() -> Vec<i64> {
 fn run_engine(stream: &[i64], n_q: u32, lut: &[i64]) -> Vec<f64> {
     let shift = n_q - 4;
     let c_lim = 4i64 << n_q;
-    let e_lim = 3 * c_lim * 4096;
     let mut state = State::new();
     let mut p_hi = [0i64; 256];
     let mut p_lo = [0i64; 256];
@@ -188,7 +187,14 @@ fn run_engine(stream: &[i64], n_q: u32, lut: &[i64]) -> Vec<f64> {
             let d2 = cdist(v, left) << 5;
             let e_hi = state.c_hi[0] * d0 + state.c_hi[1] * d1 + state.c_hi[2] * d2;
             let e_lo = state.c_lo[0] * d0 + state.c_lo[1] * d1 + state.c_lo[2] * d2;
-            assert!(e_hi.abs() <= e_lim && e_lo.abs() <= e_lim);
+            // asymmetric domain: hi in [-S, 4S]·Σd, lo doubled
+            let s_lim = 3 * c_lim / 4;
+            assert!(
+                e_hi >= -s_lim * 12288
+                    && e_hi <= 4 * s_lim * 12288
+                    && 2 * e_lo >= -2 * s_lim * 12288
+                    && 2 * e_lo <= 8 * s_lim * 12288
+            );
             let k_hi = clamp_k(e_hi, shift);
             let k_lo = clamp_k(2 * e_lo, shift);
             p_hi[v as usize] = lut[k_hi as usize] >> X_SHIFT;
@@ -220,7 +226,8 @@ fn run_engine(stream: &[i64], n_q: u32, lut: &[i64]) -> Vec<f64> {
                 .enumerate()
             {
                 let new = cs[i] - round_half_away(err * dv, GRAD_DEN);
-                cs[i] = new.clamp(-c_lim, c_lim);
+                // recovered asymmetric clamp: -S <= b <= 4S, S = 3<<n_q
+                cs[i] = new.clamp(-(3 * c_lim / 4), 3 * c_lim);
             }
         }
         let posts = [
@@ -304,7 +311,8 @@ fn run_engine_float(stream: &[i64], n_q: u32, alpha: f64) -> Vec<f64> {
             let err = f[idx] as f64 - xs[row][idx];
             for (i, &dv) in ds[row].iter().enumerate() {
                 let new = cs[i] - err * dv / GRAD_DEN as f64;
-                cs[i] = new.clamp(-c_lim, c_lim);
+                // recovered asymmetric clamp: -S <= b <= 4S
+                cs[i] = new.clamp(-0.75 * c_lim, 3.0 * c_lim);
             }
         }
         let post = [

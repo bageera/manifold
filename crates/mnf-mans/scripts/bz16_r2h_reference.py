@@ -192,13 +192,15 @@ def adapt(c_hi, c_lo, w, counters, o, ds, p_hi, p_lo, cnt_fs, x_unif, f,
     again). Counters are updated by the caller (+1 per observation). ds =
     the three feature distances at o, pre-scaled (<<5)."""
     c_lim = 4 << n_q
+    s_lim = 3 << n_q   # recovered asymmetric clamp scale S
     for cs, xs in ((c_hi, p_hi), (c_lo, p_lo)):
         err = f[o] - xs[o]
         assert -FREQ_SUM < err <= FREQ_SUM, "gradient err bound"
         for i, di in enumerate(ds):
             num = err * di
             assert abs(num) <= FREQ_SUM * 4096, "gradient num bound"
-            cs[i] = max(-c_lim, min(c_lim,
+            # recovered clamp polarity: -S <= b <= 4S with S = 3<<n_q
+            cs[i] = max(-s_lim, min(4 * s_lim,
                                     cs[i] - round_half_away(num, GRAD_DEN)))
     posts = [w[0] * p_hi[o], w[1] * p_lo[o], w[2] * cnt_fs[o], w[3] * x_unif]
     post, _ = largest_remainder(posts, sum(posts), W_SUM)
@@ -219,14 +221,16 @@ def engine_pass(stream, n_q, window):
     """Single pass: model, adapt, and emit everything (goldens + digest)."""
     shift = n_q - 4
     c_lim = 4 << n_q
+    s_lim = 3 << n_q                      # recovered asymmetric scale S
     e_lim = 3 * c_lim * 4096
-    # Energy-difference conservative bound. The memo §5 value (5·e_lim/4 =
-    # 1.25·E_max) is the [−S, 4S] coefficient-interval reading; the twin's
-    # clamp is the symmetric R2 pin [−c_lim, +c_lim], whose structural
-    # ceiling is 2·e_lim (live-verified on all nine rigs; the memo value is
-    # printed for reference and flagged in the record). Widen before the
-    # multiplication/subtraction, per the memo.
-    diff_lim = 2 * e_lim
+    # Energy-difference live ceiling at the recovered asymmetric clamp
+    # [−S, 4S] (S = 3<<n_q). E = Σ3 c_k·d_k, d_k <= 4096, so Σd <= 12288:
+    # the lo expert's energy enters doubled, max 2·4S·12288, the hi
+    # expert's floor is −S·12288, and the cross-expert spread ceiling is
+    # (8S + S)·12288 = 9·S·12288. The memo §5 value 5·e_lim/4 assumes a
+    # single feature magnitude; the three-feature engine needs the wider
+    # exact ceiling. Widened at the multiplication, per the memo.
+    diff_lim = 9 * s_lim * 12288
     c_hi, c_lo, w = [0, 0, 0], [0, 0, 0], [W_INIT] * 4
     counters = [1] * 256
     lines = []
@@ -261,7 +265,9 @@ def engine_pass(stream, n_q, window):
         d2 = cdist(o, left) << 5
         e_hi_o = c_hi[0] * d0 + c_hi[1] * d1 + c_hi[2] * d2
         e_lo_o = c_lo[0] * d0 + c_lo[1] * d1 + c_lo[2] * d2
-        assert abs(e_hi_o) <= e_lim and abs(e_lo_o) <= e_lim
+        # asymmetric domain: hi in [-S, 4S]·Σd, lo doubled
+        assert -s_lim * 12288 <= e_hi_o <= 4 * s_lim * 12288
+        assert -2 * s_lim * 12288 <= 2 * e_lo_o <= 8 * s_lim * 12288
         k_hi = clamp_k(e_hi_o, shift)
         k_lo = clamp_k(2 * e_lo_o, shift)
         adapt(c_hi, c_lo, w, counters, o,
@@ -427,18 +433,21 @@ def main():
           % (3 * (4 << 8) * 4096, 3 * (4 << 12) * 4096,
              3 * (4 << 16) * 4096,
              16 * 32768 * 4096 * 4096 * 3))
-    # memo §5 (R2H follow-up): energy-difference bounds. Memo's own values
-    # (5·e_lim/4, the [−S, 4S] reading) asserted as pinned identities; the
-    # twin's symmetric-clamp structural ceiling (2·e_lim) is the LIVE-asserted
-    # bound (see engine_pass), and the discrepancy question is recorded.
+    # R2H-E clamp reconciliation: the recovered asymmetric clamp [−S, 4S]
+    # (S = 3<<n_q) is now the implemented polarity, per the memo. The §5
+    # identity 5·e_lim/4 assumes a single feature magnitude; the
+    # three-feature engine's exact live ceiling is 9·S·12288 (hi floor
+    # −S·12288 vs the lo expert's doubled max 8S·12288), asserted here.
     assert 5 * (3 * (4 << 8) * 4096) // 4 == 15_728_640
     assert 5 * (3 * (4 << 12) * 4096) // 4 == 251_658_240
     assert 5 * (3 * (4 << 16) * 4096) // 4 == 4_026_531_840
-    assert 2 * (3 * (4 << 8) * 4096) == 25_165_824
-    assert 2 * (3 * (4 << 12) * 4096) == 402_653_184
-    assert 2 * (3 * (4 << 16) * 4096) == 6_442_450_944
-    print("energy-difference bounds: memo[−S,4S] 15728640/251658240/4026531840; "
-          "symmetric-clamp live 25165824/402653184/6442450944")
+    assert 9 * (3 << 8) * 12288 == 84_934_656
+    assert 9 * (3 << 12) * 12288 == 1_358_954_496
+    assert 9 * (3 << 16) * 12288 == 21_743_271_936
+    print("energy-difference live ceiling (asymmetric [−S,4S]): "
+          "9·S·12288 = %d/%d/%d; memo §5 single-feature 5·e_lim/4 = "
+          "15728640/251658240/4026531840"
+          % (84_934_656, 1_358_954_496, 21_743_271_936))
 
 
 if __name__ == "__main__":

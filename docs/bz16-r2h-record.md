@@ -191,6 +191,19 @@ as pinned identities and the discrepancy is disclosed rather than silently
 re-pointed. "Do not preserve a pinned assumption if it conflicts" — the
 conflict itself is evidence the external spec must answer first.
 
+**CLOSED 2026-11-18 (R2H-E, operator memo):** the recovered reference's own
+source implements the **asymmetric clamp** explicitly (`self.b[j][k] =
+min(4*self.scale, max(-self.scale, self.b[j][k] + step))`); the twin's
+symmetric pin was the deviation, not the recovered engine. All four mirrors
+now implement `[−S, 4S]`, `S = 3<<n_q`; the engine's exact difference
+ceiling is 9·S·12288 (the §5 identity 5·e_lim/4 accounts a single feature
+magnitude), and only the Q8 trace digests change — Q12/Q16 states are
+byte-identical because the clamp never binds at those precisions. Full
+detail and the new digest set:
+[docs/bz16-r2h-record-e.md](bz16-r2h-record-e.md). The symmetric-pole
+measurements in §4a's table above stand as the **labeled symmetric-clamp
+ablation**.
+
 ## 5. Saturation census and economy note (honest, synthetic-only)
 
 The live counters quantify the recovered engine's LUT saturation per rig

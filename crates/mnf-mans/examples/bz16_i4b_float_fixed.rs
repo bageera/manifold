@@ -156,7 +156,7 @@ impl State {
 struct Model<'a> {
     lut: &'a [i64],
     shift: u32,
-    e_lim: i64,
+    s_lim: i64,
 }
 
 impl<'a> Model<'a> {
@@ -164,7 +164,7 @@ impl<'a> Model<'a> {
         Model {
             lut,
             shift: n_q - 4,
-            e_lim: 3 * (4 << n_q) * 4096,
+            s_lim: 3i64 << n_q,
         }
     }
 
@@ -186,7 +186,13 @@ impl<'a> Model<'a> {
             let d2 = cdist(v, left) << 5;
             let e_hi = s.c_hi[0] * d0 + s.c_hi[1] * d1 + s.c_hi[2] * d2;
             let e_lo = s.c_lo[0] * d0 + s.c_lo[1] * d1 + s.c_lo[2] * d2;
-            assert!(e_hi.abs() <= self.e_lim && e_lo.abs() <= self.e_lim);
+            // asymmetric domain: hi in [-S, 4S]·Σd, lo doubled
+            assert!(
+                e_hi >= -self.s_lim * 12288
+                    && e_hi <= 4 * self.s_lim * 12288
+                    && 2 * e_lo >= -2 * self.s_lim * 12288
+                    && 2 * e_lo <= 8 * self.s_lim * 12288
+            );
             let k_hi = clamp_k(e_hi, self.shift);
             let k_lo = clamp_k(2 * e_lo, self.shift);
             p_hi[v as usize] = self.lut[k_hi as usize] >> X_SHIFT;
@@ -225,7 +231,8 @@ fn adapt(
             let num = err * di;
             assert!(num.abs() <= FREQ_SUM * 4096, "gradient num bound");
             let new = cs[i] - round_half_away(num, GRAD_DEN);
-            cs[i] = new.clamp(-c_lim, c_lim);
+            // recovered asymmetric clamp: -S <= b <= 4S, S = 3<<n_q
+            cs[i] = new.clamp(-(3 * c_lim / 4), 3 * c_lim);
         }
     }
     let posts = [
@@ -281,7 +288,7 @@ impl FloatState {
 struct FloatModel {
     b_hi: f64, // exp(−b_hi·e_hi)
     b_lo: f64, // exp(−b_lo·2·e_lo): the recovered β=2 expert
-    c_lim: f64,
+    s_lim: f64, // recovered asymmetric scale S = 3<<n_q
 }
 
 impl FloatModel {
@@ -292,7 +299,7 @@ impl FloatModel {
         FloatModel {
             b_hi: (2.0f64).powi(-(n_q as i32 + 4)),
             b_lo: 2.0 * (2.0f64).powi(-(n_q as i32 + 4)),
-            c_lim: (4i64 << n_q) as f64,
+            s_lim: (3i64 << n_q) as f64,
         }
     }
 
@@ -353,7 +360,8 @@ fn adapt_float(
         let err = f[idx] as f64 - xs[idx];
         for (i, &di) in ds.iter().enumerate() {
             let new = cs[i] - err * di / GRAD_DEN as f64;
-            cs[i] = new.clamp(-model.c_lim, model.c_lim);
+            // recovered asymmetric clamp: -S <= b <= 4S
+            cs[i] = new.clamp(-model.s_lim, 4.0 * model.s_lim);
         }
     }
     // fixed-share: normalize posterior, ×999, +16384, normalize again — but

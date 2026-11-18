@@ -165,6 +165,7 @@ struct Model<'a> {
     lut: &'a [i64],
     shift: u32,
     e_lim: i64,
+    s_lim: i64,
 }
 
 impl<'a> Model<'a> {
@@ -173,6 +174,7 @@ impl<'a> Model<'a> {
             lut,
             shift: n_q - 4,
             e_lim: 3 * (4 << n_q) * 4096,
+            s_lim: 3i64 << n_q,
         }
     }
 
@@ -197,7 +199,13 @@ impl<'a> Model<'a> {
             let d2 = cdist(v, left) << 5;
             let e_hi = s.c_hi[0] * d0 + s.c_hi[1] * d1 + s.c_hi[2] * d2;
             let e_lo = s.c_lo[0] * d0 + s.c_lo[1] * d1 + s.c_lo[2] * d2;
-            assert!(e_hi.abs() <= self.e_lim && e_lo.abs() <= self.e_lim);
+            // asymmetric domain: hi in [-S, 4S]·Σd, lo doubled
+            assert!(
+                e_hi >= -self.s_lim * 12288
+                    && e_hi <= 4 * self.s_lim * 12288
+                    && 2 * e_lo >= -2 * self.s_lim * 12288
+                    && 2 * e_lo <= 8 * self.s_lim * 12288
+            );
             let k_hi = clamp_k(e_hi, self.shift);
             let k_lo = clamp_k(2 * e_lo, self.shift);
             p_hi[v as usize] = self.lut[k_hi as usize] >> X_SHIFT;
@@ -237,7 +245,8 @@ fn adapt(state: &mut State, o: i64, ds: [i64; 3], probs: Probs<'_>, f: &[i64], n
             let num = err * di;
             assert!(num.abs() <= FREQ_SUM * 4096, "gradient num bound");
             let new = cs[i] - round_half_away(num, GRAD_DEN);
-            cs[i] = new.clamp(-c_lim, c_lim);
+            // recovered clamp polarity: -S <= b <= 4S with S = 3<<n_q
+            cs[i] = new.clamp(-(3 * c_lim / 4), 3 * c_lim);
         }
     }
     let posts = [
@@ -681,28 +690,28 @@ fn main() {
     let grad_x16: i64 = 16 * 32768 * 4096 * 4096 * 3;
     assert_eq!(grad_x16, 26_388_279_066_624);
     assert!(grad_x16 < 1i64 << 62, "gradient x16 comfortably within i64");
-    // R2H follow-up memo §5: energy-difference bounds. The memo's values
-    // (5·e_lim/4, the [−S, 4S] coefficient-interval reading) asserted as
-    // pinned identities; the twin's symmetric clamp ([−c_lim, +c_lim], the
-    // R2 pin — the R2H-B table is silent on clamp polarity) has the
-    // structural ceiling 2·e_lim, which is the LIVE-asserted bound. The
-    // interval discrepancy is flagged in the record for the external
-    // package (R2H-A/B re-point).
+    // R2H-E clamp reconciliation: recovered asymmetric clamp ([−S, 4S],
+    // S = 3<<n_q) implemented. The memo §5 single-feature identity
+    // 5·e_lim/4 and the engine's exact three-feature ceiling 9·S·12288
+    // both asserted as pinned values.
     let q8_d: i64 = 5 * (3 * (4 << 8) * 4096) / 4;
     let q12_d: i64 = 5 * (3 * (4 << 12) * 4096) / 4;
     let q16_d: i64 = 5 * (3 * (4 << 16) * 4096) / 4;
     assert_eq!(q8_d, 15_728_640);
     assert_eq!(q12_d, 251_658_240);
     assert_eq!(q16_d, 4_026_531_840);
-    assert_eq!(2 * E_MAX_Q8, 25_165_824);
-    assert_eq!(2 * E_MAX_Q12, 402_653_184);
-    assert_eq!(2 * E_MAX_Q16, 6_442_450_944);
+    let c8: i64 = 9 * (3 << 8) * 12288;
+    let c12: i64 = 9 * (3 << 12) * 12288;
+    let c16: i64 = 9 * (3 << 16) * 12288;
+    assert_eq!(c8, 84_934_656);
+    assert_eq!(c12, 1_358_954_496);
+    assert_eq!(c16, 21_743_271_936);
     assert!(
         2 * q16 < 1i64 << 62,
         "Q16 difference comfortably within i64"
     );
     println!(
-        "R2H bounds PASS: Q8 {q8} (i32), Q12 {q12} (i32), Q16 {q16} (> i32::MAX -> i64); gradient x16 {grad_x16} < i64; E-diff memo {q8_d}/{q12_d}/{q16_d}, symmetric-clamp live 25165824/402653184/6442450944"
+        "R2H bounds PASS: Q8 {q8} (i32), Q12 {q12} (i32), Q16 {q16} (> i32::MAX -> i64); gradient x16 {grad_x16} < i64; E-diff ceiling 9·S·12288 {c8}/{c12}/{c16}, memo §5 {q8_d}/{q12_d}/{q16_d}"
     );
 
     let golden_dir = std::env::args()
@@ -748,7 +757,7 @@ fn main() {
                     model.mixture(&state, up, left, &mut p_hi, &mut p_lo);
                 repairs_total += cnt_repairs;
                 assert!(
-                    spread <= 2 * model.e_lim,
+                    spread <= 9 * model.s_lim * 12288,
                     "energy-difference bound (q{}-{} t{})",
                     n_q,
                     name,
@@ -871,8 +880,8 @@ fn main() {
                  trace-digest MATCH, z PASS, decode PASS ({} window bits), \
                  repairs={repairs_total}, max_energy_spread={spread_max} (bound {}, memo {})",
                 wbits_bits,
-                2 * model.e_lim,
-                5 * model.e_lim / 4
+                9 * model.s_lim * 12288,
+                9 * model.s_lim * 12288
             );
         }
     }
