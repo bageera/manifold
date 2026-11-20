@@ -286,8 +286,8 @@ impl FloatState {
 }
 
 struct FloatModel {
-    b_hi: f64, // exp(−b_hi·e_hi)
-    b_lo: f64, // exp(−b_lo·2·e_lo): the recovered β=2 expert
+    b_hi: f64,  // exp(−b_hi·e_hi)
+    b_lo: f64,  // exp(−b_lo·2·e_lo): the recovered β=2 expert
     s_lim: f64, // recovered asymmetric scale S = 3<<n_q
 }
 

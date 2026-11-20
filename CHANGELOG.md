@@ -1,5 +1,43 @@
 # Changelog
 
+## Research — MNF-HP gauntlet: HP0/HP1/HP2 executed, HP9 spec drafted (2026-11-19, research only; production HOLD)
+
+New research program per the operator's HP gauntlet (Hutter-style
+conditional-information research; BZ16 stays closed). All findings
+NEGATIVE-or-marginal; no wire format, backend, or portfolio change.
+
+- **HP0 baseline** (docs/mnf-hp0-record.md): fresh `make corpus` reproduces
+  the frozen byte-exact production pick 768,303 B (30 files); fresh
+  identities/timing/RSS recorded. N1 acquisition re-verified.
+- **HP1 census** (docs/mnf-hp1-record.md): new in-crate instrument
+  `mix_coder.rs::mnf_hp1_census_dump` (env-gated `#[ignore]`) replays the
+  production model per image and dumps per-byte decoder-available features +
+  P0 aggregates + 40k-row P0-vector prefixes; pick reconstruction
+  byte-exact, stream fnv == N1 ledger, ideal bits == MNF17-N2 A1 to the
+  decimal. Census vs production P0 (interpolated count-table correctors,
+  held-out heldout-photos, permutation/random controls): extended spatial,
+  cross-channel, regional-surprise and nonlocal families = NOISE-LEVEL or
+  ZERO; differential family survives only as one binary
+  equality/flatness signal (+5.05..5.11 bits/krow class-matched, per-image
+  sign flips). Instrument hygiene notes: pre-symbol confidence bucketing
+  (first draft's P0(y) bucketing was a symbol leak, fixed pre-verdict) and
+  value-shuffle permutation control (row-level shuffle was inert, fixed).
+- **HP2 corrections** (docs/mnf-hp2-record.md): scalar/per-bucket
+  temperature calibration NEGATIVE (gamma*=1.0; every deviation costs bits);
+  2^24->2^16 precision floor -0.0005 bits/row; the flatness-indicator
+  corrector is +132 B/archive installed-codec, STANDALONE NEGATIVE at every
+  serialization (u8/u4) — below any meaningful economics. HP2 gate FAILED;
+  HP3-HP7 entry conditions unmet; HP8 unaffected by HP2; HP10 HOLD.
+- **HP9 benchmark spec** drafted (docs/mnf-hp9-benchmark-spec.md).
+- Research instrument hygiene rides along: four mnf8 helpers now pub(crate)
+  for the in-crate census, three pre-existing test-code warnings fixed
+  (N1/N2 underscore + import + next_back), rustfmt clean.
+
+Artifacts: docs/mnf-hp{0,1,2}-record.md, docs/mnf-hp9-benchmark-spec.md,
+research/hp1/census.py + census_classmatch.py, research/hp2/hp2_arms.py;
+traces/results remain gitignored (regenerable from the committed
+instruments).
+
 ## Docs — README results snapshot refreshed at the v1.17.1 vintage (2026-11-18, not a release)
 
 Mechanical refresh: `make corpus` re-run on the current tree (scripts/

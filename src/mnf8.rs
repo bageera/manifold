@@ -159,7 +159,7 @@ fn backend_candidates() -> Vec<(u32, Coder)> {
 /// MNF15-P1-B: assembles the final MNF8 file from a compressed payload
 /// (the shared header shape of the record and token paths; header fields
 /// unchanged — magic, dims, tile count, payload length, flags, backend).
-fn assemble_mnf8(
+pub(crate) fn assemble_mnf8(
     payload: &[u8],
     dims: Dims,
     tile_count: u32,
@@ -181,7 +181,7 @@ fn assemble_mnf8(
     Ok(file)
 }
 
-fn backend_compress(
+pub(crate) fn backend_compress(
     backend: u32,
     buf: &[u8],
     geom: Option<crate::mix_coder::Geom>,
@@ -776,7 +776,7 @@ fn image_predict(pixels: &[u8], w: usize, h: usize, kind: PredKind) -> Vec<u8> {
 /// relabel with ZERO added bytes; the decoder applies the inverse before
 /// the standard walk. `planar` relabels per-channel planes ([R][G][B] →
 /// [G][R−G][B−G]); `tokens` relabels tag-0 literal triplets in place.
-fn channel_diff_relabel(
+pub(crate) fn channel_diff_relabel(
     stream: &[u8],
     planar: bool,
     tokens: bool,
@@ -1386,7 +1386,7 @@ fn build_token_wire(
 ///
 /// Shared YCoCg (mode 3) and planar layout stay ON in both arms (ADR-002).
 #[allow(clippy::too_many_arguments)]
-fn build_record_stream(
+pub(crate) fn build_record_stream(
     pixels: &[u8],
     dims: Dims,
     use_atlas: bool,
@@ -5063,7 +5063,7 @@ mod mnf17_n1_acquisition {
         for f in &files {
             let (pixels, dims) = px_of(f);
             let (res, _pm) = encode_mnf8_metrics(&pixels, dims, true, Profile::Maximum);
-            let (pick_payload, _, pick_backend) = &res;
+            let (pick_payload, _, _pick_backend) = &res;
 
             let candidates = backend_candidates();
             let coder_classes: Vec<(&str, Coder)> =
@@ -5220,7 +5220,7 @@ mod mnf17_n1_acquisition {
             // replay identities (arms stay enumerated in the ledger).
             {
                 let mut seen: Vec<usize> = Vec::new(); // indices of distinct selected arms
-                for (i, a) in arms
+                for (i, _a) in arms
                     .iter()
                     .enumerate()
                     .filter(|(_, a)| a.selected.is_some())
@@ -5309,7 +5309,7 @@ mod mnf17_n1_acquisition {
                 bin.extend_from_slice(&(eligible_until as u32).to_le_bytes());
                 let path = format!(
                     "{dir}/n1-{}-{}-{}-planar{}-ref{}.bin",
-                    f.split('/').last().unwrap().trim_end_matches(".png"),
+                    f.split('/').next_back().unwrap().trim_end_matches(".png"),
                     a.kind,
                     a.coder,
                     a.planar as u8,

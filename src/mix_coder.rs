@@ -3278,7 +3278,7 @@ pub(crate) mod p1d2 {
 // A0 = each stream's actual production payload from the N1 ledger.)
 #[cfg(test)]
 mod mnf17_n2_replay {
-    use super::{build_parent_tree, mix_ctx_key, share_step, Geom, LaneWalk, MixCtx, MixParams};
+    use super::{build_parent_tree, mix_ctx_key, share_step, LaneWalk, MixCtx, MixParams};
 
     // --- recovered engine pins (bz16_r2h_parity.rs verbatim) ---
     const BZ_K_MAX: i64 = 4096;
@@ -3486,6 +3486,7 @@ mod mnf17_n2_replay {
 
     /// Recovered adaptation (gradient + fixed-share); `symmetric` = the
     /// labeled ±c_lim ablation instead of the recovered [−S, 4S].
+    #[allow(clippy::too_many_arguments)]
     fn bz_adapt(
         state: &mut BzState,
         o: usize,
@@ -3676,7 +3677,13 @@ mod mnf17_n2_replay {
 
     impl<'a> AcDecoder<'a> {
         fn new(bits: &'a [u8]) -> Self {
-            let mut d = AcDecoder { low: 0, high: BZ_R_TOP, code: 0, pos: 0, bits };
+            let mut d = AcDecoder {
+                low: 0,
+                high: BZ_R_TOP,
+                code: 0,
+                pos: 0,
+                bits,
+            };
             for _ in 0..18 {
                 d.code = (d.code << 1) | d.get_bit();
             }
@@ -4131,7 +4138,11 @@ mod mnf17_n2_replay {
             };
             let a0_mix7: usize = f[PAY_MIX7].parse().expect("mix7 payload");
             let raw_len: usize = f[7].parse().expect("raw_len");
-            let path = f[0].split('/').last().unwrap().trim_end_matches(".png");
+            let path = f[0]
+                .split('/')
+                .next_back()
+                .unwrap()
+                .trim_end_matches(".png");
             let bin = format!(
                 "{dir}/n1-{path}-{kind}-{coder}-planar{}-ref{reference}.bin",
                 planar as u8
@@ -4207,5 +4218,612 @@ mod mnf17_n2_replay {
         }
         std::fs::write(&out, &rows).expect("n2 csv");
         println!("n2 summary -> {out}");
+    }
+}
+
+// ==== MNF-HP1: native conditional-information census dump (research
+// instrument). Replays the PRODUCTION pick per image through the actual
+// mix probability model (the winner's own backend when mix, else the
+// backend-7 statistical-family replay control) and emits per-byte traces:
+// observed symbol, production probability aggregates, decoder-available
+// spatial / cross-lane features mirrored from the record grammar walk.
+//
+//   MNF_HP1_OUT=<dir> [MNF_HP1_FILES=<csv paths>] [MNF_HP1_VEC_CAP=<rows>]
+//   cargo test --release mnf_hp1_census_dump -- --ignored --nocapture
+//
+// Trace CSV (gzip): pos,y,cls,lane,pix,tx,ty,tw,th,mode,py,rk,ent,pmax,
+//   l1,l2,l4,l8,l16,l32,u1,u2,u4,u8,u16,u32,dg,pa,pb,vi,vu
+//   py/pmax = fixed-point 2^24 probabilities; ent = bits x256; rk = symbols
+//   strictly more probable than y; vi bits0-5 = left dk valid (d 1,2,4,8,16,32),
+//   vu bits0-5 = upper dk valid, vi bit6 = diagonal valid, vi bit7 = pa valid,
+//   vu bit7 = pb valid; pa/pb = same-position bytes of the other lanes (in
+//   walk order, lower lane index = decoded earlier in both layouts);
+//   lane 255 row = framing/meta/packed byte (no geometry; features zeroed).
+// Vec file per image: u32 count + count x 256 u32 LE probability vectors
+//   for the first `count` trace rows (contiguous prefix; count = min(cap, len)).
+#[cfg(test)]
+mod mnf_hp1_census {
+    use super::{build_parent_tree, mix_ctx_key, share_step, Geom, LaneWalk, MixCtx, MixParams};
+    use crate::codec::Dims;
+    use crate::mnf6::{Coder, FLAG_PLANAR};
+    use crate::mnf8::{
+        assemble_mnf8, backend_compress, build_record_stream, channel_diff_relabel,
+        encode_mnf8_metrics, PredKind, Profile, BACKEND_MIX, BACKEND_MIX5, BACKEND_MIX6,
+        BACKEND_MIX7, BACKEND_ZLIB, FLAG_PRED_LEFT, FLAG_PRED_MED, FLAG_PRED_PLANE, FLAG_TOKENS,
+    };
+    use std::io::Write;
+
+    const OUT_DEFAULT: &str = "research/results/hp1-native-traces";
+    const VEC_CAP_DEFAULT: usize = 40_000;
+
+    fn px_of(path: &str) -> (Vec<u8>, Dims) {
+        let img = image::open(path).expect("hp1 png").to_rgb8();
+        let (w, h) = (img.width(), img.height());
+        (
+            img.into_raw(),
+            Dims {
+                width: w,
+                height: h,
+            },
+        )
+    }
+
+    fn fnv64(b: &[u8]) -> u64 {
+        let mut h: u64 = 0xcbf29ce484222325;
+        for &x in b {
+            h = (h ^ u64::from(x)).wrapping_mul(0x100000001b3);
+        }
+        h
+    }
+
+    const DIST: [usize; 6] = [1, 2, 4, 8, 16, 32];
+
+    /// One geometry byte's spatial/cross-lane feature set (the row payload
+    /// of `HpWalk::eat`).
+    struct HpGeo {
+        cls: u8,
+        lane: u8,
+        pix: u32,
+        col: u16,
+        row: u16,
+        tw: u8,
+        th: u8,
+        l: [u8; 6],
+        u: [u8; 6],
+        dg: u8,
+        pa: u8,
+        pb: u8,
+        o1: u8,
+        o2: u8,
+    }
+
+    /// PlaneWalk (N1 mirror) + trace extras: record mode, same-lane
+    /// distance-k neighbors, diagonal, and the other lanes' same-position
+    /// decoded bytes.
+    struct HpWalk {
+        planar: bool,
+        width: u32,
+        height: u32,
+        grid_cols: usize,
+        next_tile: u32,
+        tile_count: u32,
+        tw: usize,
+        th: usize,
+        meta_left: usize,
+        body_left: u64,
+        body_pos: u64,
+        all_zero: bool,
+        lanes: [Vec<u8>; 3],
+        bx: usize,
+        by: usize,
+        mode: u8,
+    }
+
+    impl HpWalk {
+        fn new(width: u32, height: u32, tile_count: u32, planar: bool) -> Self {
+            HpWalk {
+                planar,
+                width,
+                height,
+                grid_cols: width.div_ceil(crate::codec::TILE_SIZE) as usize,
+                next_tile: 0,
+                tile_count,
+                tw: 0,
+                th: 0,
+                meta_left: 0,
+                body_left: 0,
+                body_pos: 0,
+                all_zero: false,
+                lanes: [Vec::new(), Vec::new(), Vec::new()],
+                bx: 0,
+                by: 0,
+                mode: 0,
+            }
+        }
+
+        fn record_shape(mode: u8, np: u64) -> Option<(usize, u64)> {
+            let nb = np as usize * 3;
+            match mode {
+                0 => Some((0, nb as u64)),
+                1 | 4 => Some((4, nb as u64)),
+                2 | 5 => Some((5, nb as u64)),
+                3 => {
+                    let n9 = (np * 9).div_ceil(8);
+                    Some((0, np + 2 * n9))
+                }
+                6 => Some((crate::laws::PLANAR_LAW_BYTES, nb as u64)),
+                7 => Some((crate::laws::BILINEAR_LAW_BYTES, nb as u64)),
+                8 => Some((3, nb as u64)),
+                _ => None,
+            }
+        }
+
+        fn np(&self) -> u64 {
+            u64::from(self.tw as u32) * u64::from(self.th as u32)
+        }
+
+        fn peek_class(&self) -> Option<u8> {
+            if self.meta_left == 0 && self.body_left == 0 {
+                if self.next_tile >= self.tile_count {
+                    return None;
+                }
+                return Some(0);
+            }
+            if self.meta_left > 0 || self.all_zero {
+                return Some(0);
+            }
+            if self.planar {
+                Some(if self.body_pos < self.np() { 0 } else { 1 })
+            } else if self.body_pos.is_multiple_of(3) {
+                Some(0)
+            } else {
+                Some(1)
+            }
+        }
+
+        fn consume(&mut self, b: u8) -> Option<()> {
+            if self.meta_left == 0 && self.body_left == 0 {
+                if self.next_tile >= self.tile_count {
+                    return None;
+                }
+                let tile = self.next_tile as usize;
+                self.bx = (tile % self.grid_cols) * crate::codec::TILE_SIZE as usize;
+                self.by = (tile / self.grid_cols) * crate::codec::TILE_SIZE as usize;
+                self.tw = (crate::codec::TILE_SIZE as usize).min(self.width as usize - self.bx);
+                self.th = (crate::codec::TILE_SIZE as usize).min(self.height as usize - self.by);
+                self.next_tile += 1;
+                self.body_pos = 0;
+                let np = self.np();
+                let (meta, body) = Self::record_shape(b, np)?;
+                self.meta_left = meta;
+                self.body_left = body;
+                self.all_zero = b == 3;
+                self.mode = b;
+                self.lanes = [
+                    vec![0u8; np as usize],
+                    vec![0u8; np as usize],
+                    vec![0u8; np as usize],
+                ];
+                return Some(());
+            }
+            if self.meta_left > 0 {
+                self.meta_left -= 1;
+                return Some(());
+            }
+            self.body_pos += 1;
+            self.body_left -= 1;
+            Some(())
+        }
+
+        fn lane_of(&self) -> Option<(usize, usize, usize)> {
+            if self.body_left == 0 || self.meta_left > 0 || self.all_zero {
+                return None;
+            }
+            let pos = self.body_pos as usize;
+            if self.planar {
+                let np = self.np() as usize;
+                if pos < np {
+                    Some((0, pos / self.tw, pos % self.tw))
+                } else if pos < 2 * np {
+                    let k = pos - np;
+                    Some((1, k / self.tw, k % self.tw))
+                } else {
+                    let k = pos - 2 * np;
+                    Some((2, k / self.tw, k % self.tw))
+                }
+            } else {
+                let sub = pos % 3;
+                let k = pos / 3;
+                Some((sub, k / self.tw, k % self.tw))
+            }
+        }
+
+        fn complete(&self) -> bool {
+            self.next_tile == self.tile_count && self.meta_left == 0 && self.body_left == 0
+        }
+
+        /// Trace row for one byte; Some = geometry (body byte), None = the
+        /// byte still feeds the model but carries no spatial features.
+        fn eat(&mut self, b: u8) -> Option<HpGeo> {
+            let class = self.peek_class()?;
+            let Some((lane, row, col)) = self.lane_of() else {
+                self.consume(b).expect("well-formed");
+                return None;
+            };
+            let base = row * self.tw + col;
+            let mut l_vals = [0u8; 6];
+            let mut u_vals = [0u8; 6];
+            for (i, &k) in DIST.iter().enumerate() {
+                if col >= k {
+                    l_vals[i] = self.lanes[lane][base - k];
+                }
+                if row >= k {
+                    u_vals[i] = self.lanes[lane][(row - k) * self.tw + col];
+                }
+            }
+            let diag = if row >= 1 && col >= 1 {
+                self.lanes[lane][(row - 1) * self.tw + col - 1]
+            } else {
+                0
+            };
+            // lane k sees lanes < k in BOTH layouts (planar plane order and
+            // interleaved pos%3 order agree on this)
+            let o1 = (lane + 1) % 3;
+            let o2 = (lane + 2) % 3;
+            let pa = if o1 < lane { self.lanes[o1][base] } else { 0 };
+            let pb = if o2 < lane { self.lanes[o2][base] } else { 0 };
+            let pix = (self.by + row) as u32 * self.width + (self.bx + col) as u32;
+            self.consume(b).expect("well-formed");
+            self.lanes[lane][base] = b;
+            Some(HpGeo {
+                cls: class,
+                lane: lane as u8,
+                pix,
+                col: col as u16,
+                row: row as u16,
+                tw: self.tw as u8,
+                th: self.th as u8,
+                l: l_vals,
+                u: u_vals,
+                dg: diag,
+                pa,
+                pb,
+                o1: o1 as u8,
+                o2: o2 as u8,
+            })
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn hp1_census_dump() {
+        let out_dir = std::env::var("MNF_HP1_OUT").unwrap_or_else(|_| OUT_DEFAULT.to_string());
+        std::fs::create_dir_all(&out_dir).expect("hp1 out dir");
+        let vec_cap: usize = std::env::var("MNF_HP1_VEC_CAP")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(VEC_CAP_DEFAULT);
+        let mut files: Vec<String> = vec![
+            "testdata/solid_256x256.png".into(),
+            "testdata/gradient_320x240.png".into(),
+            "testdata/repeat_256x256.png".into(),
+            "testdata/screenshot_640x400.png".into(),
+            "testdata/noise_256x256.png".into(),
+            "testdata/heldout/blob_224x160.png".into(),
+            "testdata/heldout/blocks_192x128.png".into(),
+            "testdata/heldout/document_200x280.png".into(),
+            "testdata/heldout/plaid_192.png".into(),
+            "testdata/heldout/poster_208x144.png".into(),
+            "testdata/photos/autumn_192x144_s900001.png".into(),
+            "testdata/photos/dusk_160x120_s900003.png".into(),
+            "testdata/photos/forest_224x160_s900002.png".into(),
+            "testdata/photos/ocean_192x144_s900007.png".into(),
+            "testdata/photos/sand_160x120_s900000.png".into(),
+            "testdata/photos/slate_192x144_s900004.png".into(),
+            "testdata/photos/slate_224x160_s900008.png".into(),
+            "testdata/photos/stone_160x120_s900006.png".into(),
+            "testdata/photos/terrain_160x120_s900009.png".into(),
+            "testdata/photos/terrain_224x160_s900005.png".into(),
+            "testdata/heldout-photos/autumn_160x120_s3100006.png".into(),
+            "testdata/heldout-photos/dusk_160x120_s3100003.png".into(),
+            "testdata/heldout-photos/dusk_224x160_s3100002.png".into(),
+            "testdata/heldout-photos/forest_192x144_s3100001.png".into(),
+            "testdata/heldout-photos/forest_224x160_s3100005.png".into(),
+            "testdata/heldout-photos/forest_224x160_s3100008.png".into(),
+            "testdata/heldout-photos/ocean_192x144_s3100007.png".into(),
+            "testdata/heldout-photos/sand_192x144_s3100004.png".into(),
+            "testdata/heldout-photos/slate_160x120_s3100009.png".into(),
+            "testdata/heldout-photos/terrain_160x120_s3100000.png".into(),
+        ];
+        if let Ok(list) = std::env::var("MNF_HP1_FILES") {
+            files = list.split(',').map(|p| p.trim().to_string()).collect();
+        }
+
+        let mut ledger = String::from(
+            "file,pick_backend,pick_len,kind,planar,ref,stream_fnv,stream_len,replay_params,control,a0_ideal_bits,rows,vec_rows,eligible_upto,recon,walk_complete,replay_ms\n",
+        );
+        for f in &files {
+            let t00 = std::time::Instant::now();
+            let (pixels, dims) = px_of(f);
+            let (res, _pm) = encode_mnf8_metrics(&pixels, dims, true, Profile::Maximum);
+            let (pick_payload, _, pick_backend) = &res;
+            let pick_be = *pick_backend;
+            let file_bytes = &pick_payload[..];
+            let flags = u32::from_le_bytes(file_bytes[24..28].try_into().expect("flags"));
+            let be_field = u32::from_le_bytes(file_bytes[28..32].try_into().expect("backend"));
+            assert_eq!(be_field, pick_be, "pick header backend {f}");
+            if flags & FLAG_TOKENS != 0 {
+                ledger.push_str(&format!(
+                    "{f},{pick_be},{pick_len},tokens,0,0,0,0,none,1,0,0,0,0,1,0,{ms}\n",
+                    pick_len = file_bytes.len(),
+                    ms = t00.elapsed().as_millis()
+                ));
+                println!("hp1 {f}: token-picked wire — no lane geometry, skipped");
+                continue;
+            }
+            let kind = if flags & FLAG_PRED_MED != 0 {
+                PredKind::Med
+            } else if flags & FLAG_PRED_PLANE != 0 {
+                PredKind::Plane
+            } else if flags & FLAG_PRED_LEFT != 0 {
+                PredKind::Left
+            } else {
+                PredKind::None
+            };
+            let planar = flags & FLAG_PLANAR != 0;
+            let reference = (flags >> 6) & 3;
+            let med = kind == PredKind::Med;
+            let pick_coder = match pick_be {
+                BACKEND_ZLIB => Coder::Zlib,
+                _ => Coder::Zstd(19),
+            };
+            let cache = crate::mnf6::ProbeCache::new(crate::mnf6::PROBE_CACHE_BUDGET_BYTES);
+            let (raw0, st) = build_record_stream(
+                &pixels,
+                dims,
+                true,
+                true,
+                planar,
+                med,
+                kind,
+                &pick_coder,
+                &cache,
+            )
+            .expect("hp1 build");
+            let tile_count = st.modes.len() as u32;
+            let raw = if reference == 0 {
+                raw0
+            } else {
+                channel_diff_relabel(
+                    &raw0,
+                    planar,
+                    false,
+                    dims.width,
+                    dims.height,
+                    reference as u8,
+                )
+            };
+            let geom = Geom {
+                width: dims.width,
+                height: dims.height,
+                tile_count,
+                planar,
+            };
+            let payload = backend_compress(pick_be, &raw, Some(geom)).expect("hp1 encode");
+            let recon = assemble_mnf8(&payload, dims, tile_count, flags, pick_be)
+                .map(|a| a == *file_bytes)
+                .unwrap_or(false);
+            assert!(recon, "pick reconstruction failed for {f}");
+
+            // replay params: the pick's own mix backend, else the backend-7
+            // statistical-family control (labeled in the ledger; backend 7
+            // needs the class walk to stay geometry-eligible over the prefix
+            // we trace).
+            let params = match pick_be {
+                BACKEND_MIX => MixParams::BACKEND4,
+                BACKEND_MIX5 => MixParams::BACKEND5,
+                BACKEND_MIX6 => MixParams::BACKEND6,
+                BACKEND_MIX7 => MixParams::BACKEND7,
+                _ => MixParams::BACKEND7,
+            };
+            let control = !matches!(
+                pick_be,
+                BACKEND_MIX | BACKEND_MIX5 | BACKEND_MIX6 | BACKEND_MIX7
+            );
+            let walkable = params.lane_child;
+            if walkable {
+                LaneWalk::new(dims.width, dims.height, tile_count, planar).expect("lane walk geom");
+            }
+            let mut ctxs: Vec<MixCtx> = (0..params.nctx)
+                .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+                .collect();
+            build_parent_tree(&mut ctxs, &params);
+            let mut walk =
+                LaneWalk::new(dims.width, dims.height, tile_count, planar).expect("lane walk");
+            let mut pw = HpWalk::new(dims.width, dims.height, tile_count, planar);
+            let stem = f
+                .split('/')
+                .next_back()
+                .unwrap_or(f)
+                .trim_end_matches(".png")
+                .to_string();
+
+            let gz = std::fs::File::create(format!("{out_dir}/{stem}.csv.gz")).expect("trace");
+            let mut gz = flate2::write::GzEncoder::new(gz, flate2::Compression::fast());
+            gz.write_all(b"pos,y,cls,lane,pix,tx,ty,tw,th,mode,py,rk,ent,pmax,l1,l2,l4,l8,l16,l32,u1,u2,u4,u8,u16,u32,dg,pa,pb,vi,vu\n")
+                .expect("trace header");
+            let mut vecs: Vec<u8> = if vec_cap > 0 {
+                let n = raw.len().min(vec_cap);
+                let mut v = Vec::with_capacity(4 + n * 256 * 4);
+                v.extend_from_slice(&u32::try_from(n).expect("cap fits").to_le_bytes());
+                v
+            } else {
+                Vec::new()
+            };
+            let vec_rows = if vecs.len() >= 4 {
+                u32::from_le_bytes(vecs[..4].try_into().expect("cap")) as usize
+            } else {
+                0
+            };
+
+            let mut prev = 0u8;
+            let mut prev2 = 0u8;
+            let mut prev3 = 0u8;
+            let mut a0_bits = 0f64;
+            let mut rows = 0usize;
+            let mut eligible_until = raw.len();
+            let mut dead = false;
+            for (pos, &b) in raw.iter().enumerate() {
+                // class walk parity (production classes, asserted per byte)
+                let Some(cls_lw) = walk.peek_class() else {
+                    dead = true;
+                    eligible_until = pos;
+                    break;
+                };
+                if walk.consume(b).is_none() {
+                    dead = true;
+                    eligible_until = pos;
+                    break;
+                }
+                let geo = pw.eat(b);
+                if let Some(g) = &geo {
+                    assert_eq!(g.cls, cls_lw, "class mirror drift {f} @{pos}");
+                }
+                let cls = cls_lw;
+                let base_key = mix_ctx_key(&params, prev, prev2, prev3);
+                let c = if params.lane_child && cls == 1 {
+                    base_key + 20
+                } else {
+                    base_key
+                };
+                let pm = ctxs[c].probs_with(&ctxs, &params);
+                let y = usize::from(b);
+                let py = pm[y];
+                let pmax = pm.iter().copied().max().unwrap_or(0);
+                let rank = pm.iter().filter(|&&p| p > py).count().min(255) as u8;
+                let ent = {
+                    let tot = 1u64 << 24;
+                    let mut e = 0f64;
+                    for &p in &pm {
+                        if p > 0 {
+                            let f = p as f64 / tot as f64;
+                            e -= f * f.log2();
+                        }
+                    }
+                    (e * 256.0).round() as u16
+                };
+                ctxs[c].step(b);
+                share_step(&mut ctxs, &params, c, b);
+                prev3 = std::mem::replace(&mut prev2, prev);
+                prev = b;
+                a0_bits += 24.0 - (py as f64).log2();
+                if pos < vec_rows {
+                    for &p in &pm {
+                        vecs.extend_from_slice(&(p as u32).to_le_bytes());
+                    }
+                }
+                let row = match &geo {
+                    Some(g) => {
+                        let col = usize::from(g.col);
+                        let rowp = usize::from(g.row);
+                        let vi = {
+                            let mut v = 0u8;
+                            for (i, &k) in DIST.iter().enumerate() {
+                                if col >= k {
+                                    v |= 1 << i;
+                                }
+                            }
+                            if rowp >= 1 && col >= 1 {
+                                v |= 1 << 6;
+                            }
+                            if usize::from(g.o1) < usize::from(g.lane) {
+                                v |= 1 << 7;
+                            }
+                            v
+                        };
+                        let vu = {
+                            let mut v = 0u8;
+                            for (i, &k) in DIST.iter().enumerate() {
+                                if rowp >= k {
+                                    v |= 1 << i;
+                                }
+                            }
+                            if usize::from(g.lane) < usize::from(g.o2) {
+                                v |= 1 << 7;
+                            }
+                            v
+                        };
+                        format!(
+                            "{pos},{b},{cls},{lane:02x},{pix},{tx},{ty},{tw},{th},{md:02x},{py},{rk},{ent},{pmax},{l1},{l2},{l4},{l8},{l16},{l32},{u1},{u2},{u4},{u8},{u16},{u32},{dg},{pa},{pb},{vi},{vu}\n",
+                            cls = g.cls,
+                            lane = g.lane,
+                            pix = g.pix,
+                            tx = g.col,
+                            ty = g.row,
+                            tw = g.tw,
+                            th = g.th,
+                            md = pw.mode,
+                            rk = rank,
+                            l1 = g.l[0], l2 = g.l[1], l4 = g.l[2], l8 = g.l[3],
+                            l16 = g.l[4], l32 = g.l[5],
+                            u1 = g.u[0], u2 = g.u[1], u4 = g.u[2], u8 = g.u[3],
+                            u16 = g.u[4], u32 = g.u[5],
+                            dg = g.dg, pa = g.pa, pb = g.pb,
+                        )
+                    }
+                    None => format!(
+                        "{pos},{b},{cls},ff,0,0,0,0,0,{md:02x},{py},{rk},{ent},{pmax},0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0\n",
+                        md = pw.mode,
+                        rk = rank,
+                    ),
+                };
+                gz.write_all(row.as_bytes()).expect("trace row");
+                rows += 1;
+            }
+            let walk_complete = !dead && walk.complete() && pw.complete();
+            gz.finish().expect("trace gz finish");
+            if vec_cap > 0 {
+                std::fs::write(format!("{out_dir}/{stem}.vec"), &vecs).expect("vec file");
+            }
+            let pparams = match pick_be {
+                BACKEND_MIX => 4,
+                BACKEND_MIX5 => 5,
+                BACKEND_MIX6 => 6,
+                BACKEND_MIX7 => 7,
+                _ => 7,
+            };
+            ledger.push_str(&format!(
+                "{file},{be},{pick_len},{kind_name},{planar},{reference},{stream_fnv:016x},{stream_len},{pparams},{control},{a0:.2},{rows},{vec_rows},{eligible},{recon},{complete},{ms}\n",
+                file = f,
+                be = pick_be,
+                pick_len = file_bytes.len(),
+                kind_name = match kind {
+                    PredKind::Med => "med",
+                    PredKind::Plane => "plane",
+                    PredKind::Left => "left",
+                    PredKind::None => "none",
+                },
+                planar = planar,
+                reference = reference,
+                pparams = pparams,
+                control = control,
+                stream_fnv = fnv64(&raw),
+                stream_len = raw.len(),
+                a0 = a0_bits,
+                rows = rows,
+                vec_rows = vec_rows,
+                eligible = eligible_until,
+                recon = recon,
+                complete = u8::from(walk_complete),
+                ms = t00.elapsed().as_millis(),
+            ));
+            println!(
+                "hp1 {f}: be{pick_be} stream {} rows {rows} a0 {a0_bits:.0} bits recon {recon} {} ms",
+                raw.len(),
+                t00.elapsed().as_millis()
+            );
+        }
+        std::fs::write(format!("{out_dir}/ledger.csv"), ledger).expect("hp1 ledger");
+        println!("hp1 ledger -> {out_dir}/ledger.csv");
     }
 }
