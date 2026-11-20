@@ -1,4 +1,14 @@
 # Changelog
+## Research — MNF-HP8-I/R dispositions: CLOSED (NOT MET) (2026-11-19, research only; production HOLD)
+
+HP8-I (incremental representation) and HP8-R (redundant mathematical
+operations) dispositioned against the HP8-E measurements
+(docs/mnf-hp8-ir-record.md). Counters are already incremental (C4-A);
+the dense vector materialization floor is what the five wire-exact E2
+candidates failed to undercut, and both gates' remaining candidate
+classes (backend-search vector reuse; SIMD-shaped reformulation) are
+promotion-authorized-only. No new experiments; no production change.
+
 
 ## Research — MNF-HP8-E exact probability-construction equivalence: E0/E1 positive, E2/E4/E5 negative (2026-11-19, research only; production HOLD)
 
