@@ -4827,3 +4827,821 @@ mod mnf_hp1_census {
         println!("hp1 ledger -> {out_dir}/ledger.csv");
     }
 }
+
+// ==== MNF-HP8-E: E0 exclusive decomposition + E1 equality-origin census +
+// E2 grouped-probability candidates (exactness + timing). Env-gated:
+//   MNF_HP8_E=1 MNF_HP8_E_OUT=<csv> [MNF_HP8_E_STRIDE=n]
+//   cargo test --release hp8_e_decomp -- --ignored --nocapture
+// Walks the PRODUCTION backend-4 form over representative fixtures,
+// captures full MixCtx snapshots, benches isolated ops on real states,
+// and verifies the grouped candidates bit-exactly against MixCtx::probs.
+#[cfg(test)]
+mod mnf_hp8_e {
+    use super::{build_parent_tree, mix_ctx_key, share_step, MixCtx, MixParams};
+    use crate::mnf6::{Coder, ProbeCache, PROBE_CACHE_BUDGET_BYTES};
+    use crate::mnf8::{build_record_stream, PredKind};
+    use constriction::stream::model::ContiguousCategoricalEntropyModel;
+    use constriction::stream::queue::DefaultRangeEncoder;
+    use constriction::stream::Encode;
+    use std::time::Instant;
+
+    const SCALE: f64 = 16_777_216.0; // 2^24
+
+    #[derive(Clone)]
+    struct Hp8State {
+        sf: u64,
+        ss: u64,
+        log_w_bits: u64,
+        fast: Vec<u64>,
+        slow: Vec<u64>,
+        s: u8,
+        prev: u8,
+        prev2: u8,
+        prev3: u8,
+    }
+
+    fn capture_walk(params: &MixParams, data: &[u8], stride: usize) -> Vec<Hp8State> {
+        let mut ctxs: Vec<MixCtx> = (0..params.nctx)
+            .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+            .collect();
+        build_parent_tree(&mut ctxs, params);
+        let mut enc = DefaultRangeEncoder::new();
+        let mut prev = 0u8;
+        let mut prev2 = 0u8;
+        let mut prev3 = 0u8;
+        let mut states = Vec::new();
+        for (i, &b) in data.iter().enumerate() {
+            let base = mix_ctx_key(params, prev, prev2, prev3);
+            let c = base;
+            if i % stride == 0 {
+                let ctx = &ctxs[c];
+                states.push(Hp8State {
+                    sf: ctx.sf,
+                    ss: ctx.ss,
+                    log_w_bits: ctx.log_w.to_bits(),
+                    fast: ctx.fast.clone(),
+                    slow: ctx.slow.clone(),
+                    s: b,
+                    prev,
+                    prev2,
+                    prev3,
+                });
+            }
+            let m = ctxs[c]
+                .model(&ctxs, params)
+                .expect("mix model always buildable");
+            enc.encode_symbols(std::iter::once((usize::from(b), &m)))
+                .expect("mix encode symbol");
+            ctxs[c].step(b);
+            share_step(&mut ctxs, params, c, b);
+            prev3 = prev2;
+            prev2 = prev;
+            prev = b;
+        }
+        states
+    }
+
+    fn weight_of(st: &Hp8State) -> f64 {
+        let log_w = f64::from_bits(st.log_w_bits);
+        1.0 / (1.0 + (-log_w).exp())
+    }
+
+    /// The exact dense mixture map from MixCtx::probs, returning pre-round
+    /// f64 bits for the E1 origin census. Bit-identical to the production
+    /// expression by construction (same ops, same order).
+    fn mixture_bits(st: &Hp8State, wf: f64) -> (Vec<u64>, Vec<u64>) {
+        let tf = st.sf as f64;
+        let ts = st.ss as f64;
+        let mut p = Vec::with_capacity(256);
+        let mut bits = Vec::with_capacity(256);
+        for (&cf, &cs) in st.fast.iter().zip(&st.slow) {
+            let m = (wf * (cf as f64 / tf) + (1.0 - wf) * (cs as f64 / ts)) * SCALE;
+            bits.push(m.to_bits());
+            p.push(m as u64);
+        }
+        (p, bits)
+    }
+
+    /// MixCtx::probs rebalance tail, verbatim.
+    fn rebalance(mut p: Vec<u64>) -> Vec<u64> {
+        let sum: u64 = p.iter().sum();
+        p[0] += 16_777_216u64 - sum;
+        let mut dense = 0usize;
+        for (i, &v) in p.iter().enumerate() {
+            if v > p[dense] {
+                dense = i;
+            }
+        }
+        let zeros = p.iter().filter(|&&v| v == 0).count();
+        p[dense] = p[dense].max(1 + zeros as u64);
+        for v in p.iter_mut() {
+            if *v == 0 {
+                *v = 1;
+            }
+        }
+        p
+    }
+
+    fn mixctx_from(st: &Hp8State, params: &MixParams) -> MixCtx {
+        let mut ctx = MixCtx::new(params.cap_fast, params.cap_slow);
+        ctx.fast = st.fast.clone();
+        ctx.slow = st.slow.clone();
+        ctx.sf = st.sf;
+        ctx.ss = st.ss;
+        ctx.log_w = f64::from_bits(st.log_w_bits);
+        ctx
+    }
+
+    /// E2a: full-pair dedupe (sort by packed (cf, cs)); the f64 mixture
+    /// expression is evaluated ONCE per distinct pair. EXACT.
+    fn probs_grouped_pairs(st: &Hp8State, wf: f64) -> Vec<u64> {
+        let tf = st.sf as f64;
+        let ts = st.ss as f64;
+        let mut idx: Vec<usize> = (0..256).collect();
+        idx.sort_by_key(|&i| (st.fast[i], st.slow[i]));
+        let mut p = vec![0u64; 256];
+        let mut i = 0usize;
+        while i < 256 {
+            let f0 = st.fast[idx[i]];
+            let s0 = st.slow[idx[i]];
+            let a = ((wf * (f0 as f64 / tf) + (1.0 - wf) * (s0 as f64 / ts)) * SCALE) as u64;
+            let mut j = i + 1;
+            while j < 256 && st.fast[idx[j]] == f0 && st.slow[idx[j]] == s0 {
+                j += 1;
+            }
+            for &k in &idx[i..j] {
+                p[k] = a;
+            }
+            i = j;
+        }
+        rebalance(p)
+    }
+
+    /// E2b: per-expert value memo (small linear maps) + full-pair linear
+    /// memo; divisions only per distinct value, mixtures per distinct pair.
+    fn probs_grouped_values(st: &Hp8State, wf: f64) -> Vec<u64> {
+        let tf = st.sf as f64;
+        let ts = st.ss as f64;
+        let mut fv: Vec<(u64, f64)> = Vec::with_capacity(64);
+        let mut sv: Vec<(u64, f64)> = Vec::with_capacity(64);
+        let mut rf = Vec::with_capacity(256);
+        for &cf in &st.fast {
+            rf.push(lookup(&mut fv, cf, tf));
+        }
+        let mut rs = Vec::with_capacity(256);
+        for &cs in &st.slow {
+            rs.push(lookup(&mut sv, cs, ts));
+        }
+        let mut pairs: Vec<(u128, u64)> = Vec::with_capacity(64);
+        let mut p = Vec::with_capacity(256);
+        for i in 0..256 {
+            let key = ((st.fast[i] as u128) << 64) | st.slow[i] as u128;
+            let a = match pairs.iter().find(|(k, _)| *k == key) {
+                Some((_, a)) => *a,
+                None => {
+                    let a = ((wf * rf[i] + (1.0 - wf) * rs[i]) * SCALE) as u64;
+                    pairs.push((key, a));
+                    a
+                }
+            };
+            p.push(a);
+        }
+        rebalance(p)
+    }
+
+    /// E2c: SINGLE-PASS fused construction + rebalance over adjacent
+    /// counter runs. Exactly one division-pair per maximal run of identical
+    /// (fast, slow); the rebalance sum/argmax/zero census are fused into the
+    /// same pass (k-weighted group sums); the argmax stays a separate
+    /// pass AFTER the p[0] fixup because the dense argmax must observe the
+    /// updated p[0]. Bit-exact by identical subexpression reuse: a run
+    /// representative's f64 mixture IS the dense loop's value for every
+    /// member.
+    fn probs_runfused(st: &Hp8State, wf: f64) -> Vec<u64> {
+        let tf = st.sf as f64;
+        let ts = st.ss as f64;
+        let mut p = vec![0u64; 256];
+        let mut sum = 0u64;
+        let mut zeros = 0u64;
+        let mut i = 0usize;
+        while i < 256 {
+            let f0 = st.fast[i];
+            let s0 = st.slow[i];
+            let a = ((wf * (f0 as f64 / tf) + (1.0 - wf) * (s0 as f64 / ts)) * SCALE) as u64;
+            p[i] = a;
+            let mut j = i + 1;
+            while j < 256 && st.fast[j] == f0 && st.slow[j] == s0 {
+                p[j] = a;
+                j += 1;
+            }
+            let k = (j - i) as u64;
+            sum = sum.wrapping_add(k.wrapping_mul(a));
+            if a == 0 {
+                zeros += k;
+            }
+            i = j;
+        }
+        // rebalance tail in EXACTLY the dense order: p[0] fixup FIRST, then
+        // the full argmax pass (dense argmax must see the updated p[0]),
+        // then the dense-slot fixup and the zero rewrite.
+        p[0] += 16_777_216u64.wrapping_sub(sum);
+        let mut dense = 0usize;
+        for (i, &v) in p.iter().enumerate() {
+            if v > p[dense] {
+                dense = i;
+            }
+        }
+        p[dense] = p[dense].max(1 + zeros);
+        for v in p.iter_mut() {
+            if *v == 0 {
+                *v = 1;
+            }
+        }
+        p
+    }
+
+    /// E2e: DENSE vectorizable map with the rebalance sum + zero census
+    /// fused into the same pass (integer associativity keeps the sum exact;
+    /// no data-dependent branching, unlike the run scan). Argmax remains a
+    /// separate pass in the dense order (see E2c note).
+    fn probs_fused_sum_ref(fast: &[u64], slow: &[u64], sf: u64, ss: u64, wf: f64) -> Vec<u64> {
+        let tf = sf as f64;
+        let ts = ss as f64;
+        let mut p = Vec::with_capacity(256);
+        let mut sum = 0u64;
+        let mut zeros = 0u64;
+        for (&cf, &cs) in fast.iter().zip(slow) {
+            let a = ((wf * (cf as f64 / tf) + (1.0 - wf) * (cs as f64 / ts)) * SCALE) as u64;
+            p.push(a);
+            sum = sum.wrapping_add(a);
+            zeros += (a == 0) as u64;
+        }
+        p[0] += 16_777_216u64.wrapping_sub(sum);
+        let mut dense = 0usize;
+        for (i, &v) in p.iter().enumerate() {
+            if v > p[dense] {
+                dense = i;
+            }
+        }
+        p[dense] = p[dense].max(1 + zeros);
+        for v in p.iter_mut() {
+            if *v == 0 {
+                *v = 1;
+            }
+        }
+        p
+    }
+
+    /// Borrowing form of E2c (same math; no state clone). The encoder twin
+    /// uses this so per-symbol cost carries no memcpy.
+    fn probs_runfused_ref(fast: &[u64], slow: &[u64], sf: u64, ss: u64, wf: f64) -> Vec<u64> {
+        let tf = sf as f64;
+        let ts = ss as f64;
+        let mut p = vec![0u64; 256];
+        let mut sum = 0u64;
+        let mut zeros = 0u64;
+        let mut i = 0usize;
+        while i < 256 {
+            let f0 = fast[i];
+            let s0 = slow[i];
+            let a = ((wf * (f0 as f64 / tf) + (1.0 - wf) * (s0 as f64 / ts)) * SCALE) as u64;
+            p[i] = a;
+            let mut j = i + 1;
+            while j < 256 && fast[j] == f0 && slow[j] == s0 {
+                p[j] = a;
+                j += 1;
+            }
+            let k = (j - i) as u64;
+            sum = sum.wrapping_add(k.wrapping_mul(a));
+            if a == 0 {
+                zeros += k;
+            }
+            i = j;
+        }
+        p[0] += 16_777_216u64.wrapping_sub(sum);
+        let mut dense = 0usize;
+        for (i, &v) in p.iter().enumerate() {
+            if v > p[dense] {
+                dense = i;
+            }
+        }
+        p[dense] = p[dense].max(1 + zeros);
+        for v in p.iter_mut() {
+            if *v == 0 {
+                *v = 1;
+            }
+        }
+        p
+    }
+
+    /// E2d: E2c with u32 emission fused in (values are always <= 2^24, so
+    /// the cast is lossless; consumes the u32-collect pass entirely).
+    fn probs_runfused_u32(st: &Hp8State, wf: f64) -> Vec<u32> {
+        let tf = st.sf as f64;
+        let ts = st.ss as f64;
+        let mut p = vec![0u32; 256];
+        let mut sum = 0u64;
+        let mut zeros = 0u64;
+        let mut i = 0usize;
+        while i < 256 {
+            let f0 = st.fast[i];
+            let s0 = st.slow[i];
+            let a = ((wf * (f0 as f64 / tf) + (1.0 - wf) * (s0 as f64 / ts)) * SCALE) as u64;
+            let a32 = a as u32;
+            p[i] = a32;
+            let mut j = i + 1;
+            while j < 256 && st.fast[j] == f0 && st.slow[j] == s0 {
+                p[j] = a32;
+                j += 1;
+            }
+            let k = (j - i) as u64;
+            sum = sum.wrapping_add(k.wrapping_mul(a));
+            if a == 0 {
+                zeros += k;
+            }
+            i = j;
+        }
+        // dense-order rebalance on the u32 vector (fixup values <= 2^24)
+        p[0] = u64::from(p[0]).wrapping_add(16_777_216u64.wrapping_sub(sum)) as u32;
+        let mut dense = 0usize;
+        for (i, &v) in p.iter().enumerate() {
+            if v > p[dense] {
+                dense = i;
+            }
+        }
+        p[dense] = u64::from(p[dense]).max(1 + zeros) as u32;
+        for v in p.iter_mut() {
+            if *v == 0 {
+                *v = 1;
+            }
+        }
+        p
+    }
+
+    fn lookup(map: &mut Vec<(u64, f64)>, v: u64, t: f64) -> f64 {
+        for &(k, r) in map.iter() {
+            if k == v {
+                return r;
+            }
+        }
+        let r = v as f64 / t;
+        map.push((v, r));
+        r
+    }
+
+    fn bench_pass<F: FnMut(&Hp8State)>(states: &[Hp8State], iters: usize, mut f: F) -> f64 {
+        let t0 = Instant::now();
+        for _ in 0..iters {
+            for st in states {
+                f(st);
+            }
+        }
+        t0.elapsed().as_secs_f64() * 1e9 / (iters * states.len()) as f64
+    }
+
+    fn fixture_states(f: &str, stride: usize) -> (Vec<Hp8State>, usize) {
+        let cache = ProbeCache::new(PROBE_CACHE_BUDGET_BYTES);
+        let img = image::open(f).expect("hp8 png").to_rgb8();
+        let dims = crate::codec::Dims {
+            width: img.width(),
+            height: img.height(),
+        };
+        let pixels = img.into_raw();
+        let (raw0, _st) = build_record_stream(
+            &pixels,
+            dims,
+            true,
+            true,
+            false,
+            true,
+            PredKind::Med,
+            &Coder::Zstd(19),
+            &cache,
+        )
+        .expect("record stream");
+        let len = raw0.len();
+        (capture_walk(&MixParams::BACKEND4, &raw0, stride), len)
+    }
+
+    #[test]
+    #[ignore]
+    fn hp8_e_decomp() {
+        if std::env::var("MNF_HP8_E").is_err() {
+            return;
+        }
+        let out = std::env::var("MNF_HP8_E_OUT").expect("MNF_HP8_E_OUT");
+        let stride: usize = std::env::var("MNF_HP8_E_STRIDE")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(97);
+        let files = [
+            "testdata/photos/forest_224x160_s900002.png",
+            "testdata/photos/dusk_160x120_s900003.png",
+            "testdata/screenshot_640x400.png",
+            "testdata/gradient_320x240.png",
+        ];
+        let mut csv = String::from("fixture,stage,ns_per_symbol\n");
+        let mut census = String::from(
+            "fixture,states,dist_pairs_mean,dist_fast_mean,dist_slow_mean,runs_mean,max_run,adj_eq_pairs_mean,origin_equal_counters_frac,origin_same_f64_diff_counters_frac,origin_round_collapse_frac\n",
+        );
+        let iters = 12usize;
+        for f in files {
+            let (states, len) = fixture_states(f, stride);
+            let n = states.len();
+            let n_usize = n;
+            println!("hp8e {f}: stream {len} B, captured {n_usize} states");
+            let mut stage = |name: &str, ns: f64| {
+                csv.push_str(&format!("{f},{name},{ns:.2}\n"));
+            };
+            stage(
+                "state_clone",
+                bench_pass(&states, iters, |st| {
+                    std::hint::black_box(st.fast.clone());
+                }),
+            );
+            stage(
+                "ctx_key",
+                bench_pass(&states, iters, |st| {
+                    std::hint::black_box(mix_ctx_key(
+                        &MixParams::BACKEND4,
+                        st.prev,
+                        st.prev2,
+                        st.prev3,
+                    ));
+                }),
+            );
+            stage(
+                "probs_full",
+                bench_pass(&states, iters, |st| {
+                    let ctx = mixctx_from(st, &MixParams::BACKEND4);
+                    std::hint::black_box(ctx.probs());
+                }),
+            );
+            stage(
+                "ctx_full_model",
+                bench_pass(&states, iters, |st| {
+                    let ctx = mixctx_from(st, &MixParams::BACKEND4);
+                    std::hint::black_box(
+                        ctx.model(std::slice::from_ref(&ctx), &MixParams::BACKEND4),
+                    );
+                }),
+            );
+            stage(
+                "mixture_only",
+                bench_pass(&states, iters, |st| {
+                    let wf = weight_of(st);
+                    let (p, b) = mixture_bits(st, wf);
+                    std::hint::black_box((p, b));
+                }),
+            );
+            stage(
+                "rebalance_only",
+                bench_pass(&states, iters, |st| {
+                    let wf = weight_of(st);
+                    let (p, _b) = mixture_bits(st, wf);
+                    std::hint::black_box(rebalance(p));
+                }),
+            );
+            stage(
+                "model_build_only",
+                bench_pass(&states, iters, |st| {
+                    let wf = weight_of(st);
+                    let (p, _b) = mixture_bits(st, wf);
+                    let r = rebalance(p);
+                    let p32: Vec<u32> = r.iter().map(|&v| v as u32).collect();
+                    std::hint::black_box(
+                    ContiguousCategoricalEntropyModel::<u32, Vec<u32>, 24>::from_nonzero_fixed_point_probabilities(p32, false).unwrap(),
+                );
+                }),
+            );
+            stage(
+                "encode_one_symbol",
+                bench_pass(&states, iters, |st| {
+                    let wf = weight_of(st);
+                    let (p, _b) = mixture_bits(st, wf);
+                    let r = rebalance(p);
+                    let p32: Vec<u32> = r.iter().map(|&v| v as u32).collect();
+                    let m = ContiguousCategoricalEntropyModel::<u32, Vec<u32>, 24>::from_nonzero_fixed_point_probabilities(p32, false).unwrap();
+                    let mut enc = DefaultRangeEncoder::new();
+                    enc.encode_symbols(std::iter::once((usize::from(st.s), &m)))
+                        .unwrap();
+                    std::hint::black_box(enc);
+                }),
+            );
+            stage(
+                "step_symbol",
+                bench_pass(&states, iters, |st| {
+                    let mut ctx = mixctx_from(st, &MixParams::BACKEND4);
+                    ctx.step(st.s);
+                    std::hint::black_box(ctx);
+                }),
+            );
+            stage(
+                "share_step_inert",
+                bench_pass(&states, iters, |st| {
+                    let ctx = mixctx_from(st, &MixParams::BACKEND4);
+                    let mut cts = vec![ctx.clone()];
+                    share_step(&mut cts, &MixParams::BACKEND4, 0, st.s);
+                    std::hint::black_box(cts);
+                }),
+            );
+            // E1 census
+            let mut dist_pairs = 0f64;
+            let mut dist_fast = 0f64;
+            let mut dist_slow = 0f64;
+            let mut runs = 0f64;
+            let mut max_run = 0usize;
+            let mut adj_eq = 0f64;
+            let mut o_cnt = 0f64;
+            let mut o_f64 = 0f64;
+            let mut o_round = 0f64;
+            for st in &states {
+                let wf = weight_of(st);
+                let (p, bits) = mixture_bits(st, wf);
+                let r = rebalance(p);
+                std::hint::black_box(&r);
+                let mut pf: Vec<(u64, u64)> = st
+                    .fast
+                    .iter()
+                    .zip(&st.slow)
+                    .map(|(&a, &b)| (a, b))
+                    .collect();
+                pf.sort_unstable();
+                pf.dedup();
+                dist_pairs += pf.len() as f64;
+                let mut ff: Vec<u64> = st.fast.clone();
+                ff.sort_unstable();
+                ff.dedup();
+                dist_fast += ff.len() as f64;
+                let mut s2: Vec<u64> = st.slow.clone();
+                s2.sort_unstable();
+                s2.dedup();
+                dist_slow += s2.len() as f64;
+                // runs over the FINAL balanced vector
+                let mut run = 1usize;
+                let mut rr = 0usize;
+                for i in 1..256 {
+                    if r[i] == r[i - 1] {
+                        adj_eq += 1.0;
+                        if st.fast[i] == st.fast[i - 1] && st.slow[i] == st.slow[i - 1] {
+                            o_cnt += 1.0;
+                        } else if bits[i] == bits[i - 1] {
+                            o_f64 += 1.0;
+                        } else {
+                            o_round += 1.0;
+                        }
+                        run += 1;
+                    } else {
+                        max_run = max_run.max(run);
+                        rr += 1;
+                        run = 1;
+                    }
+                }
+                max_run = max_run.max(run);
+                runs += (rr + 1) as f64;
+            }
+            let na = n as f64;
+            let ae = adj_eq.max(1.0);
+            census.push_str(&format!(
+                "{f},{n},{:.2},{:.2},{:.2},{:.2},{},{:.2},{:.3},{:.3},{:.3}\n",
+                dist_pairs / na,
+                dist_fast / na,
+                dist_slow / na,
+                runs / na,
+                max_run,
+                adj_eq / na,
+                o_cnt / ae,
+                o_f64 / ae,
+                o_round / ae,
+            ));
+            // E2 candidates: exactness vs mixctx.probs() then timing
+            {
+                let mut eq = 0usize;
+                for st in &states {
+                    let want = mixctx_from(st, &MixParams::BACKEND4).probs();
+                    let got = probs_grouped_pairs(st, weight_of(st));
+                    if got == want {
+                        eq += 1;
+                    }
+                }
+                let ns = bench_pass(&states, iters, |st| {
+                    std::hint::black_box(probs_grouped_pairs(st, weight_of(st)));
+                });
+                csv.push_str(&format!("{f},e2a_grouped_pairs,{ns:.2}\n"));
+                println!("hp8e {f}: E2a pairs exact {eq}/{n_usize} ns={ns:.2}");
+            }
+            {
+                let mut eq = 0usize;
+                for st in &states {
+                    let want = mixctx_from(st, &MixParams::BACKEND4).probs();
+                    let got = probs_grouped_values(st, weight_of(st));
+                    if got == want {
+                        eq += 1;
+                    }
+                }
+                let ns = bench_pass(&states, iters, |st| {
+                    std::hint::black_box(probs_grouped_values(st, weight_of(st)));
+                });
+                csv.push_str(&format!("{f},e2b_grouped_values,{ns:.2}\n"));
+                println!("hp8e {f}: E2b values exact {eq}/{n_usize} ns={ns:.2}");
+            }
+            {
+                let mut eq = 0usize;
+                for st in &states {
+                    let want = mixctx_from(st, &MixParams::BACKEND4).probs();
+                    let got = probs_runfused(st, weight_of(st));
+                    if got == want {
+                        eq += 1;
+                    }
+                }
+                let ns = bench_pass(&states, iters, |st| {
+                    std::hint::black_box(probs_runfused(st, weight_of(st)));
+                });
+                csv.push_str(&format!("{f},e2c_runfused,{ns:.2}\n"));
+                println!("hp8e {f}: E2c run-fused exact {eq}/{n_usize} ns={ns:.2}");
+            }
+            {
+                let mut eq = 0usize;
+                for st in &states {
+                    let want: Vec<u32> = mixctx_from(st, &MixParams::BACKEND4)
+                        .probs()
+                        .iter()
+                        .map(|&v| v as u32)
+                        .collect();
+                    let got = probs_runfused_u32(st, weight_of(st));
+                    if got == want {
+                        eq += 1;
+                    }
+                }
+                let ns = bench_pass(&states, iters, |st| {
+                    std::hint::black_box(probs_runfused_u32(st, weight_of(st)));
+                });
+                csv.push_str(&format!("{f},e2d_runfused_u32,{ns:.2}\n"));
+                println!("hp8e {f}: E2d u32-fused exact {eq}/{n_usize} ns={ns:.2}");
+            }
+            {
+                let mut eq = 0usize;
+                for st in &states {
+                    let want = mixctx_from(st, &MixParams::BACKEND4).probs();
+                    let got = probs_fused_sum_ref(&st.fast, &st.slow, st.sf, st.ss, weight_of(st));
+                    if got == want {
+                        eq += 1;
+                    }
+                }
+                let ns = bench_pass(&states, iters, |st| {
+                    std::hint::black_box(probs_fused_sum_ref(
+                        &st.fast,
+                        &st.slow,
+                        st.sf,
+                        st.ss,
+                        weight_of(st),
+                    ));
+                });
+                csv.push_str(&format!("{f},e2e_fused_sum,{ns:.2}\n"));
+                println!("hp8e {f}: E2e fused-sum exact {eq}/{n_usize} ns={ns:.2}");
+            }
+        }
+        std::fs::write(&out, format!("{csv}---\n{census}")).expect("hp8e csv");
+        println!("hp8-e decomp -> {out}");
+    }
+    /// E5-gate (cohort): full backend-4 walk driven by the run-fused
+    /// construction. The wire MUST be byte-identical to production
+    /// mix_encode_with; timing reported for both.
+    fn twin_encode_runfused(params: &MixParams, data: &[u8], fused_sum_arm: bool) -> Vec<u8> {
+        use constriction::stream::queue::DefaultRangeEncoder;
+        use constriction::stream::Encode;
+        let mut ctxs: Vec<MixCtx> = (0..params.nctx)
+            .map(|_| MixCtx::new(params.cap_fast, params.cap_slow))
+            .collect();
+        build_parent_tree(&mut ctxs, params);
+        let mut enc = DefaultRangeEncoder::new();
+        let mut prev = 0u8;
+        let mut prev2 = 0u8;
+        let mut prev3 = 0u8;
+        for &b in data {
+            let base = mix_ctx_key(params, prev, prev2, prev3);
+            let c = base;
+            {
+                let ctx = &ctxs[c];
+                let wf = 1.0 / (1.0 + (-ctx.log_w).exp());
+                let pd = if fused_sum_arm {
+                    probs_fused_sum_ref(&ctx.fast, &ctx.slow, ctx.sf, ctx.ss, wf)
+                } else {
+                    probs_runfused_ref(&ctx.fast, &ctx.slow, ctx.sf, ctx.ss, wf)
+                };
+                let p32: Vec<u32> = pd.iter().map(|&v| v as u32).collect();
+                let m = ContiguousCategoricalEntropyModel::<
+                    u32,
+                    Vec<u32>,
+                    24,
+                >::from_nonzero_fixed_point_probabilities(p32, false)
+                .expect("fused model buildable");
+                enc.encode_symbols(std::iter::once((usize::from(b), &m)))
+                    .expect("encode symbol");
+            }
+            ctxs[c].step(b);
+            share_step(&mut ctxs, params, c, b);
+            prev3 = prev2;
+            prev2 = prev;
+            prev = b;
+        }
+        let compressed = enc.into_compressed().expect("mix seal");
+        let mut out = Vec::with_capacity(compressed.len() * 4 + 4);
+        out.extend_from_slice(
+            &u32::try_from(data.len())
+                .expect("stream len fits u32")
+                .to_le_bytes(),
+        );
+        for w in compressed {
+            out.extend_from_slice(&w.to_le_bytes());
+        }
+        out
+    }
+
+    #[test]
+    #[ignore]
+    fn hp8_e_encoder_twin() {
+        if std::env::var("MNF_HP8_E_TWIN").is_err() {
+            return;
+        }
+        use crate::mnf8::BACKEND_MIX;
+        use std::time::Instant;
+        let files: Vec<String> = match std::env::var("MNF17_P1A_FILES") {
+            Ok(s) => s.split(',').map(|p| p.trim().to_string()).collect(),
+            Err(_) => vec![
+                "testdata/solid_256x256.png".into(),
+                "testdata/gradient_320x240.png".into(),
+                "testdata/repeat_256x256.png".into(),
+                "testdata/heldout/plaid_192.png".into(),
+                "testdata/noise_256x256.png".into(),
+                "testdata/photos/forest_224x160_s900002.png".into(),
+                "testdata/photos/dusk_160x120_s900003.png".into(),
+                "testdata/screenshot_640x400.png".into(),
+            ],
+        };
+        let cache = ProbeCache::new(PROBE_CACHE_BUDGET_BYTES);
+        let img = image::open(files[0].as_str()).expect("hp8 png");
+        let _ = img;
+        let fused_sum_arm = std::env::var("MNF_HP8_E_TWIN_ARM").as_deref() == Ok("fusedsum");
+        let mut all_ok = 0usize;
+        let mut all_n = 0usize;
+        let mut ns_prod = 0f64;
+        let mut ns_fused = 0f64;
+        let mut ns_prod_tot = 0u128;
+        let mut ns_fused_tot = 0u128;
+        let mut syms_tot = 0usize;
+        for f in &files {
+            let img = image::open(f).expect("hp8 png").to_rgb8();
+            let dims = crate::codec::Dims {
+                width: img.width(),
+                height: img.height(),
+            };
+            let pixels = img.into_raw();
+            let (raw0, _st) = build_record_stream(
+                &pixels,
+                dims,
+                true,
+                true,
+                false,
+                true,
+                PredKind::Med,
+                &Coder::Zstd(19),
+                &cache,
+            )
+            .expect("record stream");
+            let raw = &raw0;
+            let t0 = Instant::now();
+            let w0 = crate::mix_coder::mix_encode_with(&MixParams::BACKEND4, raw);
+            let t1 = Instant::now();
+            let w1 = twin_encode_runfused(&MixParams::BACKEND4, raw, fused_sum_arm);
+            let t2 = Instant::now();
+            let eq = w0 == w1;
+            all_ok += usize::from(eq);
+            all_n += 1;
+            let us0 = (t1 - t0).as_micros();
+            let us1 = (t2 - t1).as_micros();
+            let syms = raw.len();
+            let rate0 = us0 as f64 * 1e3 / syms as f64;
+            let rate1 = us1 as f64 * 1e3 / syms as f64;
+            println!(
+                "hp8e-twin {f}: {syms} symbols wire {} bytes identical={eq} prod={rate0:.0} ns/sym fused={rate1:.0} ns/sym ({:+.1}%)",
+                w0.len(),
+                (rate1 - rate0) / rate0 * 100.0,
+            );
+            ns_prod += rate0;
+            ns_fused += rate1;
+            ns_prod_tot += us0;
+            ns_fused_tot += us1;
+            syms_tot += syms;
+        }
+        println!(
+            "hp8e-twin SUMMARY (arm={}): identical {all_ok}/{all_n}; aggregate prod={:.0} ns/sym fused={:.0} ns/sym ({:+.1}%)",
+            if fused_sum_arm { "fusedsum" } else { "runfused" },
+            ns_prod_tot as f64 * 1e3 / syms_tot as f64,
+            ns_fused_tot as f64 * 1e3 / syms_tot as f64,
+            (ns_fused - ns_prod) / ns_prod * 100.0,
+        );
+        assert_eq!(all_ok, all_n, "run-fused wire divergence");
+        let _ = (ns_prod, ns_fused, BACKEND_MIX);
+    }
+}

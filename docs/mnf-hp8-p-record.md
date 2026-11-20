@@ -30,11 +30,22 @@ Q/255 units (reported per row in the CSV).
 ## 2. P2 normalization methods (MEASURED, 6 train images × 20k rows, Q=16)
 
 - Largest-remainder (production): mean entropy delta **+0.0201 bits/sym**
-  vs the exact vector; row-sum exact by construction.
+  vs the exact vector; row-sum exact by construction. CLARIFICATION (§5):
+  this +0.0201 bits per SYMBOL differs from P1's Q=16 rate of
+  +0.872 bits per 1k rows (+0.000872/symbol) because P2 and P1 measure on
+  different populations AND different metrics: P2 = full-entropy delta
+  H(q16)−H(exact) over 6 TRAIN synthetic-heavy prefixes at 20k rows;
+  P1 = observed-symbol coding-cost delta over 28 images (heldout-heavy,
+  40k rows). Both are tiny and same-sign — distinct datasets and distinct
+  statistics, not a contradiction. and same-sign; no contradiction — distinct
+  datasets and distinct statistics.
 - Floor-plus-top-grant and cumulative-boundary rounding: as standalone
-  rules they do NOT preserve the row sum; any deterministic sum-repair
-  collapses them into largest-remainder. NOT reported as competing
-  distortions — the comparison degenerates to LR by construction.
+  rules they do NOT preserve the row sum. CLARIFICATION (§5): the earlier
+  draft claimed a sum-repair "collapses them into largest-remainder" —
+  that is RETRACTED: a deterministic repair is not guaranteed to reproduce
+  LR's exact grant/tie order, and no repaired variant was measured. Only
+  LR (production) rows appear in the tables; the alternatives are
+  unmeasured.
 - Cost accounting: LR ≈ 256 mul + 256 sub + remainder ordering; the
   ordering dominates (argsort O(256 log 256) row-wise; the production
   single-symbol path uses the scalar variant).
@@ -53,8 +64,12 @@ decode_exact=true. Finalized payload bytes:
 | screenshot 640x400 | 8 | 8 | **12** | 20 | 64 | 264 | 5004 |
 | ideal bits (forest) | 15254 | 15254 | 15257 | 15298 | 15585 | 17159 | 40000 |
 
-Reading: **coder bytes are precision-insensitive through Q=16** (identical
-at 24/20/16 on the photo streams) — precision reduction buys NOTHING on
+Reading: **coder bytes are precision-insensitive through Q=16 on the photo
+streams** (forest/terrain identical at 24/20/16). CLARIFICATION (operator
+§5): screenshot — near-uniform rows dominated by equal largest frequencies —
+diverges ALREADY at Q=16 (8/8/12 B): the uniform-shape rows lose the
+remainder-grant freedom earlier. The invariant "identical at Q=16" is an
+EMPIRICAL property of peaked rows, not a theorem; precision reduction buys NOTHING on
 either byte count or (per P1) meaningful ideal bits, and the §16 caveat is
 confirmed in both directions: lower precision neither reduces nor inflates
 coder work; it only costs ideal bits as P1 quantifies. Q=8 is the forced-

@@ -1,5 +1,38 @@
 # Changelog
 
+## Research — MNF-HP8-E exact probability-construction equivalence: E0/E1 positive, E2/E4/E5 negative (2026-11-19, research only; production HOLD)
+
+- **E0 decomposition** (docs/mnf-hp8-e-record.md): production backend-4 walk
+  replayed over forest/dusk/screenshot/gradient with full MixCtx snapshots
+  (12,036 states, env-gated instrument). Exclusive per-op attribution within
+  the ~743–762 ns/symbol model loop: ctx key ≈ negligible, step ≈ 200,
+  construction side (mixture + rebalance + u32 + constriction build)
+  dominates; the encoder twin cross-checks the whole walk at 725–751 ns/sym.
+- **E1 census**: 82–99% of the probability vector is adjacent-equal runs
+  originating ≥99.6% from IDENTICAL raw counter pairs (not rounding
+  collapse, max 4.6%). u64→u32 truncation cannot merge symbols (values ≤
+  2^24). The redundancy premise is confirmed as upstream-identical.
+- **E2 candidates** (E2a sort-dedupe, E2b value memo, E2c run-fused scan,
+  E2d u32-direct, E2e fused-sum): all verified BIT-EXACT against
+  MixCtx::probs (12,036/12,036 states) — and the encoder twin proves the
+  wires BYTE-IDENTICAL to production on the full 8-fixture cohort (1.87M
+  symbols per arm). Runtime: NEGATIVE in situ (run-fused +8.9%, fused-sum
+  +13.4% aggregate; noise +23%; no fixture faster). The dense formulation
+  auto-vectorizes; exact-structure exploitation loses to it.
+  Instrumentation defect disclosed and fixed: the first twin measured
+  +30.9% because of its own per-symbol 4 KB state clone.
+- **E3**: constriction 0.5.0 exposes NO public constructor accepting a
+  precomputed CDF (from_fixed_point_cdf is private); compact run-wise cdf
+  representations defer the same dense pass inside the model build.
+  CLOSED (interface).
+- **E4**: reciprocal-multiply division remains BLOCKED (wire-diverging per
+  P1-B); all other admissible exact-integer candidates measured or
+  dispositioned within authorization — none wins.
+- **E5 gate NOT met** → no production candidate; integration HOLD. The
+  wire-exactness of the run-fused construction is preserved as a reusable,
+  verified fact; an SIMD-shaped algebraic reformulation remains the open
+  candidate class.
+
 ## Research — MNF-HP8 entropy-representation gauntlet: HP8-0/P/BT/S complete (2026-11-19, research only; production HOLD)
 
 Initial authorization per the operator's HP8 gauntlet (representation + execution
@@ -11,10 +44,11 @@ efficiency). No wire format, backend, portfolio, or promotion change.
   against committed records.
 - **HP8-P precision** (docs/mnf-hp8-p-record.md): ideal-bit census over 1.12M
   actual production probability-vector prefixes — Q=20 FREE (−0.003 bits/krow),
-  Q=16 +0.872/krow, Q=8 forced-uniform (floor cells = rows×256). Normalization
-  alternatives collapse into largest-remainder once sum-preserving. Wire probe
+  Q=16 +0.872/krow, Q=8 forced-uniform (floor cells = rows×256). Alternative
+  normalizations without sum-repair do not preserve the row sum (no repaired
+  variant measured; repair is not guaranteed to reproduce LR grant order). Wire probe
   (tests/hp8_wire_probe.rs, production constriction coder, decode-exact ×21):
-  finalized bytes IDENTICAL at Q=24/20/16. Verdict: NEGATIVE for storage/compute
+  finalized bytes identical at Q=24/20/16 on the photo streams (screenshot diverges at 16). Verdict: NEGATIVE for storage/compute
   benefit; Q=16/Q=20 carried as zero-cost precision facts.
 - **HP8-BT radial factorization** (docs/mnf-hp8-bt-record.md): BT0 11
   representations × 256/256 exact round-trips; BT1 exact mass-ratio conservation
