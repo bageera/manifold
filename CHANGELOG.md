@@ -1,5 +1,41 @@
 # Changelog
 
+## Research — MNF-HP8 entropy-representation gauntlet: HP8-0/P/BT/S complete (2026-11-19, research only; production HOLD)
+
+Initial authorization per the operator's HP8 gauntlet (representation + execution
+efficiency). No wire format, backend, portfolio, or promotion change.
+
+- **HP8-0 census** (docs/mnf-hp8-0-record.md): fresh P1-B-stage instrument run on the
+  current tree — backends 4/5/6/7 = 743/743/756/762 ns/symbol, model loop ≈ 100%
+  of per-symbol cost (C4-A tree included). Historical reference numbers verified
+  against committed records.
+- **HP8-P precision** (docs/mnf-hp8-p-record.md): ideal-bit census over 1.12M
+  actual production probability-vector prefixes — Q=20 FREE (−0.003 bits/krow),
+  Q=16 +0.872/krow, Q=8 forced-uniform (floor cells = rows×256). Normalization
+  alternatives collapse into largest-remainder once sum-preserving. Wire probe
+  (tests/hp8_wire_probe.rs, production constriction coder, decode-exact ×21):
+  finalized bytes IDENTICAL at Q=24/20/16. Verdict: NEGATIVE for storage/compute
+  benefit; Q=16/Q=20 carried as zero-cost precision facts.
+- **HP8-BT radial factorization** (docs/mnf-hp8-bt-record.md): BT0 11
+  representations × 256/256 exact round-trips; BT1 exact mass-ratio conservation
+  proven for all 9 tree arms (Fraction arithmetic); BT2 — at Q=8 the direct
+  categorical is forced-uniform (8.000 bits/sym) while every factorized arm holds
+  3.15–3.19: factorization is the ONLY precision-robust shape below Q=12; BT3
+  negative (construction adds a pass; binary = 8 coder calls vs 1); BT4/BT5
+  CLOSED (gate unmet). The winning representation need NOT be ternary: radix-16
+  shows the best cells/decisions trade at low budgets.
+- **HP8-S structure census** (docs/mnf-hp8-s-record.md): effective alphabet ≈ 13,
+  top-8 mass 88%, 236/255 adjacent-equal frequency pairs, zero floor pressure at
+  2^24, temporal L1 0.07 — structure exists but connects to no cost production
+  pays. INCONCLUSIVE, preserved as HP8-E/R entry evidence.
+
+Ledger: HP8-0 PASS, HP8-P NEGATIVE(facts), HP8-BT mixed (BT0/1 PASS, BT2
+conditional-positive, BT3 NEG, BT4/5 closed), HP8-S INCONCLUSIVE, HP8-E/I/R/C/Q/
+RUST/GATE not yet exercised (E is the next authorized candidate from the census).
+Artifacts: research/hp8/bt/{representation,trees}.py, research/hp8/{coder,
+precision,structure,summarize_census}.py, tests/hp8_{coder,wire}_probe.rs
+(env-gated #[ignore]); CSVs under research/results/ (gitignored, regenerable).
+
 ## Research — MNF-HP gauntlet: HP0/HP1/HP2 executed, HP9 spec drafted (2026-11-19, research only; production HOLD)
 
 New research program per the operator's HP gauntlet (Hutter-style
